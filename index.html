@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lock League</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090f;
+    --bg-elev: #0e131e;
+    --bg-card: #131a29;
+    --bg-card-hover: #18203400;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.12);
+    --text: #e8eef5;
+    --text-dim: #8a93a6;
+    --text-faint: #525a6b;
+    --win: #00d97f;
+    --win-bg: rgba(0,217,127,0.15);
+    --loss: #ff4d5e;
+    --loss-bg: rgba(255,77,94,0.13);
+    --push: #ffc94a;
+    --push-bg: rgba(255,201,74,0.13);
+    --accent: #ffd042;
+    --neutral: rgba(255,255,255,0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(at 8% 0%, rgba(0,217,127,0.04) 0px, transparent 50%),
+      radial-gradient(at 95% 0%, rgba(255,208,66,0.03) 0px, transparent 50%);
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+  /* --- Header --- */
+  header.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(7,9,15,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    font-size: 15px;
+  }
+  .brand-lock {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent) 0%, #ff8a00 100%);
+    display: grid; place-items: center;
+    color: #0a0e1a;
+    font-weight: 900;
+    font-size: 14px;
+  }
+  .brand-name { display: flex; flex-direction: column; line-height: 1; }
+  .brand-name small { font-size: 9px; color: var(--text-dim); letter-spacing: 0.18em; font-weight: 600; margin-top: 3px; }
+
+  nav.year-tabs { display: flex; gap: 4px; margin-left: auto; }
+  .year-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-dim);
+    padding: 7px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    transition: all 0.15s ease;
+  }
+  .year-tab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .year-tab.active {
+    background: var(--accent);
+    color: #0a0e1a;
+    border-color: var(--accent);
+  }
+  .nav-link {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 7px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .nav-link:hover { color: var(--text); }
+  .nav-link.active { color: var(--accent); }
+
+  /* --- Layout --- */
+  main { max-width: 1280px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  .hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .hero h1 {
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .hero h1 .season-tag {
+    color: var(--accent);
+    font-size: 22px;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 8px;
+    letter-spacing: 0.08em;
+  }
+  .hero-meta {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat-pill .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+  }
+  .stat-pill .value {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Standings table --- */
+  .panel {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    font-weight: 700;
+  }
+
+  .standings { width: 100%; border-collapse: collapse; }
+  .standings thead th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    font-weight: 700;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border);
+  }
+  .standings thead th.center { text-align: center; }
+  .standings thead th.right { text-align: right; }
+  .member-row {
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  .member-row > td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .member-row:hover { background: rgba(255,255,255,0.025); }
+  .member-row.expanded { background: rgba(255,208,66,0.04); }
+  .rank {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-faint);
+    font-size: 12px;
+    width: 28px;
+  }
+  .rank.gold { color: var(--accent); font-weight: 700; }
+  .rank.silver { color: #b8c3d1; font-weight: 700; }
+  .rank.bronze { color: #cd7f32; font-weight: 700; }
+  .member-name {
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .crown { color: var(--accent); font-size: 11px; }
+  .record-big {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .record-pct {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-left: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .heat-strip {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+  .heat-week {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .heat-cell {
+    width: 9px; height: 4px;
+    border-radius: 1.5px;
+    background: var(--neutral);
+  }
+  .heat-cell.W { background: var(--win); }
+  .heat-cell.L { background: var(--loss); }
+  .heat-cell.P { background: var(--push); }
+  .weekly-wins {
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .super-record {
+    font-family: 'JetBrains Mono', monospace;
+    text-align: right;
+    font-size: 13px;
+  }
+  .chev {
+    color: var(--text-faint);
+    transition: transform 0.18s ease;
+    margin-left: 8px;
+  }
+  .member-row.expanded .chev { transform: rotate(90deg); color: var(--accent); }
+
+  /* --- Expanded detail --- */
+  .detail-row { display: none; }
+  .detail-row.show { display: table-row; }
+  .detail-cell { padding: 0 !important; background: #0a0f1a; border-bottom: 1px solid var(--border); }
+  .detail-inner { padding: 18px 20px 22px; }
+  .bet-type-grid {
+    display: grid;
+    gap: 6px;
+  }
+  .bet-type-header {
+    display: grid;
+    grid-template-columns: 110px 70px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+  .bet-type-row {
+    display: grid;
+    grid-template-columns: 110px 70px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .bet-type-name {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .bet-type-name.super { color: var(--accent); }
+  .bet-type-record {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .week-cells {
+    display: grid;
+    grid-template-columns: repeat(18, 1fr);
+    gap: 3px;
+  }
+  .week-cell {
+    aspect-ratio: 1.6 / 1;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid transparent;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.08s ease;
+  }
+  .week-cell:hover { transform: scale(1.18); z-index: 2; }
+  .week-cell.W { background: var(--win-bg); border-color: rgba(0,217,127,0.32); }
+  .week-cell.L { background: var(--loss-bg); border-color: rgba(255,77,94,0.32); }
+  .week-cell.P { background: var(--push-bg); border-color: rgba(255,201,74,0.32); }
+  .week-cell-label {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .week-cell.W .week-cell-label { color: var(--win); }
+  .week-cell.L .week-cell-label { color: var(--loss); }
+  .week-cell.P .week-cell-label { color: var(--push); }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: #1a2236;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    z-index: 100;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    max-width: 260px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+  .tooltip.show { opacity: 1; transform: translateY(0); }
+  .tooltip .tt-week { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); font-weight: 700; }
+  .tooltip .tt-pick { font-weight: 600; margin: 4px 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .tooltip .tt-result {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .tooltip .tt-result.W { background: var(--win-bg); color: var(--win); }
+  .tooltip .tt-result.L { background: var(--loss-bg); color: var(--loss); }
+  .tooltip .tt-result.P { background: var(--push-bg); color: var(--push); }
+
+  /* --- Weekly winners ribbon --- */
+  .winners-strip {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 8px;
+  }
+  .winner-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+  .winner-card .wk { font-size: 9px; color: var(--text-faint); letter-spacing: 0.1em; font-weight: 700; }
+  .winner-card .who { font-size: 13px; font-weight: 700; margin-top: 4px; }
+  .winner-card.empty .who { color: var(--text-faint); font-weight: 400; }
+
+  /* --- Rules view --- */
+  .rules-list { display: flex; flex-direction: column; gap: 12px; }
+  .rule {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 18px;
+  }
+  .rule-text { font-size: 13px; line-height: 1.55; }
+  .rule-meta { font-size: 10px; color: var(--text-dim); white-space: nowrap; align-self: start; letter-spacing: 0.06em; }
+
+  /* --- Lifetime view --- */
+  .lifetime-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .lifetime-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .lt-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .lt-record { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 800; }
+  .lt-pct { color: var(--text-dim); font-size: 12px; }
+  .lt-breakdown { margin-top: 14px; display: grid; gap: 6px; }
+  .lt-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    font-size: 12px;
+    align-items: center;
+  }
+  .lt-row .lt-type { color: var(--text-dim); }
+  .lt-row .lt-rec { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+  .lt-bar {
+    height: 4px;
+    background: var(--neutral);
+    border-radius: 2px;
+    overflow: hidden;
+    display: flex;
+    width: 70px;
+  }
+  .lt-bar-w { background: var(--win); height: 100%; }
+  .lt-bar-l { background: var(--loss); height: 100%; }
+  .lt-bar-p { background: var(--push); height: 100%; }
+
+  /* --- responsive --- */
+  @media (max-width: 880px) {
+    main { padding: 20px 14px 48px; }
+    .hero h1 { font-size: 28px; }
+    .topbar-inner { padding: 12px 14px; gap: 14px; }
+    .brand-name span:first-child { display: none; }
+    .standings thead th { font-size: 9px; padding: 8px 10px; }
+    .member-row > td { padding: 12px 10px; }
+    .heat-cell { width: 7px; }
+    .record-big { font-size: 15px; }
+    .bet-type-header, .bet-type-row { grid-template-columns: 90px 60px 1fr; }
+    .week-cells { gap: 2px; }
+    .week-cell-label { font-size: 9px; }
+  }
+  @media (max-width: 600px) {
+    .heat-col { display: none; }
+    .super-col { display: none; }
+    .nav-link.lifetime { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-lock">🔒</div>
+      <div class="brand-name">
+        <span>LOCK LEAGUE</span>
+        <small>EST. 2023</small>
+      </div>
+    </div>
+    <button class="nav-link" data-view="standings">Standings</button>
+    <button class="nav-link lifetime" data-view="lifetime">Lifetime</button>
+    <button class="nav-link" data-view="rules">Rules</button>
+    <nav class="year-tabs" id="year-tabs"></nav>
+  </div>
+</header>
+
+<main id="root"></main>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA_URL = `data/seasons.json?v=${Date.now()}`;
+const SEASONS_ORDER = ["2023", "2024", "2025"];
+const BET_TYPES_ORDER = ["Favorite", "Dog", "Over", "Under", "Super Lock"];
+const WEEK_COUNT = 18;
+
+let DATA = null;
+let state = {
+  view: "standings",
+  season: "2025",
+  expanded: null,
+};
+
+function parseRecord(rec) {
+  if (!rec) return { w: 0, l: 0, t: 0 };
+  const m = String(rec).match(/^(\d+)-(\d+)(?:-(\d+))?/);
+  if (!m) return { w: 0, l: 0, t: 0 };
+  return { w: +m[1], l: +m[2], t: m[3] ? +m[3] : 0 };
+}
+function pct(rec) {
+  const total = rec.w + rec.l;
+  if (!total) return "—";
+  return (rec.w / total * 100).toFixed(1) + "%";
+}
+
+function memberWeeklySummary(memberData, weekNum) {
+  // returns {W: n, L: n, P: n} across all bet types for this week
+  const out = { W: 0, L: 0, P: 0, missing: 0 };
+  for (const bt of BET_TYPES_ORDER) {
+    const pick = memberData?.byType?.[bt]?.picks?.[weekNum];
+    if (!pick) { out.missing++; continue; }
+    if (pick.result === "W") out.W++;
+    else if (pick.result === "L") out.L++;
+    else if (pick.result === "P") out.P++;
+    else out.missing++;
+  }
+  return out;
+}
+
+function buildStandings(season) {
+  const seasonInfo = DATA.seasons[season];
+  if (!seasonInfo) return [];
+  const rows = [];
+  for (const name of seasonInfo.members) {
+    const memberData = DATA.members[name]?.[season];
+    if (!memberData) continue;
+    const seasonRec = parseRecord(memberData.seasonRecord);
+    let weeksWon = 0;
+    for (let w = 1; w <= WEEK_COUNT; w++) {
+      if (seasonInfo.weeklyWinners?.[String(w)] === name) weeksWon++;
+    }
+    const superRec = parseRecord(memberData.byType?.["Super Lock"]?.record);
+    rows.push({ name, memberData, seasonRec, weeksWon, superRec });
+  }
+  rows.sort((a, b) => {
+    if (b.seasonRec.w !== a.seasonRec.w) return b.seasonRec.w - a.seasonRec.w;
+    if (a.seasonRec.l !== b.seasonRec.l) return a.seasonRec.l - b.seasonRec.l;
+    return b.weeksWon - a.weeksWon;
+  });
+  return rows;
+}
+
+// --- Render ---
+
+function renderYearTabs() {
+  const el = document.getElementById("year-tabs");
+  el.innerHTML = "";
+  for (const y of SEASONS_ORDER) {
+    const btn = document.createElement("button");
+    btn.className = "year-tab" + (state.season === y && state.view === "standings" ? " active" : "");
+    btn.textContent = y;
+    btn.onclick = () => {
+      state.season = y;
+      state.view = "standings";
+      state.expanded = null;
+      render();
+    };
+    el.appendChild(btn);
+  }
+  // Highlight nav-link active
+  document.querySelectorAll(".nav-link").forEach(b => {
+    b.classList.toggle("active", b.dataset.view === state.view);
+  });
+}
+
+function renderStandings() {
+  const season = state.season;
+  const rows = buildStandings(season);
+  const seasonInfo = DATA.seasons[season];
+  const winners = seasonInfo?.weeklyWinners || {};
+
+  const leagueWins = rows.reduce((s, r) => s + r.seasonRec.w, 0);
+  const leagueLosses = rows.reduce((s, r) => s + r.seasonRec.l, 0);
+  const leagueTies = rows.reduce((s, r) => s + r.seasonRec.t, 0);
+  const leagueRecord = `${leagueWins}-${leagueLosses}${leagueTies ? "-"+leagueTies : ""}`;
+
+  const champion = rows[0];
+
+  return `
+    <div class="hero">
+      <h1>
+        <span class="season-tag">${season} SEASON</span>
+        ${champion ? `${champion.name} <span style="color:var(--accent);font-size:24px;">●</span> <span style="color:var(--text-dim);font-size:18px;font-weight:600;">${champion.seasonRec.w} W</span>` : "—"}
+      </h1>
+      <div class="hero-meta">
+        <div class="stat-pill">
+          <span class="label">League Record</span>
+          <span class="value">${leagueRecord}</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">Members</span>
+          <span class="value">${rows.length}</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">Weeks</span>
+          <span class="value">${WEEK_COUNT}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Standings</div>
+        <div style="font-size:11px; color: var(--text-dim);">Click any member to see weekly picks</div>
+      </div>
+      <table class="standings">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Member</th>
+            <th>Record</th>
+            <th class="center heat-col">Weekly Heat</th>
+            <th class="center">Weeks Won</th>
+            <th class="right super-col">Super 🔒</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r, i) => renderMemberRow(r, i, season)).join("")}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top: 36px;">
+      <div class="panel-title" style="margin-bottom: 12px;">Weekly Winners</div>
+      <div class="winners-strip">
+        ${Array.from({ length: WEEK_COUNT }, (_, i) => {
+          const wk = i + 1;
+          const who = winners[String(wk)];
+          return `
+            <div class="winner-card ${who ? "" : "empty"}">
+              <div class="wk">WEEK ${wk}</div>
+              <div class="who">${who || "—"}</div>
+            </div>`;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderMemberRow(r, i, season) {
+  const rankClass = i === 0 ? "gold" : i === 1 ? "silver" : i === 2 ? "bronze" : "";
+  const isExpanded = state.expanded === r.name;
+  // Build heatmap strip: 18 weeks, 5 cells stacked per week
+  const heat = Array.from({ length: WEEK_COUNT }, (_, w) => {
+    const wk = w + 1;
+    return `<div class="heat-week">${BET_TYPES_ORDER.map(bt => {
+      const pick = r.memberData?.byType?.[bt]?.picks?.[wk];
+      const cls = pick?.result || "";
+      return `<div class="heat-cell ${cls}"></div>`;
+    }).join("")}</div>`;
+  }).join("");
+
+  return `
+    <tr class="member-row ${isExpanded ? "expanded" : ""}" data-name="${r.name}">
+      <td class="rank ${rankClass}">${i + 1}</td>
+      <td>
+        <div class="member-name">
+          ${r.name}
+          ${i === 0 ? '<span class="crown">★</span>' : ""}
+        </div>
+      </td>
+      <td>
+        <span class="record-big">${r.seasonRec.w}-${r.seasonRec.l}${r.seasonRec.t ? "-"+r.seasonRec.t : ""}</span>
+        <span class="record-pct">${pct(r.seasonRec)}</span>
+      </td>
+      <td class="heat-col"><div class="heat-strip">${heat}</div></td>
+      <td class="weekly-wins">${r.weeksWon}</td>
+      <td class="super-record super-col">${r.memberData?.byType?.["Super Lock"]?.record || "—"}</td>
+      <td><span class="chev">›</span></td>
+    </tr>
+    <tr class="detail-row ${isExpanded ? "show" : ""}">
+      <td class="detail-cell" colspan="7">
+        <div class="detail-inner">
+          ${isExpanded ? renderMemberDetail(r, season) : ""}
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderMemberDetail(r, season) {
+  const md = r.memberData;
+  const weekHeader = Array.from({ length: WEEK_COUNT }, (_, i) =>
+    `<div style="font-size:9px; color: var(--text-faint); text-align:center; font-family:'JetBrains Mono',monospace;">${i + 1}</div>`
+  ).join("");
+
+  const rows = BET_TYPES_ORDER.map(bt => {
+    const info = md?.byType?.[bt];
+    if (!info) return "";
+    const cells = Array.from({ length: WEEK_COUNT }, (_, i) => {
+      const wk = i + 1;
+      const pick = info.picks?.[wk];
+      const cls = pick?.result || "";
+      const safeText = (pick?.text || "").replace(/"/g, "&quot;");
+      return `<div class="week-cell ${cls}"
+        data-week="${wk}" data-bet="${bt}" data-text="${safeText}" data-result="${pick?.result || ""}">
+        <span class="week-cell-label">${pick?.result || ""}</span>
+      </div>`;
+    }).join("");
+    return `
+      <div class="bet-type-row">
+        <div class="bet-type-name ${bt === "Super Lock" ? "super" : ""}">${bt === "Super Lock" ? "🔒 Super Lock" : bt}</div>
+        <div class="bet-type-record">${info.record || "—"}</div>
+        <div class="week-cells">${cells}</div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="bet-type-header">
+      <div>BET TYPE</div>
+      <div>RECORD</div>
+      <div class="week-cells" style="grid-template-columns: repeat(18, 1fr);">${weekHeader}</div>
+    </div>
+    ${rows}
+    <div style="margin-top: 12px; font-size: 11px; color: var(--text-faint);">
+      Season: <span class="mono" style="color:var(--text-dim);">${md?.seasonRecord || "—"}</span>
+      &nbsp;·&nbsp;
+      Lifetime: <span class="mono" style="color:var(--text-dim);">${md?.lifetimeRecord || "—"}</span>
+    </div>
+  `;
+}
+
+function renderLifetime() {
+  // Aggregate W/L across all seasons + all bet types per member
+  const members = Object.keys(DATA.members).sort();
+  const aggregated = members.map(name => {
+    const totals = { W: 0, L: 0, P: 0 };
+    const byType = {};
+    let lifetimeRecord = null;
+    for (const bt of BET_TYPES_ORDER) byType[bt] = { W: 0, L: 0, P: 0 };
+    for (const season of SEASONS_ORDER) {
+      const md = DATA.members[name]?.[season];
+      if (!md) continue;
+      if (md.lifetimeRecord) lifetimeRecord = md.lifetimeRecord; // most recent wins
+      for (const bt of BET_TYPES_ORDER) {
+        const picks = md.byType?.[bt]?.picks || {};
+        for (const wk of Object.keys(picks)) {
+          const r = picks[wk]?.result;
+          if (r === "W") { totals.W++; byType[bt].W++; }
+          else if (r === "L") { totals.L++; byType[bt].L++; }
+          else if (r === "P") { totals.P++; byType[bt].P++; }
+        }
+      }
+    }
+    return { name, totals, byType, lifetimeRecord };
+  });
+  aggregated.sort((a, b) => b.totals.W - a.totals.W);
+
+  return `
+    <div class="hero">
+      <h1>
+        <span class="season-tag">LIFETIME</span>
+        ALL-TIME RECORDS
+      </h1>
+      <div class="hero-meta">
+        <div class="stat-pill">
+          <span class="label">Seasons</span>
+          <span class="value">${SEASONS_ORDER.length}</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">Members</span>
+          <span class="value">${aggregated.length}</span>
+        </div>
+      </div>
+    </div>
+    <div class="lifetime-grid">
+      ${aggregated.map((m, i) => {
+        const total = m.totals.W + m.totals.L + m.totals.P;
+        const pctV = total ? (m.totals.W / (m.totals.W + m.totals.L) * 100).toFixed(1) : "—";
+        return `
+          <div class="lifetime-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+              <div>
+                <div class="lt-name">${i === 0 ? '<span style="color:var(--accent);font-size:14px;">★</span> ' : ''}${m.name}</div>
+                <div class="lt-record">${m.totals.W}-${m.totals.L}${m.totals.P ? "-"+m.totals.P : ""}</div>
+                <div class="lt-pct">${pctV}${pctV !== "—" ? "%" : ""} · sheet: ${m.lifetimeRecord || "—"}</div>
+              </div>
+              <div class="mono" style="font-size:24px;font-weight:800;color:var(--text-faint);">#${i+1}</div>
+            </div>
+            <div class="lt-breakdown">
+              ${BET_TYPES_ORDER.map(bt => {
+                const r = m.byType[bt];
+                const tt = r.W + r.L + r.P;
+                if (!tt) return "";
+                return `
+                  <div class="lt-row">
+                    <span class="lt-type">${bt === "Super Lock" ? "🔒 Super" : bt}</span>
+                    <span class="lt-rec">${r.W}-${r.L}${r.P ? "-"+r.P : ""}</span>
+                    <span class="lt-bar">
+                      <span class="lt-bar-w" style="width:${(r.W/tt*100)}%"></span>
+                      <span class="lt-bar-p" style="width:${(r.P/tt*100)}%"></span>
+                      <span class="lt-bar-l" style="width:${(r.L/tt*100)}%"></span>
+                    </span>
+                  </div>`;
+              }).join("")}
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderRules() {
+  return `
+    <div class="hero">
+      <h1>
+        <span class="season-tag">CONSTITUTION</span>
+        THE RULES
+      </h1>
+    </div>
+    <div class="rules-list">
+      ${DATA.rules.map(r => `
+        <div class="rule">
+          <div class="rule-text">${escapeHtml(r.article)}</div>
+          <div class="rule-meta">${r.amended || ""}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+function render() {
+  renderYearTabs();
+  const root = document.getElementById("root");
+  if (state.view === "standings") {
+    root.innerHTML = renderStandings();
+    attachStandingsHandlers();
+  } else if (state.view === "lifetime") {
+    root.innerHTML = renderLifetime();
+  } else if (state.view === "rules") {
+    root.innerHTML = renderRules();
+  }
+}
+
+function attachStandingsHandlers() {
+  document.querySelectorAll(".member-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const name = row.dataset.name;
+      state.expanded = state.expanded === name ? null : name;
+      render();
+    });
+  });
+  // Tooltip on week cells
+  const tt = document.getElementById("tooltip");
+  document.querySelectorAll(".week-cell").forEach(cell => {
+    cell.addEventListener("mouseenter", (e) => {
+      const wk = cell.dataset.week;
+      const bet = cell.dataset.bet;
+      const text = cell.dataset.text;
+      const result = cell.dataset.result;
+      if (!text && !result) return;
+      tt.innerHTML = `
+        <div class="tt-week">${bet} · Week ${wk}</div>
+        <div class="tt-pick">${escapeHtml(text || "—")}</div>
+        ${result ? `<span class="tt-result ${result}">${ {W:"WIN",L:"LOSS",P:"PUSH"}[result] }</span>` : ""}
+      `;
+      tt.classList.add("show");
+    });
+    cell.addEventListener("mousemove", (e) => {
+      const pad = 14;
+      let x = e.clientX + pad;
+      let y = e.clientY + pad;
+      const r = tt.getBoundingClientRect();
+      if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - pad;
+      if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - pad;
+      tt.style.left = x + "px";
+      tt.style.top = y + "px";
+    });
+    cell.addEventListener("mouseleave", () => tt.classList.remove("show"));
+  });
+}
+
+// Init
+document.querySelectorAll(".nav-link").forEach(btn => {
+  btn.addEventListener("click", () => {
+    state.view = btn.dataset.view;
+    state.expanded = null;
+    render();
+  });
+});
+
+fetch(DATA_URL)
+  .then(r => r.json())
+  .then(d => { DATA = d; render(); })
+  .catch(err => {
+    document.getElementById("root").innerHTML = `<div style="color:var(--loss);">Failed to load data: ${err.message}</div>`;
+  });
+</script>
+
+</body>
+</html>
