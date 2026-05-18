@@ -25,3 +25,8 @@
   from = "/api/grade"
   to = "/.netlify/functions/grade"
   status = 200
+
+[[redirects]]
+  from = "/api/_init"
+  to = "/.netlify/functions/init"
+  status = 200
