@@ -234,17 +234,20 @@
   }
   .brand { display: flex; align-items: center; gap: 12px; }
   .brand-mark {
-    width: 38px; height: 38px;
-    background: var(--green);
-    color: #000;
+    width: 40px; height: 40px;
+    color: var(--green);
     display: grid; place-items: center;
-    font-family: 'Anton', sans-serif;
-    font-size: 22px;
-    line-height: 1;
-    box-shadow: 0 0 0 1px var(--green-bright) inset, 0 0 18px var(--green-glow);
-    transform: skew(-6deg);
+    filter: drop-shadow(0 0 10px var(--green-glow));
   }
-  .brand-mark span { display: inline-block; transform: skew(6deg); }
+  .brand-mark svg { width: 100%; height: 100%; display: block; }
+  .brand-mark:hover svg { animation: lock-jiggle 0.5s cubic-bezier(.36,.07,.19,.97); }
+  @keyframes lock-jiggle {
+    0%, 100% { transform: rotate(0deg); }
+    20% { transform: rotate(-4deg); }
+    40% { transform: rotate(4deg); }
+    60% { transform: rotate(-3deg); }
+    80% { transform: rotate(2deg); }
+  }
   .brand-name { display: flex; flex-direction: column; line-height: 0.9; }
   .brand-name .l1 {
     font-family: 'Anton', sans-serif;
@@ -337,15 +340,15 @@
       linear-gradient(135deg, rgba(44,217,98,0.08) 0%, transparent 55%),
       linear-gradient(45deg, transparent 55%, rgba(44,217,98,0.04) 100%),
       var(--bg-1);
-    margin-bottom: 38px;
+    margin-bottom: 28px;
     overflow: hidden;
   }
   .champ-card::before, .champ-card::after {
     content: "";
     position: absolute;
-    width: 16px; height: 16px;
+    width: 12px; height: 12px;
     border: 2px solid var(--green);
-    box-shadow: 0 0 12px var(--green-glow);
+    box-shadow: 0 0 10px var(--green-glow);
   }
   .champ-card::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
   .champ-card::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
@@ -357,18 +360,18 @@
   .champ-body {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: 48px;
-    padding: 38px 44px 36px;
+    gap: 36px;
+    padding: 24px 30px 22px;
     align-items: end;
   }
   .champ-meta {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 44px;
+    padding: 9px 30px;
     border-bottom: 1px solid var(--line);
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
+    font-size: 9px;
     letter-spacing: 0.22em;
     color: var(--dim);
     text-transform: uppercase;
@@ -381,11 +384,11 @@
     box-shadow: 0 0 8px var(--green-glow);
     animation: pulse 1.4s ease-in-out infinite;
   }
-  .champ-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .champ-left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   .champ-rank-line {
-    display: flex; align-items: baseline; gap: 18px;
+    display: flex; align-items: baseline; gap: 14px;
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
+    font-size: 10px;
     letter-spacing: 0.2em;
     color: var(--dim);
     font-weight: 600;
@@ -393,81 +396,90 @@
   }
   .champ-rank-num {
     font-family: 'Anton', sans-serif;
-    font-size: 56px;
+    font-size: 38px;
     color: var(--green);
     line-height: 1;
     letter-spacing: -0.005em;
   }
   .champ-name {
     font-family: 'Anton', sans-serif;
-    font-size: clamp(64px, 11vw, 168px);
-    line-height: 0.84;
+    font-size: clamp(44px, 7.2vw, 96px);
+    line-height: 0.86;
     letter-spacing: -0.005em;
     text-transform: uppercase;
     color: var(--white);
   }
   .champ-tags {
-    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-    margin-top: 6px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin-top: 4px;
   }
   .champ-prize {
-    display: inline-flex; align-items: center; gap: 10px;
-    padding: 8px 14px;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 11px;
     background: var(--green);
     color: #000;
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.16em;
   }
-  .champ-prize .v { font-family: 'Anton', sans-serif; font-size: 22px; letter-spacing: 0.02em; font-weight: 400; }
+  .champ-prize .v { font-family: 'Anton', sans-serif; font-size: 17px; letter-spacing: 0.02em; font-weight: 400; }
   .champ-pill {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 12px;
+    padding: 5px 10px;
     border: 1px solid var(--line-green);
     color: var(--green);
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.16em;
   }
 
   .champ-stats {
     display: grid;
-    grid-template-columns: repeat(2, minmax(140px, 1fr));
+    grid-template-columns: repeat(2, minmax(128px, 1fr));
     gap: 1px;
     background: var(--line-green);
     border: 1px solid var(--line-green);
-    min-width: 320px;
+    min-width: 280px;
   }
   .champ-stat {
     background: #000;
-    padding: 20px 22px 18px;
+    padding: 13px 16px 12px;
     position: relative;
   }
-  .champ-stat .l {
+  .champ-stat .stat-label {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
+    font-size: 8.5px;
     color: var(--dim);
     letter-spacing: 0.2em;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     text-transform: uppercase;
   }
+  /* Single-value (e.g., "6") stays display caps */
   .champ-stat .v {
     font-family: 'Anton', sans-serif;
-    font-size: 40px;
+    font-size: 30px;
     line-height: 1;
     letter-spacing: 0.01em;
     color: var(--white);
     text-transform: uppercase;
   }
   .champ-stat .v.green { color: var(--green); }
+  /* Compound record values (W-L-P) use mono so the L doesn't look squished */
+  .champ-stat .v.rec {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-transform: none;
+  }
   .champ-stat .sub {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
+    font-size: 9.5px;
     color: var(--dim);
-    margin-top: 6px;
+    margin-top: 5px;
     letter-spacing: 0.06em;
   }
 
@@ -1108,7 +1120,16 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <div class="brand-mark"><span>L</span></div>
+      <div class="brand-mark">
+        <svg viewBox="2 6 36 32" xmlns="http://www.w3.org/2000/svg" aria-label="Lock League">
+          <path d="M14 20 V11 H26 V20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="square"/>
+          <rect x="6" y="20" width="28" height="16" fill="currentColor"/>
+          <rect x="10" y="23" width="3" height="10" fill="#000"/>
+          <rect x="10" y="30" width="8" height="3" fill="#000"/>
+          <rect x="22" y="23" width="3" height="10" fill="#000"/>
+          <rect x="22" y="30" width="8" height="3" fill="#000"/>
+        </svg>
+      </div>
       <div class="brand-name">
         <span class="l1">Lock League</span>
         <span class="l2">EST · 2023</span>
@@ -1275,51 +1296,62 @@ function renderStandings() {
   const leagueT = rows.reduce((s, r) => s + r.seasonRec.t, 0);
   const champ = rows[0];
 
-  // Champion stats
+  // Champion stats (all winner-specific)
   const champPct = champ ? pct(champ.seasonRec) : "—";
   const champSuper = champ ? parseRecord(champ.md?.byType?.["Super Lock"]?.record) : { w: 0, l: 0, t: 0 };
+  // Best bet category for the champion
+  let bestBt = null, bestPct = -1, bestRec = { w: 0, l: 0, t: 0 };
+  if (champ) {
+    for (const bt of BET_TYPES_ORDER) {
+      const r = parseRecord(champ.md?.byType?.[bt]?.record);
+      const tot = r.w + r.l;
+      if (!tot) continue;
+      const p = r.w / tot;
+      if (p > bestPct) { bestPct = p; bestBt = bt; bestRec = r; }
+    }
+  }
+  const bestBtLabel = bestBt === "Super Lock" ? "SUPER 🔒" : (bestBt ? bestBt.toUpperCase() : "—");
+
   return `
     <div class="champ-card">
       <div class="champ-bar"></div>
       <div class="champ-meta">
-        <div><span class="green-strong">SEASON ${season}</span> · OFFICIAL RESULTS · ${WEEK_COUNT} WEEKS · ${rows.length} BETTORS</div>
+        <div><span class="green-strong">${season} CHAMPION</span></div>
         <div class="right">
-          <span><span class="live-dot"></span>FINALIZED</span>
+          <span><span class="live-dot"></span>FINALIZED · ${WEEK_COUNT} WEEKS · ${rows.length} BETTORS</span>
         </div>
       </div>
       <div class="champ-body">
         <div class="champ-left">
           <div class="champ-rank-line">
             <span class="champ-rank-num">01</span>
-            <span>★ ${season} SEASON CHAMPION</span>
+            <span>★ SEASON CHAMPION</span>
           </div>
           <div class="champ-name">${champ ? champ.name : "—"}</div>
           <div class="champ-tags">
             <span class="champ-prize">1ST <span class="v">$500</span></span>
-            <span class="champ-pill">${champ ? champ.seasonRec.w : 0} WINS · ${champPct}%</span>
-            <span class="champ-pill">${champ ? champ.weeksWon : 0} WEEKS WON</span>
           </div>
         </div>
         <div class="champ-stats">
           <div class="champ-stat">
-            <div class="l">Season Record</div>
-            <div class="v">${champ ? recordHtml(champ.seasonRec) : "—"}</div>
+            <div class="stat-label">Season Record</div>
+            <div class="v rec">${champ ? recordHtml(champ.seasonRec) : "—"}</div>
             <div class="sub">${champPct}% win rate</div>
           </div>
           <div class="champ-stat">
-            <div class="l">Weeks Won</div>
+            <div class="stat-label">Weeks Won</div>
             <div class="v green">${champ ? champ.weeksWon : 0}</div>
             <div class="sub">of ${WEEK_COUNT}</div>
           </div>
           <div class="champ-stat">
-            <div class="l">Super 🔒</div>
-            <div class="v">${recordHtml(champSuper)}</div>
-            <div class="sub">${champSuper.w + champSuper.l ? (champSuper.w/(champSuper.w+champSuper.l)*100).toFixed(0) + "% hit" : "—"}</div>
+            <div class="stat-label">Super 🔒</div>
+            <div class="v rec">${recordHtml(champSuper)}</div>
+            <div class="sub">${champSuper.w + champSuper.l ? (champSuper.w/(champSuper.w+champSuper.l)*100).toFixed(0) + "% hit rate" : "—"}</div>
           </div>
           <div class="champ-stat">
-            <div class="l">League W·L</div>
-            <div class="v">${leagueW}<span style="color:var(--dim-2);">·</span>${leagueL}</div>
-            <div class="sub">${rows.length}-team field</div>
+            <div class="stat-label">Best Category</div>
+            <div class="v green" style="font-size: 22px;">${bestBtLabel}</div>
+            <div class="sub">${bestBt ? `${bestRec.w}-${bestRec.l} · ${(bestPct*100).toFixed(0)}%` : "—"}</div>
           </div>
         </div>
       </div>
