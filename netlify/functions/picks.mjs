@@ -12,6 +12,28 @@ function json(body, init = {}) {
 
 export default async (req) => {
   const url = new URL(req.url);
+  const action = (url.searchParams.get("action") || "").toLowerCase();
+
+  // Self-mark Super Lock result — auth required
+  if (req.method === "POST" && action === "mark-super-lock") {
+    const memberId = verifyCookie(req.headers.get("cookie"));
+    if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
+    const body = await req.json().catch(() => ({}));
+    const { season, week, result } = body;
+    if (!season || !week || !["W", "L", "P"].includes(result)) {
+      return json({ error: "bad-body", expected: "{season, week, result: W|L|P}" }, { status: 400 });
+    }
+    const rows = await sql()`
+      UPDATE picks
+      SET result = ${result}, graded_at = NOW()
+      WHERE member_id = ${memberId}
+        AND season = ${season}
+        AND week = ${week}
+        AND bet_type = 'Super Lock'
+      RETURNING id`;
+    if (!rows.length) return json({ error: "no-such-pick" }, { status: 404 });
+    return json({ ok: true, id: rows[0].id, result });
+  }
 
   if (req.method === "GET") {
     const season = Number(url.searchParams.get("season"));

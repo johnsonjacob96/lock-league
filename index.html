@@ -1341,6 +1341,64 @@
     letter-spacing: 0.12em;
   }
 
+  /* Super Lock manual mark widget */
+  .sl-mark-box {
+    margin-top: 26px;
+    padding: 18px 22px;
+    background: rgba(255,208,66,0.04);
+    border: 1px solid rgba(255,208,66,0.32);
+  }
+  .sl-mark-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .sl-mark-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .sl-mark-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .sl-mark-pick {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    margin-bottom: 14px;
+    line-height: 1.4;
+  }
+  .sl-mark-buttons { display: flex; gap: 8px; }
+  .sl-mark-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    padding: 9px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    text-transform: uppercase;
+    flex: 1;
+    transition: all 0.1s ease;
+  }
+  .sl-mark-btn.W { color: var(--green); border-color: var(--green); }
+  .sl-mark-btn.W:hover { background: var(--green); color: #000; }
+  .sl-mark-btn.L { color: var(--red); border-color: var(--red); }
+  .sl-mark-btn.L:hover { background: var(--red); color: #fff; }
+  .sl-mark-btn.P { color: var(--accent); border-color: var(--accent); }
+  .sl-mark-btn.P:hover { background: var(--accent); color: #000; }
+  .sl-mark-btn.current {
+    background: currentColor;
+    color: #000 !important;
+  }
+
   /* ============== Animations ============== */
   @keyframes slideIn {
     from { opacity: 0; transform: translateY(8px); }
@@ -2084,6 +2142,31 @@ function renderBookCell(bookKey, label, cls, book, game) {
 }
 
 // =================== My Picks ===================
+function currentNflWeekClient() {
+  // Mirrors lib/nfl.js. Returns {season, week} or {null, null} offseason.
+  const kickoff = Date.UTC(2026, 8, 10);
+  const week1Start = kickoff - 2 * 24 * 3600 * 1000;
+  const now = Date.now();
+  if (now < week1Start) return { season: null, week: null };
+  const wk = Math.floor((now - week1Start) / (7 * 24 * 3600 * 1000));
+  if (wk >= 18) return { season: 2026, week: 18 };
+  return { season: 2026, week: wk + 1 };
+}
+
+async function loadMyPicks(season, week) {
+  if (!state.user) return {};
+  try {
+    const r = await fetch(`/api/picks?season=${season}&week=${week}`, { credentials: "include" });
+    if (!r.ok) return {};
+    const j = await r.json();
+    const mine = {};
+    for (const p of j.picks || []) {
+      if (p.member_id === state.user.id) mine[p.bet_type] = p;
+    }
+    return mine;
+  } catch { return {}; }
+}
+
 async function renderMyPicks() {
   if (!state.user) {
     return `
@@ -2099,8 +2182,13 @@ async function renderMyPicks() {
       </div>
     `;
   }
-  const week = state.myPicksWeek || 1;
-  const draft = state.myPicksDraft || {};
+  const cur = currentNflWeekClient();
+  const season = 2026;
+  const week = state.myPicksWeek || cur.week || 1;
+  // Load existing picks for this week and pre-fill the form
+  const existing = await loadMyPicks(season, week);
+  const draft = { ...existing, ...state.myPicksDraft }; // local draft overrides
+
   const rows = BET_TYPES_ORDER.map(bt => {
     const val = draft[bt]?.pick_text || "";
     return `
@@ -2110,6 +2198,25 @@ async function renderMyPicks() {
       </div>
     `;
   }).join("");
+
+  // Super Lock manual marking widget — surfaces if Super Lock pick exists for this week
+  const sl = existing["Super Lock"];
+  const slMarkHtml = sl ? `
+    <div class="sl-mark-box">
+      <div class="sl-mark-head">
+        <div class="sl-mark-title">🔒 Mark Your Super Lock</div>
+        <div class="sl-mark-meta">WEEK ${week} · GRADE MANUALLY</div>
+      </div>
+      <div class="sl-mark-pick">${escapeHtml(sl.pick_text)}</div>
+      <div class="sl-mark-buttons">
+        <button class="sl-mark-btn W ${sl.result === 'W' ? 'current' : ''}" data-result="W">Hit · W</button>
+        <button class="sl-mark-btn L ${sl.result === 'L' ? 'current' : ''}" data-result="L">Miss · L</button>
+        <button class="sl-mark-btn P ${sl.result === 'P' ? 'current' : ''}" data-result="P">Push · P</button>
+      </div>
+      ${sl.graded_at ? `<div class="sl-mark-meta" style="margin-top:10px;">LAST MARKED · ${new Date(sl.graded_at).toLocaleString()}</div>` : ""}
+    </div>
+  ` : "";
+
   return `
     <div class="hero">
       <div>
@@ -2130,7 +2237,26 @@ async function renderMyPicks() {
         </div>
       </div>
     </div>
+    ${slMarkHtml}
   `;
+}
+
+async function markSuperLock(result) {
+  const cur = currentNflWeekClient();
+  const season = 2026;
+  const week = state.myPicksWeek || cur.week || 1;
+  try {
+    const r = await fetch("/api/picks?action=mark-super-lock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ season, week, result }),
+    });
+    const j = await r.json();
+    if (!r.ok) { state.myPicksSaveMsg = "MARK ERROR · " + (j.error || "unknown"); }
+    else { state.myPicksSaveMsg = `SUPER 🔒 MARKED ${result}`; }
+  } catch (e) { state.myPicksSaveMsg = "NETWORK ERROR"; }
+  render();
 }
 
 async function submitMyPicks() {
@@ -2181,6 +2307,9 @@ async function render() {
     root.innerHTML = await renderMyPicks();
     const saveBtn = document.getElementById("picks-save");
     if (saveBtn) saveBtn.onclick = submitMyPicks;
+    document.querySelectorAll(".sl-mark-btn").forEach(b => {
+      b.onclick = () => markSuperLock(b.dataset.result);
+    });
   }
 }
 
