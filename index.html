@@ -1255,8 +1255,8 @@ function renderTicker() {
   track.innerHTML = html + html;
   // Scroll speed: slower for full-season cycle, single-week ~4x slower than before
   const seconds = state.tickerWeek === "ALL"
-    ? Math.max(60, items.length * 2.4)
-    : Math.max(80, items.length * 2.0);
+    ? Math.max(75, items.length * 3.0)
+    : Math.max(100, items.length * 2.5);
   track.style.animationDuration = seconds + "s";
 }
 
