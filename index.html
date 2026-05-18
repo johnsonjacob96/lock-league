@@ -1138,39 +1138,84 @@
   .book-label.dk { color: var(--green); }
   .book-numbers {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 4px;
     margin-top: 2px;
   }
-  .book-num {
+  .pick-btn {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    background: rgba(255,255,255,0.02);
+    gap: 1px;
+    background: rgba(255,255,255,0.025);
     border: 1px solid transparent;
-    padding: 6px 8px;
+    padding: 8px 4px;
     cursor: pointer;
     transition: all 0.1s ease;
+    text-align: center;
+    position: relative;
   }
-  .book-num:hover { background: rgba(44,217,98,0.08); border-color: var(--line-green); }
-  .book-num .nlabel {
+  .pick-btn:hover { background: rgba(44,217,98,0.10); border-color: var(--line-green); }
+  .pick-btn .pb-label {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
+    font-size: 8.5px;
     color: var(--dim);
-    letter-spacing: 0.12em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
+    font-weight: 700;
   }
-  .book-num .nvalue {
+  .pick-btn .pb-value {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--white);
   }
-  .book-num .nprice {
+  .pick-btn .pb-price {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--dim);
+    font-size: 9px;
+    color: var(--dim-2);
   }
+  /* Selected = currently picked by the logged-in user */
+  .pick-btn.picked {
+    background: var(--green);
+    border-color: var(--green);
+    box-shadow: 0 0 16px var(--green-glow);
+  }
+  .pick-btn.picked .pb-label,
+  .pick-btn.picked .pb-value,
+  .pick-btn.picked .pb-price { color: #000; }
+  .pick-btn.picked::after {
+    content: "✓";
+    position: absolute;
+    top: 2px; right: 4px;
+    font-size: 10px;
+    font-weight: 900;
+    color: #000;
+  }
+  .pick-btn.saving { opacity: 0.4; pointer-events: none; }
+
+  /* Toast for pick confirmation */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(16px);
+    background: var(--green);
+    color: #000;
+    padding: 12px 22px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    z-index: 300;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 24px var(--green-glow);
+    opacity: 0;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { background: var(--red); color: #fff; }
+  .toast.warn { background: var(--accent); color: #000; }
   .tw-meta {
     margin-bottom: 22px;
     padding: 14px 18px;
@@ -1515,6 +1560,7 @@
 <main id="root"></main>
 
 <div class="tooltip" id="tooltip"></div>
+<div class="toast" id="toast"></div>
 
 <script>
 const DATA_URL = `data/seasons.json?v=${Date.now()}`;
@@ -2122,23 +2168,114 @@ function renderGameCard(g) {
 function renderBookCell(bookKey, label, cls, book, game) {
   const s = book.spread;
   const t = book.total;
+  const gameKey = `${game.away}@${game.home}`;
+  const dogTeam = s ? (s.fav === game.home ? game.away : game.home) : null;
+  const dogLine = s ? Math.abs(s.line) : null;
+
+  const btn = (bet, side, label, value, price, text) => `
+    <div class="pick-btn" data-bet="${bet}" data-game="${gameKey}"
+         data-side="${side}" data-line="${s && (bet === 'Favorite' || bet === 'Dog') ? s.line : (t?.point ?? '')}"
+         data-book="${bookKey}" data-price="${price ?? ''}" data-text="${text}">
+      <span class="pb-label">${label}</span>
+      <span class="pb-value">${value}</span>
+      <span class="pb-price">${price != null ? americanOdds(price) : ''}</span>
+    </div>
+  `;
+
   return `
     <div class="book-cell">
       <div class="book-label ${cls}">${label}</div>
       <div class="book-numbers">
-        <div class="book-num" data-bet="Favorite" data-game="${game.away}@${game.home}" data-side="fav" data-line="${s?.line ?? ""}" data-book="${bookKey}" data-price="${s?.favPrice ?? ""}" data-text="${s ? `${s.fav} ${s.line}` : ""}">
-          <span class="nlabel">Spread</span>
-          <span class="nvalue">${s ? `${s.line > 0 ? "+" : ""}${s.line}` : "—"}</span>
-          <span class="nprice">${s ? `${americanOdds(s.favPrice)} fav / ${americanOdds(s.dogPrice)} dog` : ""}</span>
-        </div>
-        <div class="book-num" data-bet="Over" data-game="${game.away}@${game.home}" data-side="over" data-line="${t?.point ?? ""}" data-book="${bookKey}" data-price="${t?.overPrice ?? ""}" data-text="${t ? `${game.away} / ${game.home} O${t.point}` : ""}">
-          <span class="nlabel">Total</span>
-          <span class="nvalue">${t ? `O/U ${t.point}` : "—"}</span>
-          <span class="nprice">${t ? `${americanOdds(t.overPrice)} / ${americanOdds(t.underPrice)}` : ""}</span>
-        </div>
+        ${s ? btn('Favorite', 'fav', 'Fav', `${s.line}`, s.favPrice,
+                  `${s.fav} ${s.line}`) : `<div class="pick-btn" style="opacity:.3;"><span class="pb-label">Fav</span><span class="pb-value">—</span></div>`}
+        ${s ? btn('Dog', 'dog', 'Dog', `+${dogLine}`, s.dogPrice,
+                  `${dogTeam} +${dogLine}`) : `<div class="pick-btn" style="opacity:.3;"><span class="pb-label">Dog</span><span class="pb-value">—</span></div>`}
+        ${t ? btn('Over', 'over', 'Over', `O${t.point}`, t.overPrice,
+                  `${game.away} / ${game.home} O${t.point}`) : `<div class="pick-btn" style="opacity:.3;"><span class="pb-label">Over</span><span class="pb-value">—</span></div>`}
+        ${t ? btn('Under', 'under', 'Under', `U${t.point}`, t.underPrice,
+                  `${game.away} / ${game.home} U${t.point}`) : `<div class="pick-btn" style="opacity:.3;"><span class="pb-label">Under</span><span class="pb-value">—</span></div>`}
       </div>
     </div>
   `;
+}
+
+// Cache of the logged-in user's current picks for This Week's week, by bet_type.
+// Populated when This Week mounts; used to mark .picked buttons.
+async function loadMyPickedSet(season, week) {
+  if (!state.user) return {};
+  try {
+    const r = await fetch(`/api/picks?season=${season}&week=${week}`, { credentials: "include" });
+    if (!r.ok) return {};
+    const j = await r.json();
+    const mine = {};
+    for (const p of j.picks || []) {
+      if (p.member_id === state.user.id) mine[p.bet_type] = p;
+    }
+    return mine;
+  } catch { return {}; }
+}
+
+function showToast(msg, kind = "ok") {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.className = "toast " + (kind === "err" ? "err" : kind === "warn" ? "warn" : "") + " show";
+  el.textContent = msg;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+function markPickedButtons(picksByBetType) {
+  const buttons = document.querySelectorAll(".pick-btn[data-bet]");
+  buttons.forEach(b => b.classList.remove("picked"));
+  if (!picksByBetType) return;
+  for (const [bt, pick] of Object.entries(picksByBetType)) {
+    if (!pick.game_key) continue;
+    const match = document.querySelector(
+      `.pick-btn[data-bet="${bt}"][data-game="${pick.game_key}"][data-side="${pick.side}"][data-book="${pick.book}"]`
+    );
+    if (match) match.classList.add("picked");
+  }
+}
+
+async function clickPickButton(btn) {
+  if (!state.user) {
+    showToast("SIGN IN TO PICK", "warn");
+    openLogin();
+    return;
+  }
+  const bet_type = btn.dataset.bet;
+  const game_key = btn.dataset.game;
+  const side = btn.dataset.side;
+  const line = btn.dataset.line ? Number(btn.dataset.line) : null;
+  const book = btn.dataset.book;
+  const price = btn.dataset.price ? Number(btn.dataset.price) : null;
+  const pick_text = btn.dataset.text;
+  const cur = currentNflWeekClient();
+  const season = 2026;
+  const week = state.myPicksWeek || cur.week || 1;
+
+  btn.classList.add("saving");
+  try {
+    const r = await fetch("/api/picks", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season, week, picks: [{ bet_type, pick_text, game_key, side, line, book, price }] }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      showToast(j.error === "locked" ? "LOCKED · CUTOFF PASSED" : "ERROR · " + (j.error || "unknown"), "err");
+    } else {
+      // Update local mark cache: clear any prior button of same bet type, mark this one
+      document.querySelectorAll(`.pick-btn[data-bet="${bet_type}"]`).forEach(b => b.classList.remove("picked"));
+      btn.classList.add("picked");
+      showToast(`✓ ${bet_type.toUpperCase()} · ${pick_text}`);
+    }
+  } catch (e) {
+    showToast("NETWORK ERROR", "err");
+  } finally {
+    btn.classList.remove("saving");
+  }
 }
 
 // =================== My Picks ===================
@@ -2303,6 +2440,14 @@ async function render() {
     root.innerHTML = `<div style="padding:60px 0; color: var(--dim); font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform:uppercase;">Loading live lines…</div>`;
     await loadOdds();
     root.innerHTML = renderThisWeek();
+    // Click-to-pick handlers + highlight current selections
+    document.querySelectorAll(".pick-btn[data-bet]").forEach(b => {
+      b.addEventListener("click", () => clickPickButton(b));
+    });
+    const cur = currentNflWeekClient();
+    const week = state.myPicksWeek || cur.week || 1;
+    const myPicks = await loadMyPickedSet(2026, week);
+    markPickedButtons(myPicks);
   } else if (state.view === "mypicks") {
     root.innerHTML = await renderMyPicks();
     const saveBtn = document.getElementById("picks-save");
