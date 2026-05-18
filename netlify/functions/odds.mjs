@@ -68,10 +68,17 @@ function json(body, init = {}) {
   });
 }
 
+// Week 1 2026 game window — used to filter the live API call.
+// Thu Sept 10 2026 (TNF opener) → Mon Sept 14 ~midnight ET (post-MNF, even though we ignore MNF picks)
+const WEEK1_FROM = "2026-09-10T00:00:00Z";
+const WEEK1_TO   = "2026-09-15T08:00:00Z";
+
 export default async (req) => {
   const url = new URL(req.url);
   const key = Netlify.env.get("ODDS_API_KEY");
-  const useMock = !key || url.searchParams.get("mock") === "1";
+  // Live odds fetching is gated by ODDS_LIVE=1. Default: mock (no credits burned offseason).
+  const liveEnabled = Netlify.env.get("ODDS_LIVE") === "1";
+  const useMock = !key || !liveEnabled || url.searchParams.get("mock") === "1";
 
   if (cache.data && Date.now() - cache.ts < CACHE_TTL_MS && !url.searchParams.get("fresh")) {
     return json(cache.data, { headers: { "X-Cache": "HIT", "Cache-Control": "public, max-age=60, s-maxage=300" } });
@@ -90,6 +97,9 @@ export default async (req) => {
   apiUrl.searchParams.set("oddsFormat", "american");
   apiUrl.searchParams.set("bookmakers", "fanduel,draftkings");
   apiUrl.searchParams.set("dateFormat", "iso");
+  // Restrict to Week 1 2026 window for now
+  apiUrl.searchParams.set("commenceTimeFrom", WEEK1_FROM);
+  apiUrl.searchParams.set("commenceTimeTo", WEEK1_TO);
 
   try {
     const r = await fetch(apiUrl);
