@@ -1,0 +1,27 @@
+[build]
+  publish = "."
+
+[functions]
+  node_bundler = "esbuild"
+  directory = "netlify/functions"
+
+# Pretty URLs: /api/* → /.netlify/functions/*
+[[redirects]]
+  from = "/api/odds"
+  to = "/.netlify/functions/odds"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth"
+  to = "/.netlify/functions/auth"
+  status = 200
+
+[[redirects]]
+  from = "/api/picks"
+  to = "/.netlify/functions/picks"
+  status = 200
+
+[[redirects]]
+  from = "/api/grade"
+  to = "/.netlify/functions/grade"
+  status = 200

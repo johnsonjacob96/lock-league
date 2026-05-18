@@ -1,23 +1,16 @@
-// /api/grade — runs as a Vercel Cron Tuesday 11:00 UTC (~6am ET).
-// Pulls final scores for the just-finished NFL week from ESPN's scoreboard
-// (free, no auth), updates games table, grades every pick whose game has finalized.
-//
-// Manual fire: GET /api/grade?week=N&season=YYYY  (requires CRON_SECRET in header)
-
-import { sql } from "../lib/db.js";
-import { currentNflWeek, BET_TYPES } from "../lib/nfl.js";
+// /api/grade — scheduled function. Runs Tue 11:00 UTC (~6am ET) during season.
+// Pulls final scores from ESPN, grades picks.
+import { sql } from "../../lib/db.js";
+import { currentNflWeek } from "../../lib/nfl.js";
 
 const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
 
-// Map ESPN team display names → canonical (loose match works since we store raw names too)
-function normTeam(s) {
-  return s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-}
+function normTeam(s) { return s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
 
 async function fetchScoreboard(season, week) {
   const url = new URL(ESPN_SCOREBOARD);
   url.searchParams.set("year", String(season));
-  url.searchParams.set("seasontype", "2"); // regular season
+  url.searchParams.set("seasontype", "2");
   url.searchParams.set("week", String(week));
   const r = await fetch(url);
   if (!r.ok) throw new Error(`espn ${r.status}`);
@@ -29,7 +22,6 @@ async function fetchScoreboard(season, week) {
     const away = competitors.find((c) => c.homeAway === "away");
     const status = comp?.status?.type?.completed ? "final" : (ev.status?.type?.name || "scheduled");
     return {
-      espn_id: ev.id,
       home: home?.team?.displayName,
       away: away?.team?.displayName,
       home_score: home?.score ? Number(home.score) : null,
@@ -41,27 +33,22 @@ async function fetchScoreboard(season, week) {
 }
 
 function gradeSpread(pickSide, pickLine, awayScore, homeScore, awayTeam, homeTeam, favTeam) {
-  // pickSide = 'fav' or 'dog'; pickLine = the spread on the favorite (negative number)
-  // favTeam = the team the line was on (the favorite at pick time)
-  const margin = homeScore - awayScore; // positive = home won by N
-  // If favTeam was home, fav margin = margin. If favTeam was away, fav margin = -margin.
+  const margin = homeScore - awayScore;
   const favMargin = favTeam === homeTeam ? margin : -margin;
-  const adjusted = favMargin + pickLine; // pickLine is negative; if fav wins by more than |line|, adjusted > 0
+  const adjusted = favMargin + pickLine;
   if (adjusted === 0) return "P";
   const favCovered = adjusted > 0;
   return pickSide === "fav" ? (favCovered ? "W" : "L") : (favCovered ? "L" : "W");
 }
-
 function gradeTotal(side, line, total) {
   if (total === line) return "P";
   const wentOver = total > line;
-  return side === "over" ? (wentOver ? "W" : "L") : (wentOver ? "W" : "L");
+  return side === "over" ? (wentOver ? "W" : "L") : (wentOver ? "L" : "W");
 }
 
 async function gradeWeek(season, week) {
   const events = await fetchScoreboard(season, week);
   let updated = 0, graded = 0;
-  // Upsert games
   for (const ev of events) {
     if (!ev.home || !ev.away) continue;
     await sql()`
@@ -71,25 +58,16 @@ async function gradeWeek(season, week) {
       DO UPDATE SET away_score = EXCLUDED.away_score, home_score = EXCLUDED.home_score, status = EXCLUDED.status`;
     updated++;
   }
-  // Grade picks (skip if already graded)
   const picks = await sql()`
-    SELECT * FROM picks
-    WHERE season = ${season} AND week = ${week} AND result IS NULL`;
+    SELECT * FROM picks WHERE season = ${season} AND week = ${week} AND result IS NULL`;
   for (const p of picks) {
-    // Match game by game_key like "AWAY@HOME" using normalized names
     if (!p.game_key) continue;
     const [pAway, pHome] = p.game_key.split("@");
-    const ev = events.find(
-      (e) => normTeam(e.away) === normTeam(pAway) && normTeam(e.home) === normTeam(pHome)
-    );
+    const ev = events.find((e) => normTeam(e.away) === normTeam(pAway) && normTeam(e.home) === normTeam(pHome));
     if (!ev || ev.status !== "final") continue;
 
     let result = null;
     if (p.bet_type === "Favorite" || p.bet_type === "Dog") {
-      // p.line is the spread on the favorite (negative). For dog picks we store the same line but flip side.
-      // Caller stored fav team as part of pick_text; for simplicity reconstruct from side: if side==='fav', favTeam was the favored side from books, but we don't have that here.
-      // For now we approximate: the side 'fav' means user took the favorite, so the team that was favorite is whoever the book showed as fav at pick time. We need that team. Skip if missing.
-      // (We'll re-engineer: pick_text usually contains "Team -X.X" so favTeam = first token before " -".)
       const m = (p.pick_text || "").match(/^([A-Za-z .'-]+?)\s+[-+]/);
       const favTeam = m ? m[1].trim() : null;
       if (!favTeam) continue;
@@ -98,7 +76,6 @@ async function gradeWeek(season, week) {
       const total = ev.home_score + ev.away_score;
       result = gradeTotal(p.side, Number(p.line), total);
     } else if (p.bet_type === "Super Lock") {
-      // Player prop / specialty — manual grading only
       continue;
     }
     if (result) {
@@ -106,29 +83,35 @@ async function gradeWeek(season, week) {
       graded++;
     }
   }
-  return { week, events: updated, graded };
+  return { season, week, events: updated, graded };
 }
 
-export default async function handler(req, res) {
-  // Auth: Vercel Cron sends a special header, or accept CRON_SECRET via header
-  const cronHeader = req.headers["x-vercel-cron"];
-  const secret = req.headers["x-cron-secret"];
-  const ok = cronHeader || (process.env.CRON_SECRET && secret === process.env.CRON_SECRET);
-  if (!ok) return res.status(401).json({ error: "unauthorized" });
+export default async (req) => {
+  // Manual fire via HTTP requires CRON_SECRET header (or scheduled invocation passes special header)
+  const url = new URL(req.url);
+  const isScheduled = req.headers.get("user-agent")?.includes("Netlify");
+  const secret = req.headers.get("x-cron-secret");
+  const cronSecret = Netlify.env.get("CRON_SECRET");
+  const ok = isScheduled || (cronSecret && secret === cronSecret);
+  if (!ok) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
 
-  // What week to grade? Default = last completed week (current - 1, or just-finished if cron Tuesday).
-  let season = Number(req.query.season);
-  let week = Number(req.query.week);
+  let season = Number(url.searchParams.get("season"));
+  let week = Number(url.searchParams.get("week"));
   if (!season || !week) {
     const cur = currentNflWeek();
-    if (!cur.week) return res.status(200).json({ ok: true, note: "offseason" });
+    if (!cur.week) return new Response(JSON.stringify({ ok: true, note: "offseason" }), { headers: { "Content-Type": "application/json" } });
     season = cur.season;
-    week = Math.max(1, cur.week - 1); // grade the just-finished week
+    week = Math.max(1, cur.week - 1);
   }
   try {
     const result = await gradeWeek(season, week);
-    return res.status(200).json({ ok: true, ...result });
+    return new Response(JSON.stringify({ ok: true, ...result }), { headers: { "Content-Type": "application/json" } });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
-}
+};
+
+// Netlify scheduled function: cron syntax
+export const config = {
+  schedule: "0 11 * * 2",
+};
