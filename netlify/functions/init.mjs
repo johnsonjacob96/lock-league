@@ -74,43 +74,44 @@ async function seedMembers() {
 
 async function importHistory() {
   const s = sql();
-  // Resolve all member ids in one query
   const memRows = await s`SELECT id, name FROM members`;
   const memIdByName = Object.fromEntries(memRows.map(r => [r.name, r.id]));
 
-  // Collect every row to insert
-  const rows = [];
+  // Collect columns as parallel arrays for unnest()
+  const memberIds = [], seasons = [], weeks = [], betTypes = [], pickTexts = [], results = [];
   for (const [memberName, years] of Object.entries(historicalData.members || {})) {
     const memId = memIdByName[memberName];
     if (!memId) continue;
     for (const [year, info] of Object.entries(years)) {
       for (const [bt, btInfo] of Object.entries(info.byType || {})) {
         for (const [wk, pick] of Object.entries(btInfo.picks || {})) {
-          rows.push([memId, Number(year), Number(wk), bt, pick.text || "", pick.result || null]);
+          memberIds.push(memId);
+          seasons.push(Number(year));
+          weeks.push(Number(wk));
+          betTypes.push(bt);
+          pickTexts.push(pick.text || "");
+          results.push(pick.result || null);
         }
       }
     }
   }
 
-  // Bulk insert in chunks of 500
-  const CHUNK = 500;
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK);
-    const placeholders = chunk
-      .map((_, idx) => {
-        const off = idx * 6;
-        return `($${off + 1},$${off + 2},$${off + 3},$${off + 4},$${off + 5},$${off + 6})`;
-      })
-      .join(",");
-    const params = chunk.flat();
-    const text = `INSERT INTO picks (member_id, season, week, bet_type, pick_text, result)
-                  VALUES ${placeholders}
-                  ON CONFLICT (member_id, season, week, bet_type) DO NOTHING`;
-    await s.query(text, params);
-    inserted += chunk.length;
-  }
-  return inserted;
+  if (!memberIds.length) return 0;
+
+  // Single bulk insert via unnest() — one round-trip
+  await s`
+    INSERT INTO picks (member_id, season, week, bet_type, pick_text, result)
+    SELECT * FROM unnest(
+      ${memberIds}::int[],
+      ${seasons}::int[],
+      ${weeks}::int[],
+      ${betTypes}::text[],
+      ${pickTexts}::text[],
+      ${results}::text[]
+    )
+    ON CONFLICT (member_id, season, week, bet_type) DO NOTHING`;
+
+  return memberIds.length;
 }
 
 export default async (req) => {
