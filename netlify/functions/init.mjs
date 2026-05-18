@@ -100,6 +100,11 @@ export default async (req) => {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
   }
   const url = new URL(req.url);
+  if (url.searchParams.get("env") === "1") {
+    const dbKeys = Object.keys(process.env)
+      .filter(k => /DATABASE|POSTGRES|NEON|NETLIFY_DB/i.test(k));
+    return new Response(JSON.stringify({ ok: true, db_env_keys_seen: dbKeys }), { headers: { "Content-Type": "application/json" } });
+  }
   const dryRun = url.searchParams.get("dry") === "1";
   if (dryRun) {
     return new Response(JSON.stringify({ ok: true, message: "ready — POST with secret to run" }), { headers: { "Content-Type": "application/json" } });
