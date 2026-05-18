@@ -395,11 +395,9 @@
     text-transform: uppercase;
   }
   .champ-rank-num {
-    font-family: 'Anton', sans-serif;
-    font-size: 38px;
-    color: var(--green);
+    font-size: 30px;
     line-height: 1;
-    letter-spacing: -0.005em;
+    filter: drop-shadow(0 0 10px rgba(255,208,66,0.6));
   }
   .champ-name {
     font-family: 'Anton', sans-serif;
@@ -655,14 +653,14 @@
   }
 
   .rank-block {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
     color: var(--dim-2);
-    font-weight: 700;
-    letter-spacing: 0.06em;
+    line-height: 1;
+    letter-spacing: 0;
   }
   .rank-block.top { color: var(--green); }
-  .rank-block .br { color: var(--dim-2); }
+  .crown-mark { font-size: 16px; margin-right: 2px; filter: drop-shadow(0 0 6px rgba(255,208,66,0.6)); }
 
   .member-name-cell {
     display: flex;
@@ -970,13 +968,24 @@
   .lt-card.top { border-color: var(--green); box-shadow: 0 0 0 1px var(--green-ghost) inset, 0 0 30px rgba(44,217,98,0.15); }
   .lt-rank {
     position: absolute;
-    top: 12px; right: 16px;
+    top: 12px; right: 18px;
     font-family: 'Anton', sans-serif;
-    font-size: 48px;
+    font-size: 56px;
     color: var(--dim-2);
     line-height: 1;
   }
   .lt-card.top .lt-rank { color: var(--green); }
+  .lt-champ-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--line-green);
+    color: var(--green);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
   .lt-name {
     font-family: 'Anton', sans-serif;
     font-size: 32px;
@@ -1050,6 +1059,287 @@
     text-align: right;
   }
   .rule-meta::before { content: "AMENDED "; color: var(--green); margin-right: 4px; }
+
+  /* ============== This Week view ============== */
+  .tw-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 14px;
+  }
+  .game-card {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    padding: 0;
+    overflow: hidden;
+    transition: border-color 0.12s ease;
+  }
+  .game-card:hover { border-color: var(--line-green); }
+  .game-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 16px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--line);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .game-head .kickoff { color: var(--green); font-weight: 700; }
+  .game-teams {
+    display: grid;
+    grid-template-columns: 1fr;
+    padding: 6px 0;
+  }
+  .game-team {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    padding: 8px 16px;
+    align-items: center;
+  }
+  .game-team .name {
+    font-family: 'Anton', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .game-team .is-fav {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    font-weight: 700;
+  }
+  .lines-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+    border-top: 1px solid var(--line);
+  }
+  .book-cell {
+    background: var(--bg-1);
+    padding: 10px 14px;
+    display: grid;
+    gap: 4px;
+  }
+  .book-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .book-label.fd { color: #1493ff; }
+  .book-label.dk { color: var(--green); }
+  .book-numbers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .book-num {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid transparent;
+    padding: 6px 8px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+  }
+  .book-num:hover { background: rgba(44,217,98,0.08); border-color: var(--line-green); }
+  .book-num .nlabel {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .book-num .nvalue {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--white);
+  }
+  .book-num .nprice {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .tw-meta {
+    margin-bottom: 22px;
+    padding: 14px 18px;
+    background: var(--bg-1);
+    border: 1px solid var(--line-green);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .tw-meta strong { color: var(--green); font-weight: 700; }
+  .tw-source { display: flex; gap: 12px; align-items: center; }
+
+  /* ============== Login modal ============== */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--bg-1);
+    border: 1px solid var(--green);
+    box-shadow: 0 0 40px var(--green-glow), 0 30px 80px rgba(0,0,0,0.6);
+    padding: 28px 30px;
+    width: min(420px, 92vw);
+    position: relative;
+  }
+  .modal h3 {
+    font-family: 'Anton', sans-serif;
+    font-size: 28px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+  .modal .sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.18em;
+    margin-bottom: 22px;
+    text-transform: uppercase;
+  }
+  .modal label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .modal select, .modal input {
+    width: 100%;
+    background: #000;
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    color: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    margin-bottom: 16px;
+    outline: none;
+  }
+  .modal select:focus, .modal input:focus { border-color: var(--green); }
+  .modal .btn-row { display: flex; gap: 10px; margin-top: 6px; }
+  .btn {
+    background: var(--green);
+    color: #000;
+    border: none;
+    padding: 11px 18px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: filter 0.1s ease;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
+  .btn.ghost:hover { color: var(--white); border-color: var(--green); }
+  .modal-err { color: var(--red); font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-top: 4px; }
+
+  /* User chip in topbar */
+  .user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 11px;
+    border: 1px solid var(--line-green);
+    color: var(--green);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .user-chip:hover { background: rgba(44,217,98,0.08); }
+  .user-chip .dot {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--green-glow);
+  }
+
+  /* My picks pick-submission form */
+  .picks-form {
+    background: var(--bg-1);
+    border: 1px solid var(--line-green);
+    padding: 22px 26px;
+    margin-bottom: 24px;
+  }
+  .picks-form .form-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 16px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .picks-form .form-row:last-child { border-bottom: none; }
+  .picks-form .bt-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .picks-form .bt-name.super { color: var(--green); }
+  .picks-form input.pick-input {
+    background: #000;
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    color: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+  }
+  .picks-form input.pick-input:focus { border-color: var(--green); }
+  .picks-form .lock-status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 12px;
+    letter-spacing: 0.1em;
+  }
+  .picks-form .lock-status.locked { color: var(--red); }
+  .picks-form .submit-row {
+    margin-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .picks-form .save-msg {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 0.12em;
+  }
 
   /* ============== Animations ============== */
   @keyframes slideIn {
@@ -1137,13 +1427,32 @@
     </div>
     <span class="live-pill"><span class="live-dot"></span>SEASON · FINAL</span>
     <div class="nav-links">
+      <button class="nav-link" data-view="thisweek">This Week</button>
       <button class="nav-link" data-view="standings">Standings</button>
       <button class="nav-link" data-view="lifetime">Lifetime</button>
+      <button class="nav-link" data-view="mypicks">My Picks</button>
       <button class="nav-link" data-view="rules">Rules</button>
     </div>
     <nav class="year-tabs" id="year-tabs"></nav>
+    <div id="user-area"></div>
   </div>
 </header>
+
+<div class="modal-backdrop" id="login-modal">
+  <div class="modal">
+    <h3>Sign In</h3>
+    <div class="sub">Lock League Members</div>
+    <label>Member</label>
+    <select id="login-name"></select>
+    <label>Passphrase</label>
+    <input id="login-pass" type="password" autocomplete="current-password" placeholder="Your passphrase">
+    <div class="btn-row">
+      <button class="btn" id="login-submit">Sign In</button>
+      <button class="btn ghost" id="login-cancel">Cancel</button>
+    </div>
+    <div class="modal-err" id="login-err"></div>
+  </div>
+</div>
 
 <main id="root"></main>
 
@@ -1151,12 +1460,29 @@
 
 <script>
 const DATA_URL = `data/seasons.json?v=${Date.now()}`;
-const SEASONS_ORDER = ["2023", "2024", "2025"];
+const SEASONS_ORDER = ["2023", "2024", "2025", "2026"];
+// 2026 tab is hidden until NFL kickoff (Thursday, Sept 10 2026)
+const SEASON_2026_KICKOFF_MS = Date.UTC(2026, 8, 10, 0, 0, 0);
+function seasonsVisible() {
+  const now = Date.now();
+  return SEASONS_ORDER.filter(y => y !== "2026" || now >= SEASON_2026_KICKOFF_MS);
+}
 const BET_TYPES_ORDER = ["Favorite", "Dog", "Over", "Under", "Super Lock"];
 const WEEK_COUNT = 18;
 
 let DATA = null;
-let state = { view: "standings", season: "2025", expanded: null, tickerWeek: "ALL" };
+let state = {
+  view: "standings",
+  season: "2025",
+  expanded: null,
+  tickerWeek: "ALL",
+  user: null,                  // { id, name } when logged in
+  thisWeekData: null,          // cached /api/odds response
+  myPicksDraft: {},            // { Favorite: {...}, Dog: {...}, ... }
+  myPicksWeek: null,
+  myPicksSaveMsg: "",
+};
+const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
 function parseRecord(rec) {
   if (!rec) return { w: 0, l: 0, t: 0 };
@@ -1274,7 +1600,7 @@ function renderTickerWeekSelect() {
 function renderYearTabs() {
   const el = document.getElementById("year-tabs");
   el.innerHTML = "";
-  for (const y of SEASONS_ORDER) {
+  for (const y of seasonsVisible()) {
     const btn = document.createElement("button");
     btn.className = "year-tab" + (state.season === y && state.view === "standings" ? " active" : "");
     btn.textContent = y;
@@ -1324,8 +1650,8 @@ function renderStandings() {
       <div class="champ-body">
         <div class="champ-left">
           <div class="champ-rank-line">
-            <span class="champ-rank-num">01</span>
-            <span>★ SEASON CHAMPION</span>
+            <span class="champ-rank-num">👑</span>
+            <span>SEASON CHAMPION</span>
           </div>
           <div class="champ-name">${champ ? champ.name : "—"}</div>
           <div class="champ-tags">
@@ -1401,7 +1727,7 @@ function renderStandings() {
 function renderMemberRow(r, i, season) {
   const isExp = state.expanded === r.name;
   const isTop = i < 3;
-  const rankNum = String(i + 1).padStart(2, "0");
+  const rankNum = String(i + 1);
   const heat = Array.from({ length: WEEK_COUNT }, (_, w) => {
     const wk = w + 1;
     return `<div class="heat-week">${BET_TYPES_ORDER.map(bt => {
@@ -1413,11 +1739,12 @@ function renderMemberRow(r, i, season) {
 
   return `
     <tr class="member-row ${isExp ? "expanded" : ""}" data-name="${r.name}">
-      <td><span class="rank-block ${isTop ? "top" : ""}"><span class="br">[</span>${rankNum}<span class="br">]</span></span></td>
+      <td><span class="rank-block ${isTop ? "top" : ""}">${i + 1}</span></td>
       <td>
         <div class="member-name-cell">
+          ${i === 0 ? '<span class="crown-mark">👑</span>' : ""}
           <span class="member-name">${r.name}</span>
-          ${i === 0 ? '<span class="member-crown">★ CHAMP</span>' : ""}
+          ${i === 0 ? '<span class="member-crown">CHAMP</span>' : ""}
         </div>
       </td>
       <td>
@@ -1487,12 +1814,18 @@ function renderLifetime() {
   const agg = members.map(name => {
     const totals = { W: 0, L: 0, P: 0 };
     const byType = {};
-    let lifetimeRecord = null;
+    let weeksWon = 0;
+    let seasonsAsChamp = 0;
     for (const bt of BET_TYPES_ORDER) byType[bt] = { W: 0, L: 0, P: 0 };
     for (const season of SEASONS_ORDER) {
       const md = DATA.members[name]?.[season];
       if (!md) continue;
-      if (md.lifetimeRecord) lifetimeRecord = md.lifetimeRecord;
+      // Weekly winners count
+      const winners = DATA.seasons[season]?.weeklyWinners || {};
+      for (const wk of Object.keys(winners)) if (winners[wk] === name) weeksWon++;
+      // Was this member the season champion? Compute from standings (max wins).
+      const seasonRows = buildStandings(season);
+      if (seasonRows[0]?.name === name) seasonsAsChamp++;
       for (const bt of BET_TYPES_ORDER) {
         const picks = md.byType?.[bt]?.picks || {};
         for (const wk of Object.keys(picks)) {
@@ -1503,7 +1836,7 @@ function renderLifetime() {
         }
       }
     }
-    return { name, totals, byType, lifetimeRecord };
+    return { name, totals, byType, weeksWon, seasonsAsChamp };
   });
   agg.sort((a, b) => b.totals.W - a.totals.W);
 
@@ -1529,11 +1862,16 @@ function renderLifetime() {
       ${agg.map((m, i) => {
         const tot = m.totals.W + m.totals.L;
         const pctV = tot ? (m.totals.W / tot * 100).toFixed(1) : "—";
+        const crown = i === 0 ? '<span class="crown-mark" style="font-size:24px;margin-right:8px;">👑</span>' : '';
+        const champPills = m.seasonsAsChamp > 0
+          ? `<span class="lt-champ-pill">${'👑 '.repeat(m.seasonsAsChamp)}× ${m.seasonsAsChamp} season${m.seasonsAsChamp > 1 ? 's' : ''}</span>`
+          : '';
         return `<div class="lt-card ${i === 0 ? "top" : ""}">
-          <div class="lt-rank">${String(i + 1).padStart(2, "0")}</div>
-          <div class="lt-name">${m.name}</div>
+          <div class="lt-rank">${i + 1}</div>
+          <div class="lt-name">${crown}${m.name}</div>
           <div class="lt-record">${recordHtml({w: m.totals.W, l: m.totals.L, t: m.totals.P})}</div>
-          <div class="lt-pct"><span class="pctv">${pctV}${tot ? "%" : ""}</span> · sheet ${m.lifetimeRecord || "—"}</div>
+          <div class="lt-pct"><span class="pctv">${pctV}${tot ? "%" : ""}</span> · <span class="pctv">${m.weeksWon}</span> all-time weeks won</div>
+          ${champPills ? `<div style="margin-top:6px;">${champPills}</div>` : ''}
           <div class="lt-break">
             ${BET_TYPES_ORDER.map(bt => {
               const r = m.byType[bt];
@@ -1590,10 +1928,243 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
-function render() {
+// =================== Auth / session ===================
+async function fetchMe() {
+  try {
+    const r = await fetch("/api/auth?action=me", { credentials: "include" });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j.member;
+  } catch { return null; }
+}
+async function loginSubmit() {
+  const name = document.getElementById("login-name").value;
+  const pass = document.getElementById("login-pass").value;
+  const err = document.getElementById("login-err");
+  err.textContent = "";
+  try {
+    const r = await fetch("/api/auth?action=login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name, passphrase: pass }),
+    });
+    const j = await r.json();
+    if (!r.ok) { err.textContent = j.error === "bad-passphrase" ? "Wrong passphrase." : "Login failed."; return; }
+    state.user = j.member;
+    document.getElementById("login-modal").classList.remove("show");
+    render();
+  } catch (e) { err.textContent = "Network error: " + e.message; }
+}
+async function logout() {
+  await fetch("/api/auth?action=logout", { method: "POST", credentials: "include" }).catch(()=>{});
+  state.user = null;
+  render();
+}
+function openLogin() {
+  const sel = document.getElementById("login-name");
+  sel.innerHTML = MEMBERS_ALL.map(n => `<option>${n}</option>`).join("");
+  document.getElementById("login-err").textContent = "";
+  document.getElementById("login-pass").value = "";
+  document.getElementById("login-modal").classList.add("show");
+}
+function renderUserArea() {
+  const el = document.getElementById("user-area");
+  if (state.user) {
+    el.innerHTML = `<span class="user-chip" id="user-chip"><span class="dot"></span>${state.user.name}<span style="color:var(--dim-2);margin:0 6px;">·</span><span style="color:var(--dim);">SIGN OUT</span></span>`;
+    el.querySelector("#user-chip").onclick = logout;
+  } else {
+    el.innerHTML = `<button class="nav-link" id="login-btn">Sign In</button>`;
+    el.querySelector("#login-btn").onclick = openLogin;
+  }
+}
+
+// =================== This Week ===================
+async function loadOdds() {
+  if (state.thisWeekData) return state.thisWeekData;
+  try {
+    const r = await fetch("/api/odds", { credentials: "include" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    state.thisWeekData = await r.json();
+  } catch (e) {
+    state.thisWeekData = { source: "error", error: e.message, games: [] };
+  }
+  return state.thisWeekData;
+}
+
+function fmtKickoff(iso) {
+  const d = new Date(iso);
+  const opts = { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" };
+  return d.toLocaleString("en-US", opts).toUpperCase();
+}
+
+function americanOdds(p) {
+  if (p == null) return "";
+  return p > 0 ? `+${p}` : `${p}`;
+}
+
+function renderThisWeek() {
+  const data = state.thisWeekData;
+  if (!data) {
+    return `<div class="hero"><div><div class="eyebrow">LOADING · LIVE LINES</div><div class="hero-title"><span class="wreath">This Week</span></div></div></div>`;
+  }
+  const games = data.games || [];
+  return `
+    <div class="hero">
+      <div>
+        <div class="eyebrow">LIVE · NFL · BOARD</div>
+        <div class="hero-title"><span class="wreath">This Week</span></div>
+      </div>
+      <div class="hero-stats">
+        <div class="hstat"><div class="hstat-l">Games</div><div class="hstat-v green">${games.length}</div></div>
+        <div class="hstat"><div class="hstat-l">Books</div><div class="hstat-v">FD · DK</div></div>
+      </div>
+    </div>
+    <div class="tw-meta">
+      <div class="tw-source">
+        <span>SOURCE · <strong>${(data.source || "—").toUpperCase()}</strong></span>
+        ${data.remaining ? `<span>API CREDITS · <strong>${data.remaining}</strong> LEFT</span>` : ""}
+      </div>
+      <div>UPDATED · <strong>${data.fetched_at ? new Date(data.fetched_at).toLocaleTimeString() : "—"}</strong></div>
+    </div>
+    <div class="tw-grid">
+      ${games.map(renderGameCard).join("") || `<div style="color:var(--dim);padding:30px 0;">No games available. ${data.error || ""}</div>`}
+    </div>
+  `;
+}
+
+function renderGameCard(g) {
+  const fd = g.books?.fanduel || {};
+  const dk = g.books?.draftkings || {};
+  const favTeam = fd.spread?.fav || dk.spread?.fav;
+  return `
+    <div class="game-card">
+      <div class="game-head">
+        <span>${escapeHtml(g.away)} @ ${escapeHtml(g.home)}</span>
+        <span class="kickoff">${fmtKickoff(g.kickoff)}</span>
+      </div>
+      <div class="game-teams">
+        <div class="game-team">
+          <span class="name">${escapeHtml(g.away)}</span>
+          ${favTeam === g.away ? '<span class="is-fav">FAV</span>' : ""}
+        </div>
+        <div class="game-team">
+          <span class="name">${escapeHtml(g.home)}</span>
+          ${favTeam === g.home ? '<span class="is-fav">FAV</span>' : ""}
+        </div>
+      </div>
+      <div class="lines-row">
+        ${renderBookCell("fanduel", "FD · FANDUEL", "fd", fd, g)}
+        ${renderBookCell("draftkings", "DK · DRAFTKINGS", "dk", dk, g)}
+      </div>
+    </div>
+  `;
+}
+
+function renderBookCell(bookKey, label, cls, book, game) {
+  const s = book.spread;
+  const t = book.total;
+  return `
+    <div class="book-cell">
+      <div class="book-label ${cls}">${label}</div>
+      <div class="book-numbers">
+        <div class="book-num" data-bet="Favorite" data-game="${game.away}@${game.home}" data-side="fav" data-line="${s?.line ?? ""}" data-book="${bookKey}" data-price="${s?.favPrice ?? ""}" data-text="${s ? `${s.fav} ${s.line}` : ""}">
+          <span class="nlabel">Spread</span>
+          <span class="nvalue">${s ? `${s.line > 0 ? "+" : ""}${s.line}` : "—"}</span>
+          <span class="nprice">${s ? `${americanOdds(s.favPrice)} fav / ${americanOdds(s.dogPrice)} dog` : ""}</span>
+        </div>
+        <div class="book-num" data-bet="Over" data-game="${game.away}@${game.home}" data-side="over" data-line="${t?.point ?? ""}" data-book="${bookKey}" data-price="${t?.overPrice ?? ""}" data-text="${t ? `${game.away} / ${game.home} O${t.point}` : ""}">
+          <span class="nlabel">Total</span>
+          <span class="nvalue">${t ? `O/U ${t.point}` : "—"}</span>
+          <span class="nprice">${t ? `${americanOdds(t.overPrice)} / ${americanOdds(t.underPrice)}` : ""}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// =================== My Picks ===================
+async function renderMyPicks() {
+  if (!state.user) {
+    return `
+      <div class="hero">
+        <div>
+          <div class="eyebrow">MEMBER · SIGN-IN REQUIRED</div>
+          <div class="hero-title"><span class="wreath">My Picks</span></div>
+        </div>
+      </div>
+      <div class="tw-meta" style="cursor:pointer;" onclick="document.getElementById('login-modal').classList.add('show');">
+        <div>Sign in to submit your weekly picks.</div>
+        <div><strong style="color:var(--green);">SIGN IN →</strong></div>
+      </div>
+    `;
+  }
+  const week = state.myPicksWeek || 1;
+  const draft = state.myPicksDraft || {};
+  const rows = BET_TYPES_ORDER.map(bt => {
+    const val = draft[bt]?.pick_text || "";
+    return `
+      <div class="form-row">
+        <div class="bt-name ${bt === 'Super Lock' ? 'super' : ''}">${bt === 'Super Lock' ? '🔒 Super' : bt}</div>
+        <input class="pick-input" data-bet="${bt}" value="${escapeHtml(val)}" placeholder="${bt === 'Favorite' ? 'e.g., Chiefs -3 vs Bills' : bt === 'Dog' ? 'e.g., Bills +3 @ Chiefs' : bt === 'Over' ? 'e.g., Chiefs / Bills O48.5' : bt === 'Under' ? 'e.g., Chiefs / Bills U48.5' : 'Player prop / specialty bet'}">
+      </div>
+    `;
+  }).join("");
+  return `
+    <div class="hero">
+      <div>
+        <div class="eyebrow">WEEKLY · SUBMISSION</div>
+        <div class="hero-title"><span class="wreath">${state.user.name}</span></div>
+      </div>
+      <div class="hero-stats">
+        <div class="hstat"><div class="hstat-l">Week</div><div class="hstat-v green">${week}</div></div>
+      </div>
+    </div>
+    <div class="picks-form">
+      ${rows}
+      <div class="submit-row">
+        <div class="lock-status" id="lock-status">CUTOFF · SUN 12:00 AM CT</div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span class="save-msg" id="save-msg">${state.myPicksSaveMsg || ""}</span>
+          <button class="btn" id="picks-save">Save Picks</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function submitMyPicks() {
+  const inputs = document.querySelectorAll(".pick-input");
+  const picks = [];
+  inputs.forEach(inp => {
+    const text = inp.value.trim();
+    if (text) picks.push({ bet_type: inp.dataset.bet, pick_text: text });
+  });
+  if (!picks.length) return;
+  const week = state.myPicksWeek || 1;
+  const season = 2026;
+  try {
+    const r = await fetch("/api/picks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ season, week, picks }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED" : "ERROR · " + j.error;
+    } else {
+      state.myPicksSaveMsg = `SAVED · ${j.count} PICKS`;
+    }
+  } catch (e) { state.myPicksSaveMsg = "NETWORK ERROR"; }
+  render();
+}
+
+async function render() {
   renderYearTabs();
   renderTickerWeekSelect();
   renderTicker();
+  renderUserArea();
   const root = document.getElementById("root");
   if (state.view === "standings") {
     root.innerHTML = renderStandings();
@@ -1602,6 +2173,14 @@ function render() {
     root.innerHTML = renderLifetime();
   } else if (state.view === "rules") {
     root.innerHTML = renderRules();
+  } else if (state.view === "thisweek") {
+    root.innerHTML = `<div style="padding:60px 0; color: var(--dim); font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform:uppercase;">Loading live lines…</div>`;
+    await loadOdds();
+    root.innerHTML = renderThisWeek();
+  } else if (state.view === "mypicks") {
+    root.innerHTML = await renderMyPicks();
+    const saveBtn = document.getElementById("picks-save");
+    if (saveBtn) saveBtn.onclick = submitMyPicks;
   }
 }
 
@@ -1641,11 +2220,28 @@ function attachStandingsHandlers() {
 }
 
 document.querySelectorAll(".nav-link").forEach(btn => {
-  btn.addEventListener("click", () => { state.view = btn.dataset.view; state.expanded = null; render(); });
+  btn.addEventListener("click", () => {
+    if (!btn.dataset.view) return;
+    state.view = btn.dataset.view;
+    state.expanded = null;
+    render();
+  });
 });
 
-fetch(DATA_URL).then(r => r.json()).then(d => { DATA = d; render(); })
-  .catch(err => { document.getElementById("root").innerHTML = `<div style="color:var(--red);">Failed to load data: ${err.message}</div>`; });
+// Login modal handlers
+document.getElementById("login-submit").onclick = loginSubmit;
+document.getElementById("login-cancel").onclick = () => document.getElementById("login-modal").classList.remove("show");
+document.getElementById("login-pass").addEventListener("keydown", e => { if (e.key === "Enter") loginSubmit(); });
+
+// Boot
+(async () => {
+  state.user = await fetchMe();
+  const r = await fetch(DATA_URL);
+  DATA = await r.json();
+  render();
+})().catch(err => {
+  document.getElementById("root").innerHTML = `<div style="color:var(--red);">Failed to load data: ${err.message}</div>`;
+});
 </script>
 
 </body>
