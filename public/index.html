@@ -1349,13 +1349,10 @@ function teamLogoUrl(name) {
 function teamShort(name) {
   return teamAbbr(name).toUpperCase();
 }
-// Render a logo with the abbreviation as a text fallback layered behind it.
-// If the image 404s or fails to load, it removes itself and the abbreviation shows.
-function teamLogoMark(name, sizeClasses, textClasses) {
-  return `<span class="relative inline-flex items-center justify-center ${sizeClasses}">
-    <span class="${textClasses}">${escapeHtml(teamShort(name))}</span>
-    <img src="${teamLogoUrl(name)}" alt="" class="absolute inset-1 object-contain" loading="lazy" onerror="this.remove()">
-  </span>`;
+// Render only the team logo (no overlaid text). On image error, swap in the abbreviation.
+function teamLogoMark(name, sizeClasses, fallbackTextClasses) {
+  const abbr = teamShort(name);
+  return `<img src="${teamLogoUrl(name)}" alt="${abbr}" class="${sizeClasses} object-contain" loading="lazy" onerror="var s=document.createElement('span');s.className='${fallbackTextClasses}';s.textContent='${abbr}';this.replaceWith(s)">`;
 }
 
 // =================== Auth / session ===================
@@ -1584,8 +1581,8 @@ function renderFeaturedMatchup(g) {
         </div>
         <div class="flex items-center justify-around py-6 md:py-8 gap-6">
           <div class="flex flex-col items-center gap-3 flex-1 min-w-0">
-            <div class="w-16 h-16 md:w-20 md:h-20 bg-surface-container rounded-full flex items-center justify-center border-2 border-outline-variant overflow-hidden">
-              ${teamLogoMark(g.away, 'w-full h-full', 'font-display-lg text-2xl md:text-4xl italic')}
+            <div class="w-16 h-16 md:w-20 md:h-20 bg-surface-container rounded-full flex items-center justify-center border-2 border-outline-variant overflow-hidden p-2">
+              ${teamLogoMark(g.away, 'w-full h-full', 'font-display-lg text-2xl md:text-4xl italic text-on-surface')}
             </div>
             <span class="font-headline-lg text-base md:text-xl uppercase tracking-widest text-center">${escapeHtml(g.away)}</span>
             ${favTeam === g.away ? `<span class="font-data-tabular text-primary-fixed text-sm font-bold">${line > 0 ? "+" : ""}${line}</span>` : ""}
@@ -1598,8 +1595,8 @@ function renderFeaturedMatchup(g) {
             ` : ""}
           </div>
           <div class="flex flex-col items-center gap-3 flex-1 min-w-0">
-            <div class="w-16 h-16 md:w-20 md:h-20 bg-surface-container rounded-full flex items-center justify-center border-2 border-outline-variant overflow-hidden">
-              ${teamLogoMark(g.home, 'w-full h-full', 'font-display-lg text-2xl md:text-4xl italic')}
+            <div class="w-16 h-16 md:w-20 md:h-20 bg-surface-container rounded-full flex items-center justify-center border-2 border-outline-variant overflow-hidden p-2">
+              ${teamLogoMark(g.home, 'w-full h-full', 'font-display-lg text-2xl md:text-4xl italic text-on-surface')}
             </div>
             <span class="font-headline-lg text-base md:text-xl uppercase tracking-widest text-center">${escapeHtml(g.home)}</span>
             ${favTeam === g.home ? `<span class="font-data-tabular text-primary-fixed text-sm font-bold">${line > 0 ? "+" : ""}${line}</span>` : ""}
@@ -1639,16 +1636,16 @@ function renderGameCard(g) {
       </div>
       <div class="flex justify-between items-center mb-4">
         <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <div class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center overflow-hidden">
-            ${teamLogoMark(g.away, 'w-full h-full', 'font-display-lg font-bold text-sm')}
+          <div class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center overflow-hidden p-1.5">
+            ${teamLogoMark(g.away, 'w-full h-full', 'font-display-lg font-bold text-sm text-on-surface')}
           </div>
           <span class="font-label-caps text-[10px] text-on-surface uppercase truncate max-w-full">${escapeHtml(g.away)}</span>
           ${favTeam === g.away ? `<span class="font-data-tabular text-xs text-primary-fixed">${s.line > 0 ? "+" : ""}${s.line}</span>` : (s ? `<span class="font-data-tabular text-xs text-on-surface-variant">${-s.line > 0 ? "+" : ""}${-s.line}</span>` : "")}
         </div>
         <div class="text-on-surface-variant font-display-lg text-lg opacity-30 italic">VS</div>
         <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <div class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center overflow-hidden">
-            ${teamLogoMark(g.home, 'w-full h-full', 'font-display-lg font-bold text-sm')}
+          <div class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center overflow-hidden p-1.5">
+            ${teamLogoMark(g.home, 'w-full h-full', 'font-display-lg font-bold text-sm text-on-surface')}
           </div>
           <span class="font-label-caps text-[10px] text-on-surface uppercase truncate max-w-full">${escapeHtml(g.home)}</span>
           ${favTeam === g.home ? `<span class="font-data-tabular text-xs text-primary-fixed">${s.line > 0 ? "+" : ""}${s.line}</span>` : (s ? `<span class="font-data-tabular text-xs text-on-surface-variant">${-s.line > 0 ? "+" : ""}${-s.line}</span>` : "")}
@@ -1706,8 +1703,8 @@ function renderMostPickedWidget(games) {
     <div class="glass-panel p-6 rounded-lg border-l-4 border-primary-fixed relative overflow-hidden">
       <h4 class="font-label-caps text-[10px] text-on-surface-variant mb-4 uppercase">Biggest Favorite</h4>
       <div class="flex items-center gap-4">
-        <div class="w-16 h-16 bg-surface-container flex items-center justify-center rounded-full border border-outline-variant overflow-hidden shrink-0">
-          ${teamLogoMark(biggest.fav, 'w-full h-full', 'font-display-lg text-2xl italic')}
+        <div class="w-16 h-16 bg-surface-container flex items-center justify-center rounded-full border border-outline-variant overflow-hidden shrink-0 p-2">
+          ${teamLogoMark(biggest.fav, 'w-full h-full', 'font-display-lg text-2xl italic text-on-surface')}
         </div>
         <div class="min-w-0">
           <p class="font-headline-lg text-xl uppercase italic truncate">${escapeHtml(biggest.fav)}</p>
