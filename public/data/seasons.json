@@ -28,13 +28,8 @@
         "14": "Tyler",
         "15": "Brayden",
         "16": "Tyler",
-        "17": null,
-        "18": null
-      },
-      "fgCounts": {
-        "FFE06666": 367,
-        "FFFFD966": 15,
-        "FF93C47D": 338
+        "17": "Chase",
+        "18": "Tyler"
       }
     },
     "2024": {
@@ -67,11 +62,6 @@
         "16": "Chris",
         "17": "Jared",
         "18": "Jacob"
-      },
-      "fgCounts": {
-        "FFE06666": 357,
-        "FF93C47D": 360,
-        "FFFFD966": 3
       }
     },
     "2025": {
@@ -99,17 +89,11 @@
         "11": "Jacob",
         "12": "Tyler",
         "13": "Chris",
-        "14": null,
-        "15": null,
-        "16": null,
-        "17": null,
-        "18": null
-      },
-      "fgCounts": {
-        "FFE06666": 374,
-        "FF93C47D": 342,
-        "FFFFD966": 3,
-        "FFB6D7A8": 1
+        "14": "Mason",
+        "15": "Jacob",
+        "16": "Jack",
+        "17": "Jared",
+        "18": "Mason"
       }
     }
   },
@@ -898,11 +882,11 @@
         }
       },
       "2025": {
-        "seasonRecord": "41-44",
-        "lifetimeRecord": "120-122-3",
+        "seasonRecord": "42-48",
+        "lifetimeRecord": "129-138-3",
         "byType": {
           "Favorite": {
-            "record": "4-9-0",
+            "record": "5-13",
             "picks": {
               "1": {
                 "text": "Titans vs Broncos -8.5",
@@ -979,7 +963,7 @@
             }
           },
           "Dog": {
-            "record": "5-8-0",
+            "record": "7-11",
             "picks": {
               "1": {
                 "text": "Dolphins +1.5 vs Colts",
@@ -1056,7 +1040,7 @@
             }
           },
           "Over": {
-            "record": "9-4-0",
+            "record": "11-7",
             "picks": {
               "1": {
                 "text": "Panthers / Jags O46.5",
@@ -1133,7 +1117,7 @@
             }
           },
           "Under": {
-            "record": "8-5-0",
+            "record": "9-9",
             "picks": {
               "1": {
                 "text": "Titans / Broncos U42.5",
@@ -1210,7 +1194,7 @@
             }
           },
           "Super Lock": {
-            "record": "7-6-0",
+            "record": "10-8",
             "picks": {
               "1": {
                 "text": "Tua O1.5 Passings TDs (-102)",
@@ -2073,11 +2057,11 @@
         }
       },
       "2025": {
-        "seasonRecord": "36-49",
-        "lifetimeRecord": "115-128-2",
+        "seasonRecord": "36-54",
+        "lifetimeRecord": "122-146-2",
         "byType": {
           "Favorite": {
-            "record": "8-5-0",
+            "record": "11-7",
             "picks": {
               "1": {
                 "text": "Cardinals -6.5 v Saints",
@@ -2154,7 +2138,7 @@
             }
           },
           "Dog": {
-            "record": "6-7",
+            "record": "7-11",
             "picks": {
               "1": {
                 "text": "Lions +1.5 v Packers",
@@ -2231,7 +2215,7 @@
             }
           },
           "Over": {
-            "record": "5-8-0",
+            "record": "7-11",
             "picks": {
               "1": {
                 "text": "Falcons v Bucs o47.5",
@@ -2308,7 +2292,7 @@
             }
           },
           "Under": {
-            "record": "3-10-0",
+            "record": "4-14",
             "picks": {
               "1": {
                 "text": "Texans v Rams u43.5",
@@ -2385,7 +2369,7 @@
             }
           },
           "Super Lock": {
-            "record": "7-6-0",
+            "record": "7-11",
             "picks": {
               "1": {
                 "text": "Emeka Ebuka o57.5 rec yds (-113)",
@@ -3248,11 +3232,11 @@
         }
       },
       "2025": {
-        "seasonRecord": "36-47-2",
-        "lifetimeRecord": "115-124-6",
+        "seasonRecord": "38-50-2",
+        "lifetimeRecord": "123-141-6",
         "byType": {
           "Favorite": {
-            "record": "8-5-0",
+            "record": "10-8",
             "picks": {
               "1": {
                 "text": "Washington -6 vs Giants",
@@ -3329,7 +3313,7 @@
             }
           },
           "Dog": {
-            "record": "5-6-2",
+            "record": "6-10-2",
             "picks": {
               "1": {
                 "text": "Panthers +4.5 vs Jags",
@@ -3406,7 +3390,7 @@
             }
           },
           "Over": {
-            "record": "6-7-0",
+            "record": "8-10",
             "picks": {
               "1": {
                 "text": "Titans vs Broncos O42.5",
@@ -3483,7 +3467,7 @@
             }
           },
           "Under": {
-            "record": "9-4-0",
+            "record": "12-6",
             "picks": {
               "1": {
                 "text": "Vegas vs NE U44",
@@ -3560,7 +3544,7 @@
             }
           },
           "Super Lock": {
-            "record": "2-11-0",
+            "record": "2-16",
             "picks": {
               "1": {
                 "text": "Rodgers U201.5 Passing Yards",
@@ -4423,11 +4407,11 @@
         }
       },
       "2025": {
-        "seasonRecord": "49-36",
-        "lifetimeRecord": "120-125",
+        "seasonRecord": "50-40",
+        "lifetimeRecord": "132-138",
         "byType": {
           "Favorite": {
-            "record": "8-5-0",
+            "record": "9-9",
             "picks": {
               "1": {
                 "text": "Rams -3 vs Texans",
@@ -4504,7 +4488,7 @@
             }
           },
           "Dog": {
-            "record": "6-7-0",
+            "record": "8-10",
             "picks": {
               "1": {
                 "text": "Dolphins +1.5 @ Colts",
@@ -4581,7 +4565,7 @@
             }
           },
           "Over": {
-            "record": "11-2-0",
+            "record": "14-4",
             "picks": {
               "1": {
                 "text": "Steelers @ Jets o37.5",
@@ -4658,7 +4642,7 @@
             }
           },
           "Under": {
-            "record": "7-6-0",
+            "record": "10-8",
             "picks": {
               "1": {
                 "text": "Dolphins @ Colts u47.5",
@@ -4735,7 +4719,7 @@
             }
           },
           "Super Lock": {
-            "record": "7-6-0",
+            "record": "9-9",
             "picks": {
               "1": {
                 "text": "Daniel Jones 1+ interception (-102)",
@@ -5598,11 +5582,11 @@
         }
       },
       "2025": {
-        "seasonRecord": "47-38",
-        "lifetimeRecord": "119-124-2",
+        "seasonRecord": "48-42",
+        "lifetimeRecord": "133-135-2",
         "byType": {
           "Favorite": {
-            "record": "8-5-0",
+            "record": "12-6",
             "picks": {
               "1": {
                 "text": "Bucs -1 @ Falcons",
@@ -5679,7 +5663,7 @@
             }
           },
           "Dog": {
-            "record": "8-5-0",
+            "record": "11-7",
             "picks": {
               "1": {
                 "text": "Jets +3 vs Steelers",
@@ -5756,7 +5740,7 @@
             }
           },
           "Over": {
-            "record": "6-7-0",
+            "record": "9-9",
             "picks": {
               "1": {
                 "text": "Browns/Bengals o47.5",
@@ -5833,7 +5817,7 @@
             }
           },
           "Under": {
-            "record": "7-6-0",
+            "record": "8-10",
             "picks": {
               "1": {
                 "text": "Jets/Steelers u38.5 (ESPN Bet)",
@@ -5910,7 +5894,7 @@
             }
           },
           "Super Lock": {
-            "record": "6-7-0",
+            "record": "8-10",
             "picks": {
               "1": {
                 "text": "Josh Allen ATTD (-110)",
@@ -6773,11 +6757,11 @@
         }
       },
       "2025": {
-        "seasonRecord": "38-46-1",
-        "lifetimeRecord": "118-123-4",
+        "seasonRecord": "39-50-1",
+        "lifetimeRecord": "129-137-4",
         "byType": {
           "Favorite": {
-            "record": "5-8-0",
+            "record": "7-11",
             "picks": {
               "1": {
                 "text": "Commanders -6 vs NYG",
@@ -6854,7 +6838,7 @@
             }
           },
           "Dog": {
-            "record": "6-6-1",
+            "record": "10-7-1",
             "picks": {
               "1": {
                 "text": "Carolina +4.5 @ Jax",
@@ -6931,7 +6915,7 @@
             }
           },
           "Over": {
-            "record": "6-7-0",
+            "record": "9-9",
             "picks": {
               "1": {
                 "text": "Lions Pack o47.5",
@@ -7008,7 +6992,7 @@
             }
           },
           "Under": {
-            "record": "7-6-0",
+            "record": "8-10",
             "picks": {
               "1": {
                 "text": "Colts / Dolphins u47.5",
@@ -7085,7 +7069,7 @@
             }
           },
           "Super Lock": {
-            "record": "4-9-0",
+            "record": "5-13",
             "picks": {
               "1": {
                 "text": "Trey McBride 70+ +102",
@@ -7948,11 +7932,11 @@
         }
       },
       "2025": {
-        "seasonRecord": "44-41",
-        "lifetimeRecord": "129-116",
+        "seasonRecord": "47-43",
+        "lifetimeRecord": "143-127",
         "byType": {
           "Favorite": {
-            "record": "6-7-0",
+            "record": "9-9",
             "picks": {
               "1": {
                 "text": "Commanders -6 vs Giants",
@@ -8029,7 +8013,7 @@
             }
           },
           "Dog": {
-            "record": "6-7-0",
+            "record": "9-9",
             "picks": {
               "1": {
                 "text": "Dolphins +1.5 vs Colts",
@@ -8106,7 +8090,7 @@
             }
           },
           "Over": {
-            "record": "5-8-0",
+            "record": "8-10",
             "picks": {
               "1": {
                 "text": "Lions / Packers O47.5",
@@ -8183,7 +8167,7 @@
             }
           },
           "Under": {
-            "record": "7-6-0",
+            "record": "11-7",
             "picks": {
               "1": {
                 "text": "Cardinals / Saints U44.5",
@@ -8260,7 +8244,7 @@
             }
           },
           "Super Lock": {
-            "record": "9-4-0",
+            "record": "10-8",
             "picks": {
               "1": {
                 "text": "Ashton Jeanty ATTD (-115)",
@@ -9123,11 +9107,11 @@
         }
       },
       "2025": {
-        "seasonRecord": "41-44",
-        "lifetimeRecord": "118-123-4",
+        "seasonRecord": "43-47",
+        "lifetimeRecord": "130-136-4",
         "byType": {
           "Favorite": {
-            "record": "9-4-0",
+            "record": "12-6",
             "picks": {
               "1": {
                 "text": "Chiefs -3 Vs Chargers",
@@ -9204,7 +9188,7 @@
             }
           },
           "Dog": {
-            "record": "6-7-0",
+            "record": "9-9",
             "picks": {
               "1": {
                 "text": "Raiders +3 Vs Pats",
@@ -9281,7 +9265,7 @@
             }
           },
           "Over": {
-            "record": "7-6-0",
+            "record": "7-11",
             "picks": {
               "1": {
                 "text": "Cowboys Vs Eagles O47.5",
@@ -9358,7 +9342,7 @@
             }
           },
           "Under": {
-            "record": "2-11-0",
+            "record": "5-13",
             "picks": {
               "1": {
                 "text": "Ravens Vs Bills U50.5",
@@ -9435,7 +9419,7 @@
             }
           },
           "Super Lock": {
-            "record": "7-6-0",
+            "record": "10-8",
             "picks": {
               "1": {
                 "text": "Ceedee catch on 1st drive -120",
