@@ -886,10 +886,10 @@ function renderStandings() {
       </div>
     </section>
 
-    <!-- Weekly Masters -->
+    <!-- Weekly Winners -->
     <section class="mb-stack-lg">
       <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface uppercase flex items-center gap-3 mb-6">
-        <span class="w-2 h-8 bg-secondary-fixed-dim inline-block"></span> Weekly Masters
+        <span class="w-2 h-8 bg-secondary-fixed-dim inline-block"></span> Weekly Winners
       </h3>
       <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         ${Array.from({ length: WEEK_COUNT }, (_, i) => {
@@ -1093,7 +1093,7 @@ function renderLifetime() {
               <div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
             </div>
             <div class="relative p-6">
-              <div class="font-label-caps text-tertiary-fixed text-[10px] mb-1 uppercase">Season ${season} Champion</div>
+              <div class="font-label-caps text-tertiary-fixed text-[10px] mb-1 uppercase">${season} Season Champion</div>
               <h3 class="font-headline-lg text-headline-lg-mobile text-on-surface uppercase mb-3">${escapeHtml(champ.name)}</h3>
               <div class="grid grid-cols-2 gap-4 border-t border-outline-variant pt-3">
                 <div>
@@ -1125,7 +1125,7 @@ function renderLifetime() {
               </div>
             </div>
             <div class="p-6">
-              <div class="font-label-caps text-on-surface-variant text-[10px] mb-1 uppercase">Season ${liveSeason} In Progress</div>
+              <div class="font-label-caps text-on-surface-variant text-[10px] mb-1 uppercase">${liveSeason} Season In Progress</div>
               <h3 class="font-headline-lg text-headline-lg-mobile text-on-surface/60 uppercase mb-3">TBD</h3>
               <div class="border-t border-outline-variant pt-3">
                 <p class="text-xs text-on-surface-variant italic">
@@ -1181,7 +1181,7 @@ function renderLifetime() {
       <div class="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
         <div>
           <h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface uppercase mb-1">All-Time Leaderboard</h2>
-          <p class="text-on-surface-variant text-sm">Cumulative performance since Season ${SEASONS_ORDER[0]}</p>
+          <p class="text-on-surface-variant text-sm">Cumulative performance since the ${SEASONS_ORDER[0]} season</p>
         </div>
       </div>
       <div class="glass-card overflow-x-auto">
@@ -1244,7 +1244,7 @@ function renderLifetime() {
                     <span class="material-symbols-outlined">lock</span>
                   </div>
                   <div>
-                    <h4 class="font-bold text-on-surface uppercase">Season ${s}</h4>
+                    <h4 class="font-bold text-on-surface uppercase">${s} Season</h4>
                     <p class="text-xs text-on-surface-variant">${isCurrent ? "Starts Sept 2026" : "Not available"}</p>
                   </div>
                 </div>
@@ -1259,7 +1259,7 @@ function renderLifetime() {
                   <span class="material-symbols-outlined">history_edu</span>
                 </div>
                 <div>
-                  <h4 class="font-bold text-on-surface uppercase">Season ${s}</h4>
+                  <h4 class="font-bold text-on-surface uppercase">${s} Season</h4>
                   <p class="text-xs text-on-surface-variant">Standings · Picks · Records</p>
                 </div>
               </div>
