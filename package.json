@@ -5,8 +5,8 @@
   "description": "Lock League — NFL pick league tracker",
   "type": "module",
   "scripts": {
-    "dev": "vercel dev",
-    "deploy": "vercel --prod"
+    "dev": "wrangler pages dev --port 8765",
+    "deploy": "wrangler pages deploy ."
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0",

@@ -7,3 +7,7 @@ node_modules/
 
 # Local Netlify folder
 .netlify
+
+# Local Cloudflare wrangler / pages dev
+.wrangler
+.dev.vars
