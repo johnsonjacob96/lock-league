@@ -2,7 +2,7 @@
 # Production env vars are set in the Cloudflare dashboard, not here.
 name = "lock-league"
 compatibility_date = "2026-05-01"
-pages_build_output_dir = "."
+pages_build_output_dir = "public"
 
 # Local dev only: copy your .env.local values here as a [vars] block to test
 # functions locally without hitting prod. Do NOT commit real secrets.
