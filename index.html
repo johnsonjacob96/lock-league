@@ -1,1555 +1,610 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>LOCK LEAGUE // 2025</title>
+<title>LOCK LEAGUE // 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #000;
-    --bg-1: #060806;
-    --bg-2: #0a0e0a;
-    --bg-card: #0d130d;
-    --green: #2cd962;          /* DK lime, slightly hotter */
-    --green-bright: #54ff7c;
-    --green-dim: #0e6630;
-    --green-glow: rgba(44,217,98,0.45);
-    --green-ghost: rgba(44,217,98,0.12);
-    --red: #ff2e3a;
-    --red-glow: rgba(255,46,58,0.4);
-    --red-ghost: rgba(255,46,58,0.12);
-    --yellow: #f5d300;
-    --yellow-ghost: rgba(245,211,0,0.14);
-    --white: #ffffff;
-    --line: rgba(255,255,255,0.08);
-    --line-green: rgba(44,217,98,0.32);
-    --line-strong: rgba(44,217,98,0.6);
-    --dim: #6b7468;
-    --dim-2: #3b4239;
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "on-primary": "#003919",
+          "on-secondary-fixed-variant": "#004e5a",
+          "inverse-on-surface": "#2f3132",
+          "surface-container": "#1e2021",
+          "primary-fixed": "#61ff97",
+          "on-tertiary": "#3a3000",
+          "surface-container-highest": "#333536",
+          "on-background": "#e2e2e3",
+          "on-primary-container": "#007137",
+          "inverse-surface": "#e2e2e3",
+          "on-tertiary-container": "#736000",
+          "inverse-primary": "#006d35",
+          "text-dim": "#8A9296",
+          "tertiary-container": "#ffdc49",
+          "surface-container-low": "#1a1c1d",
+          "live-red": "#FF3B3B",
+          "surface-container-high": "#282a2b",
+          "on-primary-fixed": "#00210c",
+          "on-secondary-container": "#005f6d",
+          "outline": "#849584",
+          "on-tertiary-fixed": "#221b00",
+          "error-container": "#93000a",
+          "tertiary": "#fffaf5",
+          "outline-variant": "#3b4b3d",
+          "primary-container": "#00ff85",
+          "secondary": "#b9f1ff",
+          "surface-container-lowest": "#0c0e0f",
+          "tertiary-fixed": "#ffe16d",
+          "on-surface-variant": "#b9cbb9",
+          "error": "#ffb4ab",
+          "surface-glass": "rgba(25, 28, 30, 0.6)",
+          "on-primary-fixed-variant": "#005227",
+          "surface": "#121415",
+          "secondary-fixed": "#a5eeff",
+          "primary": "#f0ffee",
+          "on-error": "#690005",
+          "surface-dim": "#121415",
+          "secondary-fixed-dim": "#00daf8",
+          "background": "#121415",
+          "on-secondary-fixed": "#001f25",
+          "border-muted": "#1F2427",
+          "surface-bright": "#38393a",
+          "tertiary-fixed-dim": "#e9c400",
+          "secondary-container": "#00e0ff",
+          "primary-fixed-dim": "#00e476",
+          "on-error-container": "#ffdad6",
+          "on-tertiary-fixed-variant": "#544600",
+          "surface-tint": "#00e476",
+          "on-surface": "#e2e2e3"
+        },
+        borderRadius: {
+          DEFAULT: "0.125rem",
+          lg: "0.25rem",
+          xl: "0.5rem",
+          full: "9999px"
+        },
+        spacing: {
+          "stack-sm": "0.5rem",
+          "container-max": "1280px",
+          "stack-lg": "2rem",
+          "stack-md": "1rem",
+          "margin-mobile": "1rem",
+          "gutter": "1.5rem"
+        },
+        maxWidth: {
+          "container-max": "1280px"
+        },
+        fontFamily: {
+          "display-lg": ["Oswald"],
+          "label-caps": ["Inter"],
+          "headline-lg": ["Oswald"],
+          "body-md": ["Inter"],
+          "data-tabular": ["JetBrains Mono"]
+        },
+        fontSize: {
+          "display-lg": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+          "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "700"}],
+          "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+          "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+          "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+          "data-tabular": ["14px", {"lineHeight": "20px", "fontWeight": "500"}]
+        }
+      }
+    }
   }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { background: var(--bg); }
+</script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { background: #121415; }
   body {
-    color: var(--white);
-    font-family: 'IBM Plex Sans', system-ui, sans-serif;
-    font-size: 13px;
-    line-height: 1.45;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #e2e2e3;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
-    /* Subtle vertical scan + corner radial */
-    background:
-      radial-gradient(ellipse at 0% 0%, rgba(44,217,98,0.06) 0%, transparent 38%),
-      radial-gradient(ellipse at 100% 0%, rgba(44,217,98,0.04) 0%, transparent 42%),
-      linear-gradient(180deg, #000 0%, #050605 100%);
-    background-attachment: fixed;
-  }
-  body::before {
-    /* Faint horizontal scanline overlay */
-    content: "";
-    position: fixed; inset: 0;
-    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
-    pointer-events: none; z-index: 1;
   }
 
-  .mono { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
-  .display { font-family: 'Anton', sans-serif; letter-spacing: 0.01em; text-transform: uppercase; }
-
-  /* ============== Top diagonal stripe ============== */
-  .stripe {
-    height: 6px;
-    background: repeating-linear-gradient(
-      90deg,
-      var(--green) 0px,
-      var(--green) 18px,
-      transparent 18px,
-      transparent 22px,
-      var(--green) 22px,
-      var(--green) 24px,
-      transparent 24px,
-      transparent 32px
-    );
-    position: relative;
-    z-index: 3;
+  /* Turf overlay */
+  .turf-overlay {
+    background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.03) 1px, transparent 0);
+    background-size: 24px 24px;
   }
 
-  /* ============== Ticker ============== */
-  .ticker {
-    position: relative;
-    height: 42px;
-    background: var(--bg-1);
-    border-top: 1px solid var(--line-green);
-    border-bottom: 1px solid var(--line-green);
-    overflow: hidden;
-    z-index: 4;
-    display: flex;
-    align-items: center;
-  }
-  .ticker-label {
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    z-index: 3;
-    background: var(--green);
-    color: #000;
-    padding: 0 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.2em;
-    box-shadow: 0 0 18px var(--green-glow);
-    clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
-    padding-right: 28px;
-  }
-  .ticker-label .dot {
-    width: 6px; height: 6px;
-    background: #000; border-radius: 50%;
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  .ticker-week-pill {
-    position: absolute;
-    right: 0; top: 0; bottom: 0;
-    z-index: 3;
-    background: #000;
-    border-left: 1px solid var(--line-green);
-    padding: 0 16px 0 22px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%);
-  }
-  .ticker-week-pill select {
-    background: transparent;
-    color: var(--green);
-    border: 1px solid var(--line-green);
-    padding: 3px 6px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    cursor: pointer;
-    outline: none;
-  }
-  .ticker-viewport {
-    flex: 1;
-    overflow: hidden;
-    height: 100%;
-    margin-left: 130px;
-    margin-right: 140px;
-    position: relative;
-  }
-  .ticker-viewport::before, .ticker-viewport::after {
-    content: "";
-    position: absolute; top: 0; bottom: 0; width: 60px; z-index: 2;
-    pointer-events: none;
-  }
-  .ticker-viewport::before { left: 0; background: linear-gradient(90deg, var(--bg-1) 0%, transparent 100%); }
-  .ticker-viewport::after { right: 0; background: linear-gradient(-90deg, var(--bg-1) 0%, transparent 100%); }
-  .ticker-track {
-    display: inline-flex;
-    width: max-content;
-    align-items: center;
-    height: 100%;
-    white-space: nowrap;
-    animation: ticker-scroll 120s linear infinite;
-    will-change: transform;
-  }
-  .ticker:hover .ticker-track { animation-play-state: paused; }
-  @keyframes ticker-scroll {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
-  }
-  .tk-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 18px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 12px;
-    color: var(--white);
-    flex-shrink: 0;
-    flex-grow: 0;
-  }
-  .tk-wk { color: var(--dim); font-weight: 600; letter-spacing: 0.08em; font-size: 10px; }
-  .tk-name {
-    font-family: 'Anton', sans-serif;
-    font-size: 14px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--white);
-  }
-  .tk-type { color: var(--green); font-size: 10px; letter-spacing: 0.16em; font-weight: 700; text-transform: uppercase; }
-  .tk-type.dog { color: var(--green-bright); }
-  .tk-type.over, .tk-type.under { color: #ffa83c; }
-  .tk-type.super { color: var(--yellow); }
-  .tk-pick { font-weight: 500; }
-  .tk-res {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px; height: 16px;
-    font-size: 10px;
-    font-weight: 800;
-    font-family: 'IBM Plex Mono', monospace;
-  }
-  .tk-res.W { background: var(--green); color: #000; }
-  .tk-res.L { background: var(--red); color: #fff; }
-  .tk-res.P { background: var(--yellow); color: #000; }
-  .tk-sep {
-    color: var(--green);
-    font-weight: 700;
-    padding: 0 4px;
-    opacity: 0.5;
-  }
+  .display { font-family: 'Oswald', sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  .font-display-lg { font-family: 'Oswald', sans-serif; font-weight: 700; }
+  .font-label-caps { font-family: 'Inter', sans-serif; font-weight: 700; letter-spacing: 0.1em; }
+  .font-headline-lg { font-family: 'Oswald', sans-serif; font-weight: 600; }
+  .font-body-md { font-family: 'Inter', sans-serif; }
+  .font-data-tabular { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+  .text-label-caps { font-size: 12px; line-height: 16px; letter-spacing: 0.1em; font-weight: 700; }
+  .text-display-lg { font-size: 72px; line-height: 80px; letter-spacing: -0.02em; font-weight: 700; }
+  .text-headline-lg { font-size: 32px; line-height: 40px; letter-spacing: 0.02em; font-weight: 600; }
+  .text-headline-lg-mobile { font-size: 24px; line-height: 32px; font-weight: 600; }
+  .text-body-md { font-size: 16px; line-height: 24px; font-weight: 400; }
+  .text-data-tabular { font-size: 14px; line-height: 20px; font-weight: 500; font-family: 'JetBrains Mono', monospace; }
 
-  /* ============== Header ============== */
-  header.topbar {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    background: rgba(0,0,0,0.95);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--line-green);
-  }
-  .topbar-inner {
-    max-width: 1320px;
-    margin: 0 auto;
-    padding: 14px 28px;
-    display: flex;
-    align-items: center;
-    gap: 28px;
-  }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .brand-mark {
-    width: 40px; height: 40px;
-    color: var(--green);
-    display: grid; place-items: center;
-    filter: drop-shadow(0 0 10px var(--green-glow));
-  }
-  .brand-mark svg { width: 100%; height: 100%; display: block; }
-  .brand-mark:hover svg { animation: lock-jiggle 0.5s cubic-bezier(.36,.07,.19,.97); }
-  @keyframes lock-jiggle {
-    0%, 100% { transform: rotate(0deg); }
-    20% { transform: rotate(-4deg); }
-    40% { transform: rotate(4deg); }
-    60% { transform: rotate(-3deg); }
-    80% { transform: rotate(2deg); }
-  }
-  .brand-name { display: flex; flex-direction: column; line-height: 0.9; }
-  .brand-name .l1 {
-    font-family: 'Anton', sans-serif;
-    font-size: 19px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
-  .brand-name .l2 {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--green);
-    letter-spacing: 0.22em;
-    margin-top: 4px;
-    font-weight: 600;
-  }
-  .live-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 9px 4px 7px;
-    border: 1px solid var(--line-strong);
-    background: rgba(44,217,98,0.05);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.2em;
-    color: var(--green);
-    font-weight: 700;
-  }
-  .live-dot {
-    width: 6px; height: 6px;
-    background: var(--green); border-radius: 50%;
-    box-shadow: 0 0 8px var(--green-glow);
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-
-  nav.year-tabs { display: flex; gap: 0; margin-left: auto; }
-  .year-tab {
-    background: transparent;
-    border: 1px solid var(--line);
-    border-right: none;
-    color: var(--dim);
-    padding: 9px 16px;
-    cursor: pointer;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    transition: all 0.12s ease;
-  }
-  .year-tab:hover { color: var(--white); border-color: var(--line-green); }
-  .year-tab:last-child { border-right: 1px solid var(--line); }
-  .year-tab.active {
-    background: var(--green);
-    color: #000;
-    border-color: var(--green);
-    box-shadow: 0 0 18px rgba(44,217,98,0.35);
-  }
-  .nav-links { display: flex; gap: 4px; margin-left: 14px; }
-  .nav-link {
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--dim);
-    padding: 9px 12px;
-    cursor: pointer;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-  .nav-link:hover { color: var(--white); }
-  .nav-link.active { color: var(--green); }
-  .nav-link.active::before { content: "// "; color: var(--green); }
-
-  /* ============== Layout ============== */
-  main {
-    max-width: 1320px;
-    margin: 0 auto;
-    padding: 38px 28px 96px;
-    position: relative;
-    z-index: 2;
-  }
-
-  /* ============== Championship Card ============== */
-  .champ-card {
-    position: relative;
-    border: 1px solid var(--line-green);
-    background:
-      linear-gradient(135deg, rgba(44,217,98,0.08) 0%, transparent 55%),
-      linear-gradient(45deg, transparent 55%, rgba(44,217,98,0.04) 100%),
-      var(--bg-1);
-    margin-bottom: 28px;
-    overflow: hidden;
-  }
-  .champ-card::before, .champ-card::after {
-    content: "";
-    position: absolute;
-    width: 12px; height: 12px;
-    border: 2px solid var(--green);
-    box-shadow: 0 0 10px var(--green-glow);
-  }
-  .champ-card::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
-  .champ-card::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
-  .champ-bar {
-    height: 4px;
-    background: var(--green);
-    box-shadow: 0 0 14px var(--green-glow);
-  }
-  .champ-body {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 36px;
-    padding: 24px 30px 22px;
-    align-items: end;
-  }
-  .champ-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 9px 30px;
-    border-bottom: 1px solid var(--line);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.22em;
-    color: var(--dim);
-    text-transform: uppercase;
-  }
-  .champ-meta .green-strong { color: var(--green); font-weight: 700; }
-  .champ-meta .right { display: flex; gap: 18px; align-items: center; }
-  .champ-meta .right .live-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 8px var(--green-glow);
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-  .champ-left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-  .champ-rank-line {
-    display: flex; align-items: baseline; gap: 14px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: var(--dim);
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-  .champ-rank-num {
-    font-size: 30px;
-    line-height: 1;
-    filter: drop-shadow(0 0 10px rgba(255,208,66,0.6));
-  }
-  .champ-name {
-    font-family: 'Anton', sans-serif;
-    font-size: clamp(44px, 7.2vw, 96px);
-    line-height: 0.86;
-    letter-spacing: -0.005em;
-    text-transform: uppercase;
-    color: var(--white);
-  }
-  .champ-tags {
-    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-    margin-top: 4px;
-  }
-  .champ-prize {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 11px;
-    background: var(--green);
-    color: #000;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.16em;
-  }
-  .champ-prize .v { font-family: 'Anton', sans-serif; font-size: 17px; letter-spacing: 0.02em; font-weight: 400; }
-  .champ-pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 5px 10px;
-    border: 1px solid var(--line-green);
-    color: var(--green);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-  }
-
-  .champ-stats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(128px, 1fr));
-    gap: 1px;
-    background: var(--line-green);
-    border: 1px solid var(--line-green);
-    min-width: 280px;
-  }
-  .champ-stat {
-    background: #000;
-    padding: 13px 16px 12px;
-    position: relative;
-  }
-  .champ-stat .stat-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 8.5px;
-    color: var(--dim);
-    letter-spacing: 0.2em;
-    font-weight: 700;
-    margin-bottom: 6px;
-    text-transform: uppercase;
-  }
-  /* Single-value (e.g., "6") stays display caps */
-  .champ-stat .v {
-    font-family: 'Anton', sans-serif;
-    font-size: 30px;
-    line-height: 1;
-    letter-spacing: 0.01em;
-    color: var(--white);
-    text-transform: uppercase;
-  }
-  .champ-stat .v.green { color: var(--green); }
-  /* Compound record values (W-L-P) use mono so the L doesn't look squished */
-  .champ-stat .v.rec {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 26px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    text-transform: none;
-  }
-  .champ-stat .sub {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9.5px;
-    color: var(--dim);
-    margin-top: 5px;
-    letter-spacing: 0.06em;
-  }
-
-  /* ============== Hero (other views) ============== */
-  .hero {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 32px;
-    align-items: end;
-    padding-bottom: 28px;
-    margin-bottom: 32px;
-    border-bottom: 1px solid var(--line-green);
-    position: relative;
-  }
-  .hero::after {
-    content: "";
-    position: absolute;
-    left: 0; bottom: -1px;
-    width: 120px; height: 3px;
-    background: var(--green);
-    box-shadow: 0 0 14px var(--green-glow);
-  }
-  .eyebrow {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--green);
-    letter-spacing: 0.32em;
-    font-weight: 700;
-    margin-bottom: 12px;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .eyebrow::before {
-    content: ""; width: 26px; height: 2px; background: var(--green);
-  }
-  .hero-title {
-    font-family: 'Anton', sans-serif;
-    font-size: clamp(56px, 9vw, 124px);
-    line-height: 0.86;
-    letter-spacing: -0.005em;
-    text-transform: uppercase;
-  }
-  .hero-title .name { color: var(--white); }
-  .hero-title .wreath { color: var(--green); }
-  .hero-title .crown {
-    display: inline-block;
-    margin-left: 10px;
-    color: var(--yellow);
-    font-size: 0.5em;
-    transform: translateY(-0.5em);
-  }
-  .hero-stats {
-    display: grid;
-    grid-template-columns: repeat(3, auto);
-    gap: 28px;
-    align-items: end;
-  }
-  .hstat { text-align: right; }
-  .hstat-l {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--dim);
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    font-weight: 600;
-    margin-bottom: 6px;
-  }
-  .hstat-v {
-    font-family: 'Anton', sans-serif;
-    font-size: 38px;
-    color: var(--white);
-    letter-spacing: 0.02em;
-    line-height: 1;
-  }
-  .hstat-v.green { color: var(--green); }
-
-  /* ============== Section header ============== */
-  .section-h {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin: 44px 0 18px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--line);
-    position: relative;
-  }
-  .section-h::after {
-    content: "";
-    position: absolute; left: 0; bottom: -1px;
-    width: 48px; height: 2px;
-    background: var(--green);
-  }
-  .section-h h2 {
-    font-family: 'Anton', sans-serif;
-    font-size: 24px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .section-h h2::before {
-    content: "// "; color: var(--green); font-weight: 400;
-  }
-  .section-h .section-note {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  /* ============== Standings table ============== */
-  .standings-wrap {
-    border: 1px solid var(--line-green);
-    background: var(--bg-1);
-    position: relative;
-  }
-  .standings-wrap::before,
-  .standings-wrap::after {
-    content: "";
-    position: absolute;
-    width: 12px; height: 12px;
-    border: 2px solid var(--green);
-  }
-  .standings-wrap::before {
-    top: -1px; left: -1px;
-    border-right: none; border-bottom: none;
-  }
-  .standings-wrap::after {
-    bottom: -1px; right: -1px;
-    border-left: none; border-top: none;
-  }
-
-  .standings {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  .standings thead th {
-    text-align: left;
-    padding: 12px 18px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    color: var(--dim);
-    font-weight: 700;
-    background: var(--bg-2);
-    border-bottom: 1px solid var(--line-green);
-  }
-  .standings thead th.center { text-align: center; }
-  .standings thead th.right { text-align: right; }
-
-  .member-row {
-    cursor: pointer;
-    transition: background 0.1s ease;
-    position: relative;
-  }
-  .member-row > td {
-    padding: 18px 18px;
-    border-bottom: 1px solid var(--line);
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     vertical-align: middle;
   }
-  .member-row:hover {
-    background: rgba(44,217,98,0.04);
-  }
-  .member-row.expanded {
-    background: rgba(44,217,98,0.06);
-  }
-  .member-row.expanded > td:first-child::before {
-    content: "";
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: var(--green);
-    box-shadow: 0 0 14px var(--green-glow);
+
+  /* Glass panel */
+  .glass-card, .glass-panel {
+    background: rgba(25, 28, 30, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid #1F2427;
   }
 
-  .rank-block {
-    font-family: 'Anton', sans-serif;
-    font-size: 22px;
-    color: var(--dim-2);
-    line-height: 1;
-    letter-spacing: 0;
-  }
-  .rank-block.top { color: var(--green); }
-  .crown-mark { font-size: 16px; margin-right: 2px; filter: drop-shadow(0 0 6px rgba(255,208,66,0.6)); }
+  /* Record colors */
+  .rec-W { color: #61ff97; }
+  .rec-L { color: #FF3B3B; }
+  .rec-T, .rec-P { color: #ffe16d; }
 
-  .member-name-cell {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
+  /* Live pulse */
+  @keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(255, 59, 59, 0.55); }
+    70% { box-shadow: 0 0 0 8px rgba(255, 59, 59, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 59, 59, 0); }
   }
-  .member-name {
-    font-family: 'Anton', sans-serif;
-    font-size: 26px;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    line-height: 1;
-  }
-  .member-crown {
-    color: var(--yellow);
-    font-size: 12px;
-    letter-spacing: 0.2em;
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 700;
-  }
+  .live-pulse { animation: pulse-red 2s infinite; }
 
-  .record-stack { display: flex; align-items: baseline; gap: 10px; }
-  .record-big {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--white);
+  /* Ticker marquee */
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
   }
-  .record-big .w { color: var(--green); }
-  .record-big .sep { color: var(--dim-2); padding: 0 1px; }
-  .record-big .l { color: var(--red); }
-  .record-big .t { color: var(--yellow); }
-  .record-pct {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--dim);
-    font-weight: 500;
-  }
-
-  /* Heat strip */
-  .heat-strip {
-    display: flex;
-    gap: 3px;
+  .marquee-track {
+    display: inline-flex;
+    width: max-content;
+    animation: marquee var(--marquee-duration, 80s) linear infinite;
+    white-space: nowrap;
     align-items: center;
-    justify-content: center;
   }
-  .heat-week {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-  .heat-cell {
-    width: 11px; height: 4px;
-    background: rgba(255,255,255,0.05);
-  }
-  .heat-cell.W { background: var(--green); box-shadow: 0 0 4px rgba(44,217,98,0.5); }
-  .heat-cell.L { background: var(--red); }
-  .heat-cell.P { background: var(--yellow); }
+  .marquee-track:hover { animation-play-state: paused; }
+  .tk-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 22px; height: 100%; border-right: 1px solid #1F2427; }
+  .tk-wk { color: #8A9296; font-size: 10px; letter-spacing: 0.12em; }
+  .tk-name { color: #e2e2e3; font-weight: 600; font-size: 11px; }
+  .tk-type { font-size: 10px; letter-spacing: 0.08em; padding: 2px 6px; border: 1px solid #3b4b3d; }
+  .tk-type.fav { color: #61ff97; border-color: rgba(97,255,151,0.35); }
+  .tk-type.dog { color: #a5eeff; border-color: rgba(165,238,255,0.35); }
+  .tk-type.over { color: #ffe16d; border-color: rgba(255,225,109,0.35); }
+  .tk-type.under { color: #00daf8; border-color: rgba(0,218,248,0.35); }
+  .tk-type.super { color: #FF3B3B; border-color: rgba(255,59,59,0.35); }
+  .tk-pick { color: #b9cbb9; font-size: 11px; }
+  .tk-res { font-size: 10px; padding: 1px 5px; font-weight: 700; }
+  .tk-res.W { background: rgba(97,255,151,0.18); color: #61ff97; }
+  .tk-res.L { background: rgba(255,59,59,0.18); color: #FF3B3B; }
+  .tk-res.P { background: rgba(255,225,109,0.18); color: #ffe16d; }
 
-  .ww-cell {
-    font-family: 'Anton', sans-serif;
-    font-size: 28px;
-    text-align: center;
-    color: var(--green);
-    line-height: 1;
-  }
-  .ww-cell.zero { color: var(--dim-2); }
-  .super-cell {
-    text-align: right;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 14px;
-    font-weight: 600;
-  }
-  .super-cell .key { color: var(--green); margin-right: 6px; font-size: 11px; letter-spacing: 0.1em; }
+  /* Heat strip cells (Standings overview) — Stitch w-3 h-5 */
+  .heat-cell { width: 0.75rem; height: 1.25rem; background: #333536; transition: transform 0.1s; }
+  .heat-cell.W { background: #61ff97; }
+  .heat-cell.L { background: #FF3B3B; }
+  .heat-cell.P { background: #ffe16d; }
+  .heat-cell:hover { transform: scaleY(1.3); }
 
-  .chev {
-    color: var(--dim-2);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 14px;
-    transition: transform 0.15s ease, color 0.15s ease;
-    display: inline-block;
-  }
-  .member-row.expanded .chev { transform: rotate(90deg); color: var(--green); }
-
-  /* ============== Member detail panel ============== */
-  .detail-row { display: none; }
-  .detail-row.show { display: table-row; }
-  .detail-cell {
-    padding: 0 !important;
-    background: #050805;
-    border-bottom: 1px solid var(--line-green);
-    border-top: 1px solid var(--line-green);
-  }
-  .detail-inner {
-    padding: 22px 28px 28px;
-    position: relative;
-  }
-
-  .bet-grid-head {
-    display: grid;
-    grid-template-columns: 140px 100px 1fr;
-    gap: 16px;
-    align-items: center;
-    padding: 4px 0 10px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--dim-2);
-    font-weight: 700;
-    border-bottom: 1px solid var(--line);
-  }
-  .bet-row {
-    display: grid;
-    grid-template-columns: 140px 100px 1fr;
-    gap: 16px;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-  }
-  .bet-row:last-child { border-bottom: none; }
-  .bet-name {
-    font-family: 'Anton', sans-serif;
-    font-size: 18px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .bet-name.super { color: var(--green); }
-  .bet-name.super::before {
-    content: "★";
-    color: var(--green);
-    margin-right: 6px;
-    font-size: 14px;
-  }
-  .bet-record {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 15px;
-    font-weight: 700;
-  }
-  .bet-record .w { color: var(--green); }
-  .bet-record .sep { color: var(--dim-2); }
-  .bet-record .l { color: var(--red); }
-  .bet-record .t { color: var(--yellow); }
-  .week-cells {
-    display: grid;
-    grid-template-columns: repeat(18, 1fr);
-    gap: 3px;
-  }
+  /* Week cell (member detail grid) */
   .week-cell {
-    aspect-ratio: 1.5 / 1;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid transparent;
+    width: 26px; height: 26px;
+    background: #1a1c1d;
+    border: 1px solid #2a2c2d;
+    display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer;
-    position: relative;
-    transition: transform 0.08s ease, box-shadow 0.12s ease;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #6b7468;
+    transition: transform 0.1s, border-color 0.1s;
   }
-  .week-cell:hover {
-    transform: scale(1.22);
-    z-index: 2;
-  }
-  .week-cell.W {
-    background: rgba(44,217,98,0.18);
-    border-color: var(--green);
-    box-shadow: 0 0 0 1px var(--green) inset, 0 0 10px rgba(44,217,98,0.15);
-  }
-  .week-cell.W:hover { box-shadow: 0 0 0 1px var(--green) inset, 0 0 18px var(--green-glow); }
-  .week-cell.L {
-    background: rgba(255,46,58,0.18);
-    border-color: var(--red);
-  }
-  .week-cell.L:hover { box-shadow: 0 0 18px var(--red-glow); }
-  .week-cell.P {
-    background: var(--yellow-ghost);
-    border-color: var(--yellow);
-  }
-  .week-cell-label {
-    position: absolute;
-    inset: 0;
-    display: grid; place-items: center;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    font-weight: 700;
-    color: rgba(255,255,255,0.45);
-  }
-  .week-cell.W .week-cell-label { color: var(--green-bright); }
-  .week-cell.L .week-cell-label { color: var(--red); }
-  .week-cell.P .week-cell-label { color: var(--yellow); }
+  .week-cell.W { background: rgba(97, 255, 151, 0.16); color: #61ff97; border-color: rgba(97, 255, 151, 0.35); }
+  .week-cell.L { background: rgba(255, 59, 59, 0.16); color: #FF3B3B; border-color: rgba(255, 59, 59, 0.35); }
+  .week-cell.P { background: rgba(255, 225, 109, 0.14); color: #ffe16d; border-color: rgba(255, 225, 109, 0.35); }
+  .week-cell:hover { transform: scale(1.18); z-index: 5; position: relative; }
 
-  .bet-grid-weeklabel {
-    display: grid;
-    grid-template-columns: repeat(18, 1fr);
-    gap: 3px;
-  }
-  .bet-grid-weeklabel > div {
-    text-align: center;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--dim-2);
-    font-weight: 600;
-  }
-
-  .detail-foot {
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px dashed var(--line);
-    display: flex;
-    gap: 24px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--dim);
-  }
-  .detail-foot strong { color: var(--white); font-weight: 600; margin-right: 6px; }
-  .detail-foot .label { color: var(--green); margin-right: 8px; font-weight: 700; letter-spacing: 0.1em; }
-
-  /* ============== Tooltip ============== */
+  /* Tooltip */
   .tooltip {
     position: fixed;
+    background: #0c0e0f;
+    border: 1px solid #3b4b3d;
+    padding: 10px 14px;
+    font-size: 12px;
     pointer-events: none;
-    background: #000;
-    border: 1px solid var(--green);
-    color: var(--white);
-    padding: 10px 14px;
-    font-size: 12px;
     z-index: 100;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.7), 0 0 24px rgba(44,217,98,0.25);
-    max-width: 280px;
     opacity: 0;
-    transform: translateY(4px);
-    transition: opacity 0.1s ease, transform 0.1s ease;
+    transition: opacity 0.15s;
+    max-width: 280px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
   }
-  .tooltip.show { opacity: 1; transform: translateY(0); }
-  .tt-meta {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--green);
-    letter-spacing: 0.18em;
-    font-weight: 700;
-    text-transform: uppercase;
-    margin-bottom: 5px;
-  }
-  .tt-pick {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 7px;
-    line-height: 1.35;
-  }
-  .tt-result {
-    display: inline-block;
-    padding: 2px 9px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.18em;
-  }
-  .tt-result.W { background: var(--green); color: #000; }
-  .tt-result.L { background: var(--red); color: #fff; }
-  .tt-result.P { background: var(--yellow); color: #000; }
+  .tooltip.show { opacity: 1; }
+  .tooltip .tt-meta { color: #b9cbb9; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .tooltip .tt-pick { color: #e2e2e3; font-weight: 600; margin-bottom: 6px; }
+  .tooltip .tt-result { display: inline-block; padding: 2px 8px; font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: 0.1em; }
+  .tooltip .tt-result.W { background: rgba(97, 255, 151, 0.2); color: #61ff97; }
+  .tooltip .tt-result.L { background: rgba(255, 59, 59, 0.2); color: #FF3B3B; }
+  .tooltip .tt-result.P { background: rgba(255, 225, 109, 0.18); color: #ffe16d; }
 
-  /* ============== Weekly winners ============== */
-  .winners-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(98px, 1fr));
-    gap: 8px;
-  }
-  .winner-card {
-    background: var(--bg-1);
-    border: 1px solid var(--line);
-    padding: 10px 10px 12px;
-    position: relative;
-    transition: all 0.12s ease;
-  }
-  .winner-card:not(.empty) { border-left: 3px solid var(--green); }
-  .winner-card:not(.empty):hover { background: var(--bg-2); border-color: var(--green); }
-  .winner-card .wk {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--dim);
-    letter-spacing: 0.16em;
-    font-weight: 700;
-  }
-  .winner-card .who {
-    font-family: 'Anton', sans-serif;
-    font-size: 22px;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    margin-top: 4px;
-    line-height: 1;
-  }
-  .winner-card.empty .who { color: var(--dim-2); font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 400; }
-
-  /* ============== Lifetime cards ============== */
-  .lt-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 14px;
-  }
-  .lt-card {
-    background: var(--bg-1);
-    border: 1px solid var(--line-green);
-    padding: 22px 22px 18px;
-    position: relative;
-  }
-  .lt-card.top { border-color: var(--green); box-shadow: 0 0 0 1px var(--green-ghost) inset, 0 0 30px rgba(44,217,98,0.15); }
-  .lt-rank {
-    position: absolute;
-    top: 12px; right: 18px;
-    font-family: 'Anton', sans-serif;
-    font-size: 56px;
-    color: var(--dim-2);
-    line-height: 1;
-  }
-  .lt-card.top .lt-rank { color: var(--green); }
-  .lt-champ-pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 10px;
-    border: 1px solid var(--line-green);
-    color: var(--green);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .lt-name {
-    font-family: 'Anton', sans-serif;
-    font-size: 32px;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    line-height: 1;
-    margin-bottom: 6px;
-  }
-  .lt-record {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-  }
-  .lt-record .w { color: var(--green); }
-  .lt-record .l { color: var(--red); }
-  .lt-record .sep { color: var(--dim-2); }
-  .lt-pct {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--dim);
-    margin-top: 4px;
-  }
-  .lt-pct .pctv { color: var(--white); font-weight: 600; }
-  .lt-break { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
-  .lt-row {
-    display: grid;
-    grid-template-columns: 1fr auto 90px;
-    gap: 10px;
-    align-items: center;
-    font-size: 12px;
-  }
-  .lt-bt { font-family: 'IBM Plex Mono', monospace; color: var(--dim); letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; }
-  .lt-bt.super { color: var(--green); font-weight: 700; }
-  .lt-r { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 700; }
-  .lt-r .w { color: var(--green); }
-  .lt-r .l { color: var(--red); }
-  .lt-r .sep { color: var(--dim-2); }
-  .lt-bar { height: 4px; background: rgba(255,255,255,0.05); display: flex; }
-  .lt-bar-w { background: var(--green); height: 100%; }
-  .lt-bar-l { background: var(--red); height: 100%; }
-  .lt-bar-p { background: var(--yellow); height: 100%; }
-
-  /* ============== Rules ============== */
-  .rules-list { display: flex; flex-direction: column; gap: 0; }
-  .rule {
-    display: grid;
-    grid-template-columns: 56px 1fr 160px;
-    gap: 20px;
-    padding: 18px 20px;
-    border: 1px solid var(--line);
-    border-bottom: none;
-    background: var(--bg-1);
-    align-items: start;
-  }
-  .rule:last-child { border-bottom: 1px solid var(--line); }
-  .rule:hover { background: var(--bg-2); border-color: var(--line-green); }
-  .rule-num {
-    font-family: 'Anton', sans-serif;
-    font-size: 28px;
-    color: var(--green);
-    line-height: 1;
-  }
-  .rule-text { font-size: 13px; line-height: 1.6; }
-  .rule-meta {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    text-align: right;
-  }
-  .rule-meta::before { content: "AMENDED "; color: var(--green); margin-right: 4px; }
-
-  /* ============== This Week view ============== */
-  .tw-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-    gap: 14px;
-  }
-  .game-card {
-    background: var(--bg-1);
-    border: 1px solid var(--line);
-    padding: 0;
-    overflow: hidden;
-    transition: border-color 0.12s ease;
-  }
-  .game-card:hover { border-color: var(--line-green); }
-  .game-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 11px 16px;
-    background: var(--bg-2);
-    border-bottom: 1px solid var(--line);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-  .game-head .kickoff { color: var(--green); font-weight: 700; }
-  .game-teams {
-    display: grid;
-    grid-template-columns: 1fr;
-    padding: 6px 0;
-  }
-  .game-team {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 10px;
-    padding: 8px 16px;
-    align-items: center;
-  }
-  .game-team .name {
-    font-family: 'Anton', sans-serif;
-    font-size: 20px;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-  }
-  .game-team .is-fav {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--accent);
-    letter-spacing: 0.12em;
-    font-weight: 700;
-  }
-  .lines-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--line);
-    border-top: 1px solid var(--line);
-  }
-  .book-cell {
-    background: var(--bg-1);
-    padding: 10px 14px;
-    display: grid;
-    gap: 4px;
-  }
-  .book-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--dim);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    font-weight: 700;
-  }
-  .book-label.fd { color: #1493ff; }
-  .book-label.dk { color: var(--green); }
-  .book-numbers {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    gap: 4px;
-    margin-top: 2px;
-  }
-  .pick-btn {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: rgba(255,255,255,0.025);
-    border: 1px solid transparent;
-    padding: 8px 4px;
-    cursor: pointer;
-    transition: all 0.1s ease;
-    text-align: center;
-    position: relative;
-  }
-  .pick-btn:hover { background: rgba(44,217,98,0.10); border-color: var(--line-green); }
-  .pick-btn .pb-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 8.5px;
-    color: var(--dim);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    font-weight: 700;
-  }
-  .pick-btn .pb-value {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--white);
-  }
-  .pick-btn .pb-price {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
-    color: var(--dim-2);
-  }
-  /* Selected = currently picked by the logged-in user */
-  .pick-btn.picked {
-    background: var(--green);
-    border-color: var(--green);
-    box-shadow: 0 0 16px var(--green-glow);
-  }
-  .pick-btn.picked .pb-label,
-  .pick-btn.picked .pb-value,
-  .pick-btn.picked .pb-price { color: #000; }
-  .pick-btn.picked::after {
-    content: "✓";
-    position: absolute;
-    top: 2px; right: 4px;
-    font-size: 10px;
-    font-weight: 900;
-    color: #000;
-  }
-  .pick-btn.saving { opacity: 0.4; pointer-events: none; }
-
-  /* Toast for pick confirmation */
+  /* Toast */
   .toast {
     position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(16px);
-    background: var(--green);
-    color: #000;
-    padding: 12px 22px;
-    font-family: 'IBM Plex Mono', monospace;
+    bottom: 88px;
+    right: 24px;
+    background: #0c0e0f;
+    border-left: 3px solid #61ff97;
+    padding: 14px 20px;
     font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    z-index: 300;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 24px var(--green-glow);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.08em;
+    z-index: 200;
     opacity: 0;
-    transition: opacity 0.18s ease, transform 0.18s ease;
-    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .toast.err { background: var(--red); color: #fff; }
-  .toast.warn { background: var(--accent); color: #000; }
-  .tw-meta {
-    margin-bottom: 22px;
-    padding: 14px 18px;
-    background: var(--bg-1);
-    border: 1px solid var(--line-green);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--dim);
-  }
-  .tw-meta strong { color: var(--green); font-weight: 700; }
-  .tw-source { display: flex; gap: 12px; align-items: center; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.err { border-left-color: #FF3B3B; color: #FF3B3B; }
+  .toast.warn { border-left-color: #ffe16d; color: #ffe16d; }
+  @media (min-width: 768px) { .toast { bottom: 24px; } }
 
-  /* ============== Login modal ============== */
+  /* Modal */
   .modal-backdrop {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.7);
-    backdrop-filter: blur(4px);
-    z-index: 200;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(8px);
+    z-index: 100;
     display: none;
     align-items: center;
     justify-content: center;
   }
   .modal-backdrop.show { display: flex; }
   .modal {
-    background: var(--bg-1);
-    border: 1px solid var(--green);
-    box-shadow: 0 0 40px var(--green-glow), 0 30px 80px rgba(0,0,0,0.6);
-    padding: 28px 30px;
-    width: min(420px, 92vw);
-    position: relative;
+    background: #1a1c1d;
+    border: 1px solid #3b4b3d;
+    padding: 32px;
+    width: 380px;
+    max-width: 92vw;
   }
-  .modal h3 {
-    font-family: 'Anton', sans-serif;
-    font-size: 28px;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    margin-bottom: 4px;
+
+  /* Pick button (clickable book cell) */
+  .pick-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 6px;
+    background: rgba(25, 28, 30, 0.6);
+    border: 1px solid #3b4b3d;
+    cursor: pointer;
+    transition: all 0.12s;
+    min-width: 0;
   }
-  .modal .sub {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.18em;
-    margin-bottom: 22px;
-    text-transform: uppercase;
+  .pick-btn:hover { border-color: #61ff97; background: rgba(97, 255, 151, 0.06); transform: translateY(-1px); }
+  .pick-btn.picked { background: rgba(97, 255, 151, 0.18); border-color: #61ff97; box-shadow: 0 0 14px rgba(97, 255, 151, 0.22); }
+  .pick-btn.saving { opacity: 0.5; pointer-events: none; }
+  .pick-btn .pb-label { font-size: 9px; letter-spacing: 0.14em; color: #b9cbb9; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 700; }
+  .pick-btn .pb-value { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #61ff97; font-weight: 600; }
+  .pick-btn .pb-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A9296; }
+
+  /* Pick input (My Picks) */
+  .pick-input {
+    width: 100%;
+    background: rgba(25, 28, 30, 0.6);
+    border: 1px solid #3b4b3d;
+    color: #e2e2e3;
+    padding: 12px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.12s;
   }
-  .modal label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.16em;
+  .pick-input:focus { outline: none; border-color: #61ff97; }
+  .pick-input::placeholder { color: #6b7468; }
+
+  /* Super Lock manual mark button */
+  .sl-mark-btn {
+    padding: 10px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    background: rgba(25, 28, 30, 0.6);
+    border: 1px solid #3b4b3d;
+    color: #b9cbb9;
+    cursor: pointer;
+    transition: all 0.12s;
     font-weight: 700;
-    display: block;
-    margin-bottom: 6px;
   }
+  .sl-mark-btn.W:hover, .sl-mark-btn.W.current { background: rgba(97, 255, 151, 0.18); color: #61ff97; border-color: #61ff97; }
+  .sl-mark-btn.L:hover, .sl-mark-btn.L.current { background: rgba(255, 59, 59, 0.18); color: #FF3B3B; border-color: #FF3B3B; }
+  .sl-mark-btn.P:hover, .sl-mark-btn.P.current { background: rgba(255, 225, 109, 0.16); color: #ffe16d; border-color: #ffe16d; }
+
+  /* Modal form fields */
+  .modal label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #b9cbb9; margin-bottom: 6px; }
   .modal select, .modal input {
     width: 100%;
-    background: #000;
-    border: 1px solid var(--line);
+    background: #0c0e0f;
+    border: 1px solid #3b4b3d;
+    color: #e2e2e3;
     padding: 10px 12px;
-    color: var(--white);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
     margin-bottom: 16px;
-    outline: none;
   }
-  .modal select:focus, .modal input:focus { border-color: var(--green); }
-  .modal .btn-row { display: flex; gap: 10px; margin-top: 6px; }
-  .btn {
-    background: var(--green);
-    color: #000;
-    border: none;
-    padding: 11px 18px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 800;
+  .modal select:focus, .modal input:focus { outline: none; border-color: #61ff97; }
+  .modal .btn {
+    flex: 1;
+    background: #00ff85;
+    color: #003919;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    letter-spacing: 0.18em;
-    cursor: pointer;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    transition: filter 0.1s ease;
+    padding: 12px;
+    border: 1px solid #00ff85;
+    cursor: pointer;
+    font-weight: 700;
+    transition: all 0.12s;
   }
-  .btn:hover { filter: brightness(1.1); }
-  .btn.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
-  .btn.ghost:hover { color: var(--white); border-color: var(--green); }
-  .modal-err { color: var(--red); font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-top: 4px; }
+  .modal .btn:hover { filter: brightness(1.1); }
+  .modal .btn:active { transform: scale(0.97); }
+  .modal .btn.ghost {
+    background: transparent;
+    color: #b9cbb9;
+    border-color: #3b4b3d;
+  }
+  .modal .btn.ghost:hover { color: #e2e2e3; border-color: #b9cbb9; }
+  .modal-err { color: #FF3B3B; font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 12px; min-height: 14px; }
 
-  /* User chip in topbar */
+  /* Primary CTA */
+  .btn-primary {
+    background: #00ff85;
+    color: #003919;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 12px 22px;
+    border: 1px solid #00ff85;
+    cursor: pointer;
+    font-weight: 700;
+    transition: all 0.12s;
+  }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-primary:active { transform: scale(0.97); }
+
+  /* Sidebar nav link */
+  .side-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin: 0 8px;
+    color: #b9cbb9;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    transition: all 0.15s;
+    cursor: pointer;
+    background: transparent;
+    border-radius: 0.25rem;
+    width: calc(100% - 16px);
+    text-align: left;
+  }
+  .side-nav-link:hover { color: #e2e2e3; background: #282a2b; }
+  .side-nav-link.active { background: #00ff85; color: #003919; }
+  .side-nav-link.active .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
+  .side-nav-link .material-symbols-outlined { color: #61ff97; font-size: 22px; }
+  .side-nav-link.active .material-symbols-outlined { color: #003919; }
+
+  /* Bottom mobile nav */
+  .bottom-nav-link {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 2px;
+    padding: 8px 0;
+    color: #b9cbb9;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    transition: color 0.15s;
+  }
+  .bottom-nav-link:hover { color: #e2e2e3; }
+  .bottom-nav-link.active { color: #61ff97; font-weight: 700; }
+  .bottom-nav-link.active .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
+
+  /* Year tab */
+  .year-tab {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: #b9cbb9;
+    padding: 6px 12px;
+    border: 1px solid #1F2427;
+    cursor: pointer;
+    transition: all 0.12s;
+    background: transparent;
+  }
+  .year-tab:hover { color: #e2e2e3; border-color: #3b4b3d; }
+  .year-tab.active { color: #61ff97; border-color: #61ff97; background: rgba(97, 255, 151, 0.06); }
+
+  /* User chip */
   .user-chip {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 11px;
-    border: 1px solid var(--line-green);
-    color: var(--green);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    font-weight: 700;
-    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #61ff97;
     cursor: pointer;
-  }
-  .user-chip:hover { background: rgba(44,217,98,0.08); }
-  .user-chip .dot {
-    width: 6px; height: 6px;
-    background: var(--green);
-    border-radius: 50%;
-    box-shadow: 0 0 6px var(--green-glow);
-  }
-
-  /* My picks pick-submission form */
-  .picks-form {
-    background: var(--bg-1);
-    border: 1px solid var(--line-green);
-    padding: 22px 26px;
-    margin-bottom: 24px;
-  }
-  .picks-form .form-row {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 16px;
-    align-items: center;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .picks-form .form-row:last-child { border-bottom: none; }
-  .picks-form .bt-name {
-    font-family: 'Anton', sans-serif;
-    font-size: 18px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  .picks-form .bt-name.super { color: var(--green); }
-  .picks-form input.pick-input {
-    background: #000;
-    border: 1px solid var(--line);
-    padding: 10px 12px;
-    color: var(--white);
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    width: 100%;
-    outline: none;
-  }
-  .picks-form input.pick-input:focus { border-color: var(--green); }
-  .picks-form .lock-status {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--dim);
-    margin-top: 12px;
-    letter-spacing: 0.1em;
-  }
-  .picks-form .lock-status.locked { color: var(--red); }
-  .picks-form .submit-row {
-    margin-top: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .picks-form .save-msg {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--green);
-    letter-spacing: 0.12em;
-  }
-
-  /* Super Lock manual mark widget */
-  .sl-mark-box {
-    margin-top: 26px;
-    padding: 18px 22px;
-    background: rgba(255,208,66,0.04);
-    border: 1px solid rgba(255,208,66,0.32);
-  }
-  .sl-mark-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-  }
-  .sl-mark-title {
-    font-family: 'Anton', sans-serif;
-    font-size: 18px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
-  .sl-mark-meta {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-  .sl-mark-pick {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 14px;
-    margin-bottom: 14px;
-    line-height: 1.4;
-  }
-  .sl-mark-buttons { display: flex; gap: 8px; }
-  .sl-mark-btn {
+    padding: 6px 12px;
+    border: 1px solid #3b4b3d;
+    transition: all 0.12s;
     background: transparent;
-    border: 1px solid var(--line);
-    padding: 9px 16px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 800;
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    cursor: pointer;
+  }
+  .user-chip:hover { border-color: #61ff97; }
+  .user-chip .dot { width: 6px; height: 6px; background: #61ff97; border-radius: 50%; box-shadow: 0 0 8px rgba(97,255,151,0.6); }
+
+  /* Hide scrollbar utility */
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Member avatar */
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 9999px;
+    background: #282a2b;
+    border: 1px solid #3b4b3d;
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: #e2e2e3;
+    flex-shrink: 0;
+  }
+  .avatar.lg { width: 48px; height: 48px; font-size: 16px; }
+  .avatar.xl { width: 64px; height: 64px; font-size: 22px; }
+
+  /* Cinematic hero gradient bg (placeholder for stadium image) */
+  .hero-bg {
+    background:
+      radial-gradient(ellipse at 30% 100%, rgba(97,255,151,0.18) 0%, transparent 55%),
+      radial-gradient(ellipse at 80% 0%, rgba(0,218,248,0.10) 0%, transparent 45%),
+      radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.9) 100%),
+      linear-gradient(180deg, #1a1c1d 0%, #0c0e0f 100%);
+  }
+  .hero-bg::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.04) 1px, transparent 0);
+    background-size: 24px 24px;
+    pointer-events: none;
+  }
+  .champion-glow { box-shadow: 0 0 60px -10px rgba(233, 196, 0, 0.25); }
+
+  /* Submit picks CTA (sidebar) */
+  .submit-picks-cta {
+    width: 100%;
+    background: #00ff85;
+    color: #003919;
+    padding: 14px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    flex: 1;
-    transition: all 0.1s ease;
+    border: 1px solid #00ff85;
+    cursor: pointer;
+    transition: all 0.12s;
+    border-radius: 0.25rem;
   }
-  .sl-mark-btn.W { color: var(--green); border-color: var(--green); }
-  .sl-mark-btn.W:hover { background: var(--green); color: #000; }
-  .sl-mark-btn.L { color: var(--red); border-color: var(--red); }
-  .sl-mark-btn.L:hover { background: var(--red); color: #fff; }
-  .sl-mark-btn.P { color: var(--accent); border-color: var(--accent); }
-  .sl-mark-btn.P:hover { background: var(--accent); color: #000; }
-  .sl-mark-btn.current {
-    background: currentColor;
-    color: #000 !important;
-  }
-
-  /* ============== Animations ============== */
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .member-row { animation: slideIn 0.35s cubic-bezier(.2,.7,.2,1) both; }
-  .member-row:nth-child(1) { animation-delay: 0.02s; }
-  .member-row:nth-child(3) { animation-delay: 0.06s; }
-  .member-row:nth-child(5) { animation-delay: 0.1s; }
-  .member-row:nth-child(7) { animation-delay: 0.14s; }
-  .member-row:nth-child(9) { animation-delay: 0.18s; }
-  .member-row:nth-child(11) { animation-delay: 0.22s; }
-  .member-row:nth-child(13) { animation-delay: 0.26s; }
-  .member-row:nth-child(15) { animation-delay: 0.30s; }
-  .winner-card, .lt-card, .rule { animation: slideIn 0.4s cubic-bezier(.2,.7,.2,1) both; }
-
-  /* ============== Responsive ============== */
-  @media (max-width: 980px) {
-    .champ-body { grid-template-columns: 1fr; gap: 28px; padding: 28px 22px 26px; }
-    .champ-stats { min-width: 0; }
-    .champ-meta { padding: 10px 22px; font-size: 9px; }
-    .champ-meta .right span:not(.live-dot) { display: none; }
-    .ticker-label { font-size: 9px; padding: 0 10px 0 10px; padding-right: 22px; }
-    .ticker-week-pill { padding: 0 10px 0 18px; font-size: 9px; }
-    .ticker-viewport { margin-left: 100px; margin-right: 110px; }
-    .topbar-inner { padding: 12px 16px; gap: 14px; flex-wrap: wrap; }
-    .nav-links { width: 100%; order: 99; }
-    nav.year-tabs { margin-left: 0; }
-    .hero { grid-template-columns: 1fr; gap: 24px; }
-    .hero-stats { justify-content: flex-start; }
-    .hstat { text-align: left; }
-    main { padding: 26px 16px 60px; }
-    .standings thead th { padding: 9px 10px; font-size: 8px; }
-    .member-row > td { padding: 14px 10px; }
-    .member-name { font-size: 20px; }
-    .record-big { font-size: 17px; }
-    .heat-col, .super-col { display: none; }
-    .bet-grid-head, .bet-row { grid-template-columns: 100px 80px 1fr; gap: 10px; }
-    .bet-name { font-size: 15px; }
-    .week-cell-label { font-size: 9px; }
-    .rule { grid-template-columns: 40px 1fr; gap: 14px; padding: 14px 14px; }
-    .rule-meta { grid-column: 2; text-align: left; margin-top: 6px; }
-  }
-  @media (max-width: 600px) {
-    .brand-name .l2 { display: none; }
-    .ww-col { display: none; }
-    .live-pill { display: none; }
-    .hstat-v { font-size: 28px; }
-  }
+  .submit-picks-cta:hover { filter: brightness(1.1); }
+  .submit-picks-cta:active { transform: scale(0.97); }
 </style>
 </head>
-<body>
+<body class="bg-background text-on-surface min-h-screen turf-overlay">
 
-<div class="stripe"></div>
-
-<div class="ticker" id="ticker">
-  <div class="ticker-label"><span class="dot"></span>LIVE LINES</div>
-  <div class="ticker-viewport">
-    <div class="ticker-track" id="ticker-track"></div>
+<!-- Live Ticker -->
+<div id="ticker" class="w-full bg-surface-container-lowest border-b border-outline-variant h-10 flex items-center overflow-hidden sticky top-0 z-[60]">
+  <div class="flex items-center gap-2 px-3 md:px-4 bg-live-red text-white h-full shrink-0 font-label-caps text-[10px] tracking-widest">
+    <span class="live-pulse w-1.5 h-1.5 bg-white rounded-full"></span> LIVE LINES
   </div>
-  <div class="ticker-week-pill">
-    <span>WK</span>
-    <select id="ticker-week-select"></select>
+  <div class="flex-1 overflow-hidden h-full flex items-center min-w-0">
+    <div id="ticker-track" class="marquee-track"></div>
+  </div>
+  <div class="hidden md:flex items-center gap-2 px-4 border-l border-outline-variant h-full shrink-0">
+    <span class="text-on-surface-variant font-data-tabular text-[10px] tracking-widest">WK</span>
+    <select id="ticker-week-select" class="bg-transparent text-primary-fixed border-none font-data-tabular text-[11px] outline-none cursor-pointer"></select>
   </div>
 </div>
 
-<header class="topbar">
-  <div class="topbar-inner">
-    <div class="brand">
-      <div class="brand-mark">
-        <svg viewBox="2 6 36 32" xmlns="http://www.w3.org/2000/svg" aria-label="Lock League">
-          <path d="M14 20 V11 H26 V20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="square"/>
-          <rect x="6" y="20" width="28" height="16" fill="currentColor"/>
-          <rect x="10" y="23" width="3" height="10" fill="#000"/>
-          <rect x="10" y="30" width="8" height="3" fill="#000"/>
-          <rect x="22" y="23" width="3" height="10" fill="#000"/>
-          <rect x="22" y="30" width="8" height="3" fill="#000"/>
-        </svg>
-      </div>
-      <div class="brand-name">
-        <span class="l1">Lock League</span>
-        <span class="l2">EST · 2023</span>
-      </div>
+<!-- Mobile Top App Bar -->
+<header class="md:hidden bg-surface-glass backdrop-blur-md sticky top-10 z-50 border-b border-outline-variant h-14 flex items-center justify-between px-4">
+  <div class="flex items-center gap-2">
+    <div class="text-primary-fixed">
+      <svg width="22" height="22" viewBox="2 6 36 32" xmlns="http://www.w3.org/2000/svg" aria-label="Lock League">
+        <path d="M14 20 V11 H26 V20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="square"/>
+        <rect x="6" y="20" width="28" height="16" fill="currentColor"/>
+        <rect x="10" y="23" width="3" height="10" fill="#121415"/>
+        <rect x="10" y="30" width="8" height="3" fill="#121415"/>
+        <rect x="22" y="23" width="3" height="10" fill="#121415"/>
+        <rect x="22" y="30" width="8" height="3" fill="#121415"/>
+      </svg>
     </div>
-    <span class="live-pill"><span class="live-dot"></span>SEASON · FINAL</span>
-    <div class="nav-links">
-      <button class="nav-link" data-view="thisweek">This Week</button>
-      <button class="nav-link" data-view="standings">Standings</button>
-      <button class="nav-link" data-view="lifetime">Lifetime</button>
-      <button class="nav-link" data-view="mypicks">My Picks</button>
-      <button class="nav-link" data-view="rules">Rules</button>
-    </div>
-    <nav class="year-tabs" id="year-tabs"></nav>
-    <div id="user-area"></div>
+    <span class="font-display-lg text-headline-lg-mobile italic tracking-tighter text-primary-fixed">LOCK LEAGUE</span>
   </div>
+  <div id="user-area-mobile" class="flex items-center gap-3"></div>
 </header>
 
+<!-- Desktop Sidebar -->
+<aside class="bg-surface-container-low w-64 fixed left-0 top-10 bottom-0 hidden md:flex flex-col border-r border-outline-variant z-40">
+  <div class="px-6 py-6 border-b border-outline-variant">
+    <div class="flex items-center gap-3">
+      <div class="text-primary-fixed">
+        <svg width="32" height="32" viewBox="2 6 36 32" xmlns="http://www.w3.org/2000/svg" aria-label="Lock League">
+          <path d="M14 20 V11 H26 V20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="square"/>
+          <rect x="6" y="20" width="28" height="16" fill="currentColor"/>
+          <rect x="10" y="23" width="3" height="10" fill="#1a1c1d"/>
+          <rect x="10" y="30" width="8" height="3" fill="#1a1c1d"/>
+          <rect x="22" y="23" width="3" height="10" fill="#1a1c1d"/>
+          <rect x="22" y="30" width="8" height="3" fill="#1a1c1d"/>
+        </svg>
+      </div>
+      <div>
+        <div class="font-display-lg text-2xl text-primary-fixed leading-none tracking-tight uppercase font-bold">LOCK LEAGUE</div>
+        <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mt-1">EST · 2023</div>
+      </div>
+    </div>
+  </div>
+  <nav class="flex flex-col gap-1 py-4 flex-grow">
+    <button class="side-nav-link nav-link" data-view="standings">
+      <span class="material-symbols-outlined">leaderboard</span>
+      <span>STANDINGS</span>
+    </button>
+    <button class="side-nav-link nav-link" data-view="mypicks">
+      <span class="material-symbols-outlined">edit_square</span>
+      <span>MY PICKS</span>
+    </button>
+    <button class="side-nav-link nav-link" data-view="thisweek">
+      <span class="material-symbols-outlined">timer</span>
+      <span>THIS WEEK</span>
+    </button>
+    <button class="side-nav-link nav-link" data-view="lifetime">
+      <span class="material-symbols-outlined">military_tech</span>
+      <span>LIFETIME</span>
+    </button>
+    <button class="side-nav-link nav-link" data-view="rules">
+      <span class="material-symbols-outlined">gavel</span>
+      <span>RULES</span>
+    </button>
+  </nav>
+  <div class="p-4">
+    <button class="submit-picks-cta" id="sidebar-submit-picks">SUBMIT PICKS</button>
+  </div>
+  <div id="user-area" class="px-4 pb-4"></div>
+</aside>
+
+<!-- Login modal -->
 <div class="modal-backdrop" id="login-modal">
   <div class="modal">
-    <h3>Sign In</h3>
-    <div class="sub">Lock League Members</div>
+    <h3 class="font-display-lg text-2xl text-primary-fixed mb-1 uppercase">Sign In</h3>
+    <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mb-6 uppercase">Lock League Members</div>
     <label>Member</label>
     <select id="login-name"></select>
     <label>Passphrase</label>
     <input id="login-pass" type="password" autocomplete="current-password" placeholder="Your passphrase">
-    <div class="btn-row">
+    <div class="flex gap-3 mt-2">
       <button class="btn" id="login-submit">Sign In</button>
       <button class="btn ghost" id="login-cancel">Cancel</button>
     </div>
@@ -1557,7 +612,33 @@
   </div>
 </div>
 
-<main id="root"></main>
+<main id="root" class="md:ml-64 px-margin-mobile md:px-gutter pt-6 md:pt-stack-lg pb-32"></main>
+
+<!-- Mobile Bottom Nav -->
+<nav class="md:hidden bg-surface-glass backdrop-blur-xl border-t border-outline-variant fixed bottom-0 inset-x-0 z-50 shadow-lg" style="background: rgba(40, 42, 43, 0.85);">
+  <div class="flex items-center w-full pt-1 pb-safe">
+    <button class="bottom-nav-link nav-link" data-view="standings">
+      <span class="material-symbols-outlined">dashboard</span>
+      <span class="font-label-caps text-[10px]">Home</span>
+    </button>
+    <button class="bottom-nav-link nav-link" data-view="mypicks">
+      <span class="material-symbols-outlined">ads_click</span>
+      <span class="font-label-caps text-[10px]">Picks</span>
+    </button>
+    <button class="bottom-nav-link nav-link" data-view="thisweek">
+      <span class="material-symbols-outlined">timer</span>
+      <span class="font-label-caps text-[10px]">Week</span>
+    </button>
+    <button class="bottom-nav-link nav-link" data-view="lifetime">
+      <span class="material-symbols-outlined">history</span>
+      <span class="font-label-caps text-[10px]">Lifetime</span>
+    </button>
+    <button class="bottom-nav-link nav-link" data-view="rules">
+      <span class="material-symbols-outlined">gavel</span>
+      <span class="font-label-caps text-[10px]">Rules</span>
+    </button>
+  </div>
+</nav>
 
 <div class="tooltip" id="tooltip"></div>
 <div class="toast" id="toast"></div>
@@ -1565,7 +646,6 @@
 <script>
 const DATA_URL = `data/seasons.json?v=${Date.now()}`;
 const SEASONS_ORDER = ["2023", "2024", "2025", "2026"];
-// 2026 tab is hidden until NFL kickoff (Thursday, Sept 10 2026)
 const SEASON_2026_KICKOFF_MS = Date.UTC(2026, 8, 10, 0, 0, 0);
 function seasonsVisible() {
   const now = Date.now();
@@ -1580,27 +660,32 @@ let state = {
   season: "2025",
   expanded: null,
   tickerWeek: "ALL",
-  user: null,                  // { id, name } when logged in
-  thisWeekData: null,          // cached /api/odds response
-  myPicksDraft: {},            // { Favorite: {...}, Dog: {...}, ... }
+  user: null,
+  thisWeekData: null,
+  myPicksDraft: {},
   myPicksWeek: null,
   myPicksSaveMsg: "",
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
+function initials(name) {
+  if (!name) return "—";
+  const parts = String(name).trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function parseRecord(rec) {
   if (!rec) return { w: 0, l: 0, t: 0 };
-  const m = String(rec).match(/^(\d+)-(\d+)(?:-(\d+))?/);
-  if (!m) return { w: 0, l: 0, t: 0 };
-  return { w: +m[1], l: +m[2], t: m[3] ? +m[3] : 0 };
+  const parts = rec.split("-").map(s => parseInt(s.trim(), 10) || 0);
+  return { w: parts[0] || 0, l: parts[1] || 0, t: parts[2] || 0 };
 }
 function pct(rec) {
-  const total = rec.w + rec.l;
-  if (!total) return "—";
-  return (rec.w / total * 100).toFixed(1);
+  const tot = rec.w + rec.l;
+  return tot ? ((rec.w / tot) * 100).toFixed(1) : "—";
 }
 function recordHtml(rec) {
-  return `<span class="w">${rec.w}</span><span class="sep">·</span><span class="l">${rec.l}</span>${rec.t ? `<span class="sep">·</span><span class="t">${rec.t}</span>` : ""}`;
+  return `<span class="rec-W">${rec.w}</span>-<span class="rec-L">${rec.l}</span>${rec.t ? '-<span class="rec-T">' + rec.t + '</span>' : ''}`;
 }
 function recordHtmlFromString(s) {
   return recordHtml(parseRecord(s));
@@ -1631,7 +716,6 @@ function buildStandings(season) {
 
 // --- Ticker ---
 function buildTickerItems(season, weekFilter) {
-  // weekFilter: "ALL" or a week number (string)
   const items = [];
   const seasonInfo = DATA.seasons[season];
   if (!seasonInfo) return items;
@@ -1664,11 +748,10 @@ function renderTickerItem(it) {
   const safe = escapeHtml(it.text);
   return `<span class="tk-item">
     <span class="tk-wk">WK${String(it.wk).padStart(2,"0")}</span>
-    <span class="tk-name">${it.name}</span>
+    <span class="tk-name">${escapeHtml(it.name)}</span>
     <span class="tk-type ${btClass(it.bt)}">${btShort(it.bt)}</span>
     <span class="tk-pick">${safe}</span>
     ${it.result ? `<span class="tk-res ${it.result}">${it.result}</span>` : ""}
-    <span class="tk-sep">◆</span>
   </span>`;
 }
 
@@ -1678,16 +761,15 @@ function renderTicker() {
 
   if (!items.length) {
     track.innerHTML = `<span class="tk-item"><span class="tk-wk">NO PICKS</span></span>`;
+    track.style.setProperty("--marquee-duration", "60s");
     return;
   }
-  // Render twice for seamless loop
   const html = items.map(renderTickerItem).join("");
   track.innerHTML = html + html;
-  // Scroll speed: slower for full-season cycle, single-week ~4x slower than before
   const seconds = state.tickerWeek === "ALL"
-    ? Math.max(75, items.length * 3.0)
-    : Math.max(100, items.length * 2.5);
-  track.style.animationDuration = seconds + "s";
+    ? Math.max(80, items.length * 2.6)
+    : Math.max(60, items.length * 2.2);
+  track.style.setProperty("--marquee-duration", seconds + "s");
 }
 
 function renderTickerWeekSelect() {
@@ -1701,35 +783,22 @@ function renderTickerWeekSelect() {
   sel.onchange = () => { state.tickerWeek = sel.value; renderTicker(); };
 }
 
-function renderYearTabs() {
-  const el = document.getElementById("year-tabs");
-  el.innerHTML = "";
-  for (const y of seasonsVisible()) {
-    const btn = document.createElement("button");
-    btn.className = "year-tab" + (state.season === y && state.view === "standings" ? " active" : "");
-    btn.textContent = y;
-    btn.onclick = () => { state.season = y; state.view = "standings"; state.expanded = null; render(); };
-    el.appendChild(btn);
-  }
+function syncNavActive() {
   document.querySelectorAll(".nav-link").forEach(b => {
     b.classList.toggle("active", b.dataset.view === state.view);
   });
 }
 
+// ---- View: Standings ----
 function renderStandings() {
   const season = state.season;
   const rows = buildStandings(season);
   const seasonInfo = DATA.seasons[season];
   const winners = seasonInfo?.weeklyWinners || {};
-  const leagueW = rows.reduce((s, r) => s + r.seasonRec.w, 0);
-  const leagueL = rows.reduce((s, r) => s + r.seasonRec.l, 0);
-  const leagueT = rows.reduce((s, r) => s + r.seasonRec.t, 0);
   const champ = rows[0];
 
-  // Champion stats (all winner-specific)
   const champPct = champ ? pct(champ.seasonRec) : "—";
   const champSuper = champ ? parseRecord(champ.md?.byType?.["Super Lock"]?.record) : { w: 0, l: 0, t: 0 };
-  // Best bet category for the champion
   let bestBt = null, bestPct = -1, bestRec = { w: 0, l: 0, t: 0 };
   if (champ) {
     for (const bt of BET_TYPES_ORDER) {
@@ -1742,140 +811,169 @@ function renderStandings() {
   }
   const bestBtLabel = bestBt === "Super Lock" ? "SUPER 🔒" : (bestBt ? bestBt.toUpperCase() : "—");
 
+  // Year filter pills
+  const yearPills = `
+    <div class="flex gap-2 items-center">
+      ${seasonsVisible().map(y => `
+        <button class="year-tab year-pill ${state.season === y ? "active" : ""}" data-year="${y}">${y}</button>
+      `).join("")}
+    </div>
+  `;
+
   return `
-    <div class="champ-card">
-      <div class="champ-bar"></div>
-      <div class="champ-meta">
-        <div><span class="green-strong">${season} CHAMPION</span></div>
-        <div class="right">
-          <span><span class="live-dot"></span>FINALIZED · ${WEEK_COUNT} WEEKS · ${rows.length} BETTORS</span>
+    <!-- Champion hero -->
+    <section class="relative w-full rounded-xl overflow-hidden mb-6 hero-bg champion-glow">
+      <div class="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent z-10"></div>
+      <div class="relative z-20 px-5 md:px-8 py-5 md:py-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <div class="inline-flex items-center px-2.5 py-0.5 bg-tertiary-fixed-dim text-on-tertiary-fixed font-label-caps text-[10px] rounded-sm mb-2 uppercase">
+            <span class="material-symbols-outlined text-xs mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
+            ${season} Champion
+          </div>
+          <h2 class="font-display-lg text-3xl md:text-5xl text-primary-fixed leading-none uppercase mb-3 break-words">${escapeHtml(champ ? champ.name : "—")}</h2>
+          <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <div class="flex items-baseline gap-2">
+              <span class="text-on-surface-variant font-label-caps text-[10px]">RECORD</span>
+              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champ ? recordHtml(champ.seasonRec) : "—"}</span>
+            </div>
+            <span class="w-px h-4 bg-outline-variant"></span>
+            <div class="flex items-baseline gap-2">
+              <span class="text-on-surface-variant font-label-caps text-[10px]">WEEKS</span>
+              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champ ? champ.weeksWon : 0}</span>
+            </div>
+            <span class="w-px h-4 bg-outline-variant"></span>
+            <div class="flex items-baseline gap-2">
+              <span class="text-on-surface-variant font-label-caps text-[10px]">WIN %</span>
+              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champPct}%</span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="champ-body">
-        <div class="champ-left">
-          <div class="champ-rank-line">
-            <span class="champ-rank-num">👑</span>
-            <span>SEASON CHAMPION</span>
-          </div>
-          <div class="champ-name">${champ ? champ.name : "—"}</div>
-          <div class="champ-tags">
-            <span class="champ-prize">1ST <span class="v">$500</span></span>
-          </div>
-        </div>
-        <div class="champ-stats">
-          <div class="champ-stat">
-            <div class="stat-label">Season Record</div>
-            <div class="v rec">${champ ? recordHtml(champ.seasonRec) : "—"}</div>
-            <div class="sub">${champPct}% win rate</div>
-          </div>
-          <div class="champ-stat">
-            <div class="stat-label">Weeks Won</div>
-            <div class="v green">${champ ? champ.weeksWon : 0}</div>
-            <div class="sub">of ${WEEK_COUNT}</div>
-          </div>
-          <div class="champ-stat">
-            <div class="stat-label">Super 🔒</div>
-            <div class="v rec">${recordHtml(champSuper)}</div>
-            <div class="sub">${champSuper.w + champSuper.l ? (champSuper.w/(champSuper.w+champSuper.l)*100).toFixed(0) + "% hit rate" : "—"}</div>
-          </div>
-          <div class="champ-stat">
-            <div class="stat-label">Best Category</div>
-            <div class="v green" style="font-size: 22px;">${bestBtLabel}</div>
-            <div class="sub">${bestBt ? `${bestRec.w}-${bestRec.l} · ${(bestPct*100).toFixed(0)}%` : "—"}</div>
+        <div class="glass-card px-4 py-2.5 flex items-center gap-3 border-l-2 border-l-secondary-fixed-dim shrink-0">
+          <span class="material-symbols-outlined text-2xl text-live-red">event_available</span>
+          <div>
+            <div class="text-on-surface-variant font-label-caps text-[9px] uppercase tracking-widest">Status</div>
+            <div class="font-display-lg text-base text-live-red uppercase leading-none mt-0.5">Season Final</div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="section-h">
-      <h2>Standings</h2>
-      <span class="section-note">CLICK ROW · EXPAND PICKS</span>
-    </div>
+    <!-- Year selector + section header -->
+    <section class="mb-stack-lg">
+      <div class="flex items-center justify-between mb-stack-md gap-3 flex-wrap">
+        <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface uppercase flex items-center gap-3">
+          <span class="w-2 h-8 bg-primary-fixed inline-block"></span> ${season} Standings
+        </h3>
+        ${yearPills}
+      </div>
 
-    <div class="standings-wrap">
-      <table class="standings">
-        <thead>
-          <tr>
-            <th style="width:50px;">#</th>
-            <th>Member</th>
-            <th style="width:160px;">Season Record</th>
-            <th class="center heat-col" style="width:260px;">Weekly Heat (W·L·P)</th>
-            <th class="center ww-col" style="width:90px;">Weeks Won</th>
-            <th class="right super-col" style="width:140px;">Super 🔒</th>
-            <th style="width:30px;"></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map((r, i) => renderMemberRow(r, i, season)).join("")}
-        </tbody>
-      </table>
-    </div>
+      <div class="overflow-x-auto hide-scrollbar glass-card rounded-lg">
+        <table class="w-full text-left border-collapse min-w-[640px]">
+          <thead>
+            <tr class="border-b border-outline-variant font-label-caps text-on-surface-variant text-[11px] tracking-widest bg-surface-container-low/50 uppercase">
+              <th class="px-4 md:px-6 py-4">Rank</th>
+              <th class="px-4 md:px-6 py-4">Member</th>
+              <th class="px-4 md:px-6 py-4">Record (W-L)</th>
+              <th class="px-4 md:px-6 py-4">Win %</th>
+              <th class="px-4 md:px-6 py-4 hidden lg:table-cell">Weekly Heat (1–18)</th>
+              <th class="px-4 md:px-6 py-4 text-right">Weeks Won</th>
+            </tr>
+          </thead>
+          <tbody class="font-data-tabular">
+            ${rows.map((r, i) => renderMemberRow(r, i, season)).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-    <div class="section-h">
-      <h2>Weekly Winners</h2>
-      <span class="section-note">${season} · WEEK-BY-WEEK</span>
-    </div>
-    <div class="winners-grid">
-      ${Array.from({ length: WEEK_COUNT }, (_, i) => {
-        const wk = i + 1;
-        const who = winners[String(wk)];
-        return `<div class="winner-card ${who ? "" : "empty"}">
-          <div class="wk">WK ${String(wk).padStart(2,"0")}</div>
-          <div class="who">${who || "—"}</div>
-        </div>`;
-      }).join("")}
-    </div>
+    <!-- Weekly Masters -->
+    <section class="mb-stack-lg">
+      <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface uppercase flex items-center gap-3 mb-6">
+        <span class="w-2 h-8 bg-secondary-fixed-dim inline-block"></span> Weekly Masters
+      </h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        ${Array.from({ length: WEEK_COUNT }, (_, i) => {
+          const wk = i + 1;
+          const who = winners[String(wk)];
+          if (!who) {
+            return `
+              <div class="glass-card p-4 border-dashed border-2 border-outline-variant flex flex-col items-center justify-center h-32 group hover:border-primary-fixed transition-all">
+                <span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary-fixed mb-1">lock_open</span>
+                <span class="font-label-caps text-[10px] text-on-surface-variant group-hover:text-primary-fixed">WK ${String(wk).padStart(2,"0")}</span>
+              </div>
+            `;
+          }
+          return `
+            <div class="glass-card p-4 border-t-2 border-t-primary-fixed flex flex-col justify-between h-32 relative overflow-hidden">
+              <span class="absolute right-[-10px] top-[-10px] font-display-lg text-5xl opacity-5 pointer-events-none select-none">${String(wk).padStart(2,"0")}</span>
+              <span class="font-label-caps text-[10px] text-on-surface-variant">WK ${String(wk).padStart(2,"0")}</span>
+              <div class="mt-2">
+                <p class="font-display-lg text-xl leading-none uppercase">${escapeHtml(who)}</p>
+                <p class="text-primary-fixed text-[10px] font-data-tabular mt-1">WINNER</p>
+              </div>
+              <div class="flex justify-between items-end">
+                <span class="material-symbols-outlined text-primary-fixed/50">military_tech</span>
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
   `;
 }
 
 function renderMemberRow(r, i, season) {
   const isExp = state.expanded === r.name;
-  const isTop = i < 3;
-  const rankNum = String(i + 1);
+  const isTop = i === 0;
   const heat = Array.from({ length: WEEK_COUNT }, (_, w) => {
     const wk = w + 1;
-    return `<div class="heat-week">${BET_TYPES_ORDER.map(bt => {
-      const pick = r.md?.byType?.[bt]?.picks?.[wk];
-      const cls = pick?.result || "";
-      return `<div class="heat-cell ${cls}"></div>`;
-    }).join("")}</div>`;
+    const winner = DATA.seasons[season]?.weeklyWinners?.[String(wk)];
+    // Use overall week result: green if member won that week, red if not, gray if no picks
+    const totalPicksThisWeek = BET_TYPES_ORDER.filter(bt => r.md?.byType?.[bt]?.picks?.[wk]).length;
+    if (!totalPicksThisWeek) return `<div class="heat-cell"></div>`;
+    if (winner === r.name) return `<div class="heat-cell W"></div>`;
+    // Compute W-L for this week
+    let wins = 0, losses = 0;
+    for (const bt of BET_TYPES_ORDER) {
+      const res = r.md?.byType?.[bt]?.picks?.[wk]?.result;
+      if (res === "W") wins++;
+      else if (res === "L") losses++;
+    }
+    if (wins > losses) return `<div class="heat-cell W"></div>`;
+    if (losses > wins) return `<div class="heat-cell L"></div>`;
+    return `<div class="heat-cell P"></div>`;
   }).join("");
 
   return `
-    <tr class="member-row ${isExp ? "expanded" : ""}" data-name="${r.name}">
-      <td><span class="rank-block ${isTop ? "top" : ""}">${i + 1}</span></td>
-      <td>
-        <div class="member-name-cell">
-          ${i === 0 ? '<span class="crown-mark">👑</span>' : ""}
-          <span class="member-name">${r.name}</span>
-          ${i === 0 ? '<span class="member-crown">CHAMP</span>' : ""}
+    <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : ""}" data-name="${escapeHtml(r.name)}">
+      <td class="px-4 md:px-6 py-5 ${isTop ? "text-primary-fixed font-bold" : "text-on-surface-variant font-bold"}">${i + 1}</td>
+      <td class="px-4 md:px-6 py-5">
+        <div class="flex items-center gap-2">
+          <span class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(r.name)}</span>
+          ${isTop ? '<span class="material-symbols-outlined text-tertiary-fixed-dim text-base" style="font-variation-settings: \'FILL\' 1;">workspace_premium</span>' : ""}
         </div>
       </td>
-      <td>
-        <div class="record-stack">
-          <span class="record-big">${recordHtml(r.seasonRec)}</span>
-          <span class="record-pct">${pct(r.seasonRec)}%</span>
-        </div>
+      <td class="px-4 md:px-6 py-5">${recordHtml(r.seasonRec)}</td>
+      <td class="px-4 md:px-6 py-5 text-primary-fixed-dim">${pct(r.seasonRec)}${r.seasonRec.w + r.seasonRec.l ? "%" : ""}</td>
+      <td class="px-4 md:px-6 py-5 hidden lg:table-cell">
+        <div class="flex gap-1">${heat}</div>
       </td>
-      <td class="heat-col"><div class="heat-strip">${heat}</div></td>
-      <td class="ww-col"><div class="ww-cell ${r.weeksWon === 0 ? "zero" : ""}">${r.weeksWon}</div></td>
-      <td class="super-cell super-col">
-        <span class="key">SL</span>${recordHtmlFromString(r.md?.byType?.["Super Lock"]?.record)}
-      </td>
-      <td><span class="chev">›</span></td>
-    </tr>
-    <tr class="detail-row ${isExp ? "show" : ""}">
-      <td class="detail-cell" colspan="7">
-        <div class="detail-inner">${isExp ? renderMemberDetail(r) : ""}</div>
+      <td class="px-4 md:px-6 py-5 text-right">
+        <span class="font-display-lg text-2xl ${r.weeksWon ? "text-primary-fixed" : "text-on-surface-variant opacity-40"}">${String(r.weeksWon).padStart(2, "0")}</span>
       </td>
     </tr>
+    ${isExp ? `
+      <tr class="bg-surface-container-lowest/50 border-b border-outline-variant">
+        <td colspan="6" class="py-5 px-3 md:px-6">${renderMemberDetail(r)}</td>
+      </tr>
+    ` : ""}
   `;
 }
 
 function renderMemberDetail(r) {
   const md = r.md;
   const weekHeader = Array.from({ length: WEEK_COUNT }, (_, i) =>
-    `<div>W${String(i + 1).padStart(2, "0")}</div>`
+    `<div class="w-[26px] text-center font-data-tabular text-[9px] text-on-surface-variant">${String(i + 1).padStart(2, "0")}</div>`
   ).join("");
 
   const rows = BET_TYPES_ORDER.map(bt => {
@@ -1885,34 +983,38 @@ function renderMemberDetail(r) {
       const wk = i + 1;
       const pick = info.picks?.[wk];
       const cls = pick?.result || "";
-      const safe = (pick?.text || "").replace(/"/g, "&quot;").replace(/</g,"&lt;");
-      return `<div class="week-cell ${cls}" data-week="${wk}" data-bet="${bt}" data-text="${safe}" data-result="${pick?.result || ""}">
-        <span class="week-cell-label">${pick?.result || ""}</span>
-      </div>`;
+      const safe = (pick?.text || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      return `<div class="week-cell ${cls}" data-week="${wk}" data-bet="${bt}" data-text="${safe}" data-result="${pick?.result || ""}">${pick?.result || ""}</div>`;
     }).join("");
+    const isSuper = bt === "Super Lock";
     return `
-      <div class="bet-row">
-        <div class="bet-name ${bt === "Super Lock" ? "super" : ""}">${bt === "Super Lock" ? "Super Lock" : bt}</div>
-        <div class="bet-record">${recordHtmlFromString(info.record)}</div>
-        <div class="week-cells">${cells}</div>
+      <div class="flex items-center gap-4 py-1.5">
+        <div class="w-24 font-label-caps text-[11px] uppercase ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${isSuper ? "Super 🔒" : bt}</div>
+        <div class="w-20 font-data-tabular text-[11px]">${recordHtmlFromString(info.record)}</div>
+        <div class="flex gap-1">${cells}</div>
       </div>
     `;
   }).join("");
 
   return `
-    <div class="bet-grid-head">
-      <div>Bet Type</div>
-      <div>Record</div>
-      <div class="bet-grid-weeklabel">${weekHeader}</div>
-    </div>
-    ${rows}
-    <div class="detail-foot">
-      <div><span class="label">SEASON</span><strong>${md?.seasonRecord || "—"}</strong></div>
-      <div><span class="label">LIFETIME</span><strong>${md?.lifetimeRecord || "—"}</strong></div>
+    <div class="overflow-x-auto">
+      <div class="min-w-fit">
+        <div class="flex items-center gap-4 py-2 border-b border-outline-variant mb-2">
+          <div class="w-24 font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase">Bet Type</div>
+          <div class="w-20 font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase">Record</div>
+          <div class="flex gap-1">${weekHeader}</div>
+        </div>
+        ${rows}
+        <div class="flex flex-wrap gap-6 mt-4 pt-3 border-t border-outline-variant font-data-tabular text-[11px]">
+          <div><span class="text-on-surface-variant tracking-widest mr-2">SEASON</span><strong class="text-on-surface">${escapeHtml(md?.seasonRecord || "—")}</strong></div>
+          <div><span class="text-on-surface-variant tracking-widest mr-2">LIFETIME</span><strong class="text-on-surface">${escapeHtml(md?.lifetimeRecord || "—")}</strong></div>
+        </div>
+      </div>
     </div>
   `;
 }
 
+// ---- View: Lifetime ----
 function renderLifetime() {
   const members = Object.keys(DATA.members).sort();
   const agg = members.map(name => {
@@ -1920,14 +1022,14 @@ function renderLifetime() {
     const byType = {};
     let weeksWon = 0;
     let seasonsAsChamp = 0;
+    let seasonsPlayed = 0;
     for (const bt of BET_TYPES_ORDER) byType[bt] = { W: 0, L: 0, P: 0 };
     for (const season of SEASONS_ORDER) {
       const md = DATA.members[name]?.[season];
       if (!md) continue;
-      // Weekly winners count
+      seasonsPlayed++;
       const winners = DATA.seasons[season]?.weeklyWinners || {};
       for (const wk of Object.keys(winners)) if (winners[wk] === name) weeksWon++;
-      // Was this member the season champion? Compute from standings (max wins).
       const seasonRows = buildStandings(season);
       if (seasonRows[0]?.name === name) seasonsAsChamp++;
       for (const bt of BET_TYPES_ORDER) {
@@ -1940,96 +1042,288 @@ function renderLifetime() {
         }
       }
     }
-    return { name, totals, byType, weeksWon, seasonsAsChamp };
+    // Units at -110: win = +1, loss = -1.1, push = 0
+    const units = totals.W - 1.1 * totals.L;
+    return { name, totals, byType, weeksWon, seasonsAsChamp, seasonsPlayed, units };
   });
   agg.sort((a, b) => b.totals.W - a.totals.W);
+  const groupUnits = agg.reduce((s, m) => s + m.units, 0);
+  const fmtUnits = (u) => {
+    if (Math.abs(u) < 0.05) return "0.0";
+    const sign = u > 0 ? "+" : "−";
+    return sign + Math.abs(u).toFixed(1);
+  };
 
+  // Find historical champions, one card per season
+  const champBySeason = [];
+  for (const season of SEASONS_ORDER) {
+    if (season === "2026") continue; // upcoming
+    const rows = buildStandings(season);
+    if (!rows.length) continue;
+    const champ = rows[0];
+    champBySeason.push({ season, champ });
+  }
+
+  // Live race for current season (if any season has data but no clear "final" feel — pick latest with data)
+  const liveSeason = "2026";
+  const liveLeader = (() => {
+    const rows = buildStandings(liveSeason);
+    return rows[0] || null;
+  })();
+
+  // Filter toggle (visual only for now)
   return `
-    <div class="hero">
-      <div>
-        <div class="eyebrow">ALL · TIME · LEADERBOARD</div>
-        <div class="hero-title"><span class="wreath">Lifetime</span></div>
+    <!-- Hall of Champions -->
+    <section class="mb-12">
+      <div class="flex items-center gap-4 mb-6">
+        <div class="h-px flex-grow bg-gradient-to-r from-transparent via-tertiary-fixed-dim to-transparent opacity-30"></div>
+        <h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-tertiary-fixed uppercase tracking-widest text-center flex items-center gap-2">
+          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+          Hall of Champions
+        </h2>
+        <div class="h-px flex-grow bg-gradient-to-r from-transparent via-tertiary-fixed-dim to-transparent opacity-30"></div>
       </div>
-      <div class="hero-stats">
-        <div class="hstat">
-          <div class="hstat-l">Seasons</div>
-          <div class="hstat-v green">${SEASONS_ORDER.length}</div>
-        </div>
-        <div class="hstat">
-          <div class="hstat-l">Members</div>
-          <div class="hstat-v">${agg.length}</div>
-        </div>
-      </div>
-    </div>
-    <div class="section-h"><h2>Standings</h2><span class="section-note">2023 → 2025</span></div>
-    <div class="lt-grid">
-      ${agg.map((m, i) => {
-        const tot = m.totals.W + m.totals.L;
-        const pctV = tot ? (m.totals.W / tot * 100).toFixed(1) : "—";
-        const crown = i === 0 ? '<span class="crown-mark" style="font-size:24px;margin-right:8px;">👑</span>' : '';
-        const champPills = m.seasonsAsChamp > 0
-          ? `<span class="lt-champ-pill">${'👑 '.repeat(m.seasonsAsChamp)}× ${m.seasonsAsChamp} season${m.seasonsAsChamp > 1 ? 's' : ''}</span>`
-          : '';
-        return `<div class="lt-card ${i === 0 ? "top" : ""}">
-          <div class="lt-rank">${i + 1}</div>
-          <div class="lt-name">${crown}${m.name}</div>
-          <div class="lt-record">${recordHtml({w: m.totals.W, l: m.totals.L, t: m.totals.P})}</div>
-          <div class="lt-pct"><span class="pctv">${pctV}${tot ? "%" : ""}</span> · <span class="pctv">${m.weeksWon}</span> all-time weeks won</div>
-          ${champPills ? `<div style="margin-top:6px;">${champPills}</div>` : ''}
-          <div class="lt-break">
-            ${BET_TYPES_ORDER.map(bt => {
-              const r = m.byType[bt];
-              const tt = r.W + r.L + r.P;
-              if (!tt) return "";
-              return `<div class="lt-row">
-                <span class="lt-bt ${bt === "Super Lock" ? "super" : ""}">${bt === "Super Lock" ? "Super 🔒" : bt}</span>
-                <span class="lt-r">${recordHtml({w: r.W, l: r.L, t: r.P})}</span>
-                <span class="lt-bar">
-                  <span class="lt-bar-w" style="width:${(r.W/tt*100)}%"></span>
-                  <span class="lt-bar-p" style="width:${(r.P/tt*100)}%"></span>
-                  <span class="lt-bar-l" style="width:${(r.L/tt*100)}%"></span>
-                </span>
-              </div>`;
-            }).join("")}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        ${champBySeason.map(({ season, champ }) => `
+          <div class="glass-card relative overflow-hidden group champion-glow">
+            <div class="absolute top-0 right-0 p-4 z-10">
+              <span class="material-symbols-outlined text-tertiary-fixed text-4xl drop-shadow-lg" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+            </div>
+            <div class="w-full h-28 hero-bg relative">
+              <div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+            </div>
+            <div class="relative p-6">
+              <div class="font-label-caps text-tertiary-fixed text-[10px] mb-1 uppercase">Season ${season} Champion</div>
+              <h3 class="font-headline-lg text-headline-lg-mobile text-on-surface uppercase mb-3">${escapeHtml(champ.name)}</h3>
+              <div class="grid grid-cols-2 gap-4 border-t border-outline-variant pt-3">
+                <div>
+                  <p class="text-[10px] font-label-caps text-on-surface-variant uppercase">Final Record</p>
+                  <p class="font-data-tabular text-secondary-fixed text-lg mt-1">${recordHtml(champ.seasonRec)}</p>
+                </div>
+                <div>
+                  <p class="text-[10px] font-label-caps text-on-surface-variant uppercase">Weeks Won</p>
+                  <p class="font-data-tabular text-primary-fixed text-lg mt-1">${champ.weeksWon}</p>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>`;
-      }).join("")}
-    </div>
+        `).join("")}
+
+        ${seasonsVisible().includes(liveSeason) ? `
+          <!-- Live race card for 2026 -->
+          <div class="glass-card relative overflow-hidden group border-primary-fixed/20">
+            <div class="absolute top-3 right-3 z-10 flex items-center gap-2 bg-live-red/20 px-2 py-1 backdrop-blur-sm rounded-sm">
+              <span class="w-2 h-2 rounded-full bg-live-red live-pulse"></span>
+              <span class="font-label-caps text-[10px] text-live-red uppercase">LIVE RACE</span>
+            </div>
+            <div class="w-full h-28 hero-bg relative">
+              <div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-12 h-12 rounded-full border-2 border-dashed border-outline-variant flex items-center justify-center bg-surface-container/40 backdrop-blur-sm">
+                  <span class="material-symbols-outlined text-outline-variant text-base">help_outline</span>
+                </div>
+              </div>
+            </div>
+            <div class="p-6">
+              <div class="font-label-caps text-on-surface-variant text-[10px] mb-1 uppercase">Season ${liveSeason} In Progress</div>
+              <h3 class="font-headline-lg text-headline-lg-mobile text-on-surface/60 uppercase mb-3">TBD</h3>
+              <div class="border-t border-outline-variant pt-3">
+                <p class="text-xs text-on-surface-variant italic">
+                  ${liveLeader ? `Current leader: <span class="text-primary-fixed">${escapeHtml(liveLeader.name)}</span>` : "Season starts Sept 2026"}
+                </p>
+              </div>
+            </div>
+          </div>
+        ` : ""}
+
+        <!-- Lifetime metrics card -->
+        <div class="glass-card p-6 bg-gradient-to-br from-surface-container-high to-surface-container">
+          <div class="flex items-center gap-2 mb-6">
+            <span class="material-symbols-outlined text-secondary-fixed">query_stats</span>
+            <h3 class="font-label-caps text-label-caps text-on-surface uppercase">Lifetime Metrics</h3>
+          </div>
+          <div class="space-y-6">
+            <div class="flex justify-between items-end border-b border-outline-variant pb-2">
+              <div>
+                <p class="text-[10px] font-label-caps text-on-surface-variant uppercase">Group Units (−110)</p>
+                <p class="text-on-surface font-body-md">Total ± across league</p>
+              </div>
+              <p class="font-data-tabular ${groupUnits >= 0 ? "text-primary-fixed" : "text-live-red"} text-xl">${fmtUnits(groupUnits)}</p>
+            </div>
+            <div class="flex justify-between items-end border-b border-outline-variant pb-2">
+              <div>
+                <p class="text-[10px] font-label-caps text-on-surface-variant uppercase">Total Picks Graded</p>
+                <p class="text-on-surface font-body-md">Across all seasons</p>
+              </div>
+              <p class="font-data-tabular text-on-surface text-xl">${agg.reduce((s, m) => s + m.totals.W + m.totals.L + m.totals.P, 0)}</p>
+            </div>
+            <div class="flex justify-between items-end border-b border-outline-variant pb-2">
+              <div>
+                <p class="text-[10px] font-label-caps text-on-surface-variant uppercase">Active Bettors</p>
+                <p class="text-on-surface font-body-md">Lifetime members</p>
+              </div>
+              <p class="font-data-tabular text-secondary-fixed text-xl">${agg.length}</p>
+            </div>
+            <div class="flex justify-between items-end border-b border-outline-variant pb-2">
+              <div>
+                <p class="text-[10px] font-label-caps text-on-surface-variant uppercase">Seasons Tracked</p>
+                <p class="text-on-surface font-body-md">${SEASONS_ORDER[0]} → ${SEASONS_ORDER[SEASONS_ORDER.length - 1]}</p>
+              </div>
+              <p class="font-data-tabular text-tertiary-fixed text-xl">${champBySeason.length}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- All-Time Leaderboard -->
+    <section class="mb-12">
+      <div class="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
+        <div>
+          <h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface uppercase mb-1">All-Time Leaderboard</h2>
+          <p class="text-on-surface-variant text-sm">Cumulative performance since Season ${SEASONS_ORDER[0]}</p>
+        </div>
+      </div>
+      <div class="glass-card overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-[640px]">
+          <thead>
+            <tr class="bg-surface-container-high/40 border-b border-outline-variant">
+              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase">Rank</th>
+              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase">Member</th>
+              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase">Seasons</th>
+              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase">Record</th>
+              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase text-center">Win %</th>
+              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase text-center">Weeks Won</th>
+              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase text-right">Units (−110)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-outline-variant">
+            ${agg.map((m, i) => {
+              const tot = m.totals.W + m.totals.L;
+              const pctV = tot ? (m.totals.W / tot * 100).toFixed(1) : "—";
+              const isTop = i === 0;
+              const isUnder = tot && (m.totals.W / tot) < 0.5;
+              const barColor = isUnder ? "bg-live-red" : "bg-primary-fixed";
+              return `
+                <tr class="hover:bg-primary-fixed/5 transition-colors group">
+                  <td class="py-4 px-6 font-data-tabular ${isTop ? "text-tertiary-fixed" : "text-on-surface-variant"} text-lg">${i + 1}</td>
+                  <td class="py-4 px-6">
+                    <div class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(m.name)}${m.seasonsAsChamp >= 1 ? ` <span class="material-symbols-outlined text-tertiary-fixed-dim text-base align-middle" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>` : ""}</div>
+                  </td>
+                  <td class="py-4 px-6 font-data-tabular text-on-surface-variant">${m.seasonsPlayed}</td>
+                  <td class="py-4 px-6 font-data-tabular text-on-surface">${recordHtml({w: m.totals.W, l: m.totals.L, t: m.totals.P})}</td>
+                  <td class="py-4 px-6 text-center">
+                    <div class="w-24 bg-surface-container-highest h-1.5 rounded-full mx-auto relative overflow-hidden">
+                      <div class="absolute inset-y-0 left-0 ${barColor}" style="width: ${tot ? Math.min(100, (m.totals.W/tot*100)).toFixed(1) : 0}%"></div>
+                    </div>
+                    <span class="font-data-tabular text-xs text-on-surface-variant mt-1 inline-block">${pctV}${tot ? "%" : ""}</span>
+                  </td>
+                  <td class="py-4 px-6 font-data-tabular ${m.weeksWon ? "text-on-surface" : "text-on-surface-variant opacity-50"} text-center">${m.weeksWon}</td>
+                  <td class="py-4 px-6 font-data-tabular ${m.units >= 0 ? "text-primary-fixed" : "text-live-red"} text-right text-base">${fmtUnits(m.units)}</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Season Archives -->
+    <section>
+      <h3 class="font-label-caps text-label-caps text-on-surface-variant uppercase mb-4 tracking-widest">Season Archives</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        ${SEASONS_ORDER.map(s => {
+          const playable = seasonsVisible().includes(s);
+          const hasData = DATA.seasons[s] && (DATA.seasons[s].members || []).length > 0;
+          const isCurrent = s === "2026";
+          if (!playable || !hasData) {
+            return `
+              <div class="glass-card p-5 flex items-center justify-between opacity-50 cursor-not-allowed">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded bg-surface-container-highest flex items-center justify-center text-outline-variant">
+                    <span class="material-symbols-outlined">lock</span>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-on-surface uppercase">Season ${s}</h4>
+                    <p class="text-xs text-on-surface-variant">${isCurrent ? "Starts Sept 2026" : "Not available"}</p>
+                  </div>
+                </div>
+                <span class="material-symbols-outlined text-outline-variant">more_horiz</span>
+              </div>
+            `;
+          }
+          return `
+            <div class="glass-card p-5 flex items-center justify-between group cursor-pointer hover:border-primary-fixed/40 transition-all archive-link" data-season="${s}">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded bg-surface-container-highest flex items-center justify-center text-primary-fixed group-hover:scale-110 transition-transform">
+                  <span class="material-symbols-outlined">history_edu</span>
+                </div>
+                <div>
+                  <h4 class="font-bold text-on-surface uppercase">Season ${s}</h4>
+                  <p class="text-xs text-on-surface-variant">Standings · Picks · Records</p>
+                </div>
+              </div>
+              <span class="material-symbols-outlined text-outline-variant group-hover:text-primary-fixed">chevron_right</span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
   `;
 }
 
+// ---- View: Rules ----
+const RULES_ICONS = ["settings_suggest", "alarm", "payments", "gavel", "shield", "menu_book", "balance", "verified", "history_edu", "rule"];
 function renderRules() {
+  const items = (DATA.rules || []).map((r, i) => {
+    const m = r.article.match(/^Article\s+([0-9A-Za-z]+)[\.:]?\s*(.*)$/s);
+    const num = m ? m[1] : String(i + 1);
+    const body = m ? m[2].trim() : r.article;
+    const firstLine = body.split(/\n/)[0].slice(0, 80);
+    return { num, body, firstLine, amended: r.amended || "", icon: RULES_ICONS[i % RULES_ICONS.length] };
+  });
+
   return `
-    <div class="hero">
-      <div>
-        <div class="eyebrow">THE · CONSTITUTION</div>
-        <div class="hero-title"><span class="wreath">Rules</span></div>
-      </div>
-      <div class="hero-stats">
-        <div class="hstat">
-          <div class="hstat-l">Articles</div>
-          <div class="hstat-v green">${DATA.rules.length}</div>
+    <section class="mb-stack-lg border-l-4 border-primary-fixed pl-6">
+      <h2 class="font-display-lg text-headline-lg md:text-display-lg text-primary-fixed uppercase leading-tight">League Rules &<br>Guidelines</h2>
+      <p class="text-on-surface-variant font-data-tabular mt-2 max-w-2xl">Official protocol for the Lock League. ${items.length} articles, ratified 2023.</p>
+    </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <!-- Sticky compendium nav (desktop) -->
+      <nav class="hidden lg:block lg:col-span-3">
+        <div class="sticky top-24 space-y-4">
+          <p class="text-label-caps font-label-caps text-primary-fixed-dim border-b border-outline-variant pb-2 mb-4 uppercase">Compendium</p>
+          <ul class="space-y-3">
+            ${items.map(it => `
+              <li><a class="text-on-surface-variant hover:text-primary-fixed flex items-center gap-2 group transition-colors text-sm" href="#rule-${it.num}">
+                <span class="w-1.5 h-1.5 rounded-full bg-outline-variant group-hover:bg-primary-fixed"></span>
+                Article ${it.num}
+              </a></li>
+            `).join("")}
+          </ul>
         </div>
+      </nav>
+
+      <!-- Rules content -->
+      <div class="lg:col-span-9 space-y-8">
+        ${items.map(it => `
+          <section id="rule-${it.num}" class="glass-panel p-6 md:p-8 rounded-lg relative overflow-hidden">
+            <div class="absolute top-0 right-0 p-4 opacity-[0.07] pointer-events-none">
+              <span class="material-symbols-outlined text-8xl">${it.icon}</span>
+            </div>
+            <h3 class="font-headline-lg text-2xl md:text-headline-lg text-primary-fixed mb-5 uppercase">Article ${it.num}</h3>
+            <div class="text-on-surface leading-relaxed whitespace-pre-line">${escapeHtml(it.body)}</div>
+            ${it.amended ? `<div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mt-4 pt-3 border-t border-outline-variant uppercase">${escapeHtml(it.amended)}</div>` : ""}
+          </section>
+        `).join("")}
       </div>
-    </div>
-    <div class="section-h"><h2>Articles</h2><span class="section-note">RATIFIED · 2023</span></div>
-    <div class="rules-list">
-      ${DATA.rules.map((r, i) => {
-        const m = r.article.match(/^Article\s+([0-9A-Za-z]+)[\.:]?\s*(.*)$/s);
-        const num = m ? m[1] : String(i+1);
-        const body = m ? m[2] : r.article;
-        return `<div class="rule">
-          <div class="rule-num">${num}</div>
-          <div class="rule-text">${escapeHtml(body).replace(/\n/g, "<br>")}</div>
-          <div class="rule-meta">${r.amended || ""}</div>
-        </div>`;
-      }).join("")}
     </div>
   `;
 }
 
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
 // =================== Auth / session ===================
@@ -2071,15 +1365,35 @@ function openLogin() {
   document.getElementById("login-err").textContent = "";
   document.getElementById("login-pass").value = "";
   document.getElementById("login-modal").classList.add("show");
+  setTimeout(() => document.getElementById("login-pass").focus(), 50);
 }
+
 function renderUserArea() {
+  // Desktop sidebar version: profile chip at bottom
   const el = document.getElementById("user-area");
+  // Mobile top-bar version: icon button
+  const elMobile = document.getElementById("user-area-mobile");
+
   if (state.user) {
-    el.innerHTML = `<span class="user-chip" id="user-chip"><span class="dot"></span>${state.user.name}<span style="color:var(--dim-2);margin:0 6px;">·</span><span style="color:var(--dim);">SIGN OUT</span></span>`;
-    el.querySelector("#user-chip").onclick = logout;
+    el.innerHTML = `
+      <div class="flex items-center gap-3 p-3 border-t border-outline-variant -mx-4 -mb-4 mt-2">
+        <div class="avatar">${initials(state.user.name)}</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-label-caps text-xs text-on-surface truncate uppercase">${escapeHtml(state.user.name)}</div>
+          <button class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant hover:text-primary-fixed uppercase" id="logout-btn">Sign Out</button>
+        </div>
+      </div>
+    `;
+    el.querySelector("#logout-btn").onclick = logout;
+    elMobile.innerHTML = `
+      <button id="logout-btn-mobile" class="user-chip"><span class="dot"></span>${escapeHtml(state.user.name)}</button>
+    `;
+    elMobile.querySelector("#logout-btn-mobile").onclick = logout;
   } else {
-    el.innerHTML = `<button class="nav-link" id="login-btn">Sign In</button>`;
+    el.innerHTML = `<button class="user-chip w-full justify-center" id="login-btn"><span class="material-symbols-outlined text-base">login</span>Sign In</button>`;
     el.querySelector("#login-btn").onclick = openLogin;
+    elMobile.innerHTML = `<button id="login-btn-mobile" class="user-chip"><span class="material-symbols-outlined text-base">login</span>Sign In</button>`;
+    elMobile.querySelector("#login-btn-mobile").onclick = openLogin;
   }
 }
 
@@ -2096,10 +1410,13 @@ async function loadOdds() {
   return state.thisWeekData;
 }
 
-function fmtKickoff(iso) {
+function fmtKickoffDay(iso) {
   const d = new Date(iso);
-  const opts = { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" };
-  return d.toLocaleString("en-US", opts).toUpperCase();
+  return d.toLocaleString("en-US", { weekday: "short" }).toUpperCase();
+}
+function fmtKickoffTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 function americanOdds(p) {
@@ -2107,100 +1424,317 @@ function americanOdds(p) {
   return p > 0 ? `+${p}` : `${p}`;
 }
 
+function nextKickoffCountdown(games) {
+  const now = Date.now();
+  const next = games
+    .map(g => new Date(g.kickoff).getTime())
+    .filter(t => t > now)
+    .sort((a, b) => a - b)[0];
+  if (!next) return null;
+  const ms = next - now;
+  const days = Math.floor(ms / 86400000);
+  const hrs = Math.floor((ms % 86400000) / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  return { days, hrs, mins };
+}
+
+function gameStatusPill(g) {
+  // We only have kickoff iso. Approximate live vs upcoming vs final.
+  const kickoff = new Date(g.kickoff).getTime();
+  const now = Date.now();
+  if (kickoff > now) {
+    return `<span class="font-data-tabular text-[10px] text-on-surface-variant font-medium uppercase">${fmtKickoffDay(g.kickoff)} · ${fmtKickoffTime(g.kickoff)}</span>`;
+  }
+  // Past kickoff — without real status, show "POST" but no live indicator
+  return `<span class="font-data-tabular text-[10px] text-text-dim font-bold uppercase tracking-widest">POST KICKOFF</span>`;
+}
+
 function renderThisWeek() {
   const data = state.thisWeekData;
   if (!data) {
-    return `<div class="hero"><div><div class="eyebrow">LOADING · LIVE LINES</div><div class="hero-title"><span class="wreath">This Week</span></div></div></div>`;
+    return `<div class="py-20 text-center font-data-tabular text-on-surface-variant tracking-widest uppercase text-sm">Loading live lines…</div>`;
   }
   const games = data.games || [];
+  const cd = nextKickoffCountdown(games);
+
+  // Featured matchup: first upcoming game by kickoff
+  const upcoming = games.filter(g => new Date(g.kickoff).getTime() > Date.now())
+                       .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+  const featured = upcoming[0] || games[0];
+
   return `
-    <div class="hero">
+    <!-- Weekly Overview Header -->
+    <section class="mb-stack-lg flex flex-col md:flex-row justify-between items-start md:items-end gap-stack-md">
       <div>
-        <div class="eyebrow">LIVE · NFL · BOARD</div>
-        <div class="hero-title"><span class="wreath">This Week</span></div>
+        <span class="font-label-caps text-label-caps text-primary-fixed uppercase">Live · NFL · Board</span>
+        <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight uppercase text-primary-fixed">This Week</h1>
       </div>
-      <div class="hero-stats">
-        <div class="hstat"><div class="hstat-l">Games</div><div class="hstat-v green">${games.length}</div></div>
-        <div class="hstat"><div class="hstat-l">Books</div><div class="hstat-v">FD · DK</div></div>
+      ${cd ? `
+        <div class="flex flex-col items-start md:items-end">
+          <span class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Kickoff In</span>
+          <div class="flex gap-2">
+            <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
+              <span class="font-data-tabular text-xl text-primary-fixed">${String(cd.days).padStart(2,"0")}</span>
+              <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Days</span>
+            </div>
+            <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
+              <span class="font-data-tabular text-xl text-primary-fixed">${String(cd.hrs).padStart(2,"0")}</span>
+              <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Hrs</span>
+            </div>
+            <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
+              <span class="font-data-tabular text-xl text-primary-fixed">${String(cd.mins).padStart(2,"0")}</span>
+              <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Min</span>
+            </div>
+          </div>
+        </div>
+      ` : ""}
+    </section>
+
+    <!-- Source meta -->
+    <div class="glass-panel p-3 md:p-4 mb-stack-lg flex flex-col md:flex-row gap-3 md:items-center md:justify-between font-data-tabular text-[11px] uppercase tracking-widest text-on-surface-variant">
+      <div class="flex flex-wrap gap-4">
+        <span>Source · <strong class="text-on-surface">${escapeHtml((data.source || "—").toUpperCase())}</strong></span>
+        ${data.remaining ? `<span>Api · <strong class="text-on-surface">${data.remaining}</strong> left</span>` : ""}
       </div>
+      <div>Updated · <strong class="text-on-surface">${data.fetched_at ? new Date(data.fetched_at).toLocaleTimeString() : "—"}</strong></div>
     </div>
-    <div class="tw-meta">
-      <div class="tw-source">
-        <span>SOURCE · <strong>${(data.source || "—").toUpperCase()}</strong></span>
-        ${data.remaining ? `<span>API CREDITS · <strong>${data.remaining}</strong> LEFT</span>` : ""}
+
+    ${games.length === 0 ? `
+      <div class="glass-panel p-8 text-center text-on-surface-variant font-data-tabular text-sm">No games available. ${escapeHtml(data.error || "")}</div>
+    ` : `
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+        <!-- Main content -->
+        <div class="lg:col-span-8 space-y-stack-lg">
+          ${featured ? renderFeaturedMatchup(featured) : ""}
+          <section>
+            <div class="flex items-center justify-between border-b border-outline-variant pb-2 mb-4">
+              <h3 class="font-headline-lg text-xl uppercase italic">Full Schedule</h3>
+              <span class="font-label-caps text-[10px] text-on-surface-variant uppercase">${games.length} Games · FD · DK</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${games.filter(g => g !== featured).map(renderGameCard).join("")}
+            </div>
+          </section>
+        </div>
+
+        <!-- Sidebar widgets -->
+        <aside class="lg:col-span-4 space-y-gutter">
+          ${renderMostPickedWidget(games)}
+          ${renderLeagueConsensusWidget(featured)}
+          ${renderRecentPicksWidget()}
+        </aside>
       </div>
-      <div>UPDATED · <strong>${data.fetched_at ? new Date(data.fetched_at).toLocaleTimeString() : "—"}</strong></div>
-    </div>
-    <div class="tw-grid">
-      ${games.map(renderGameCard).join("") || `<div style="color:var(--dim);padding:30px 0;">No games available. ${data.error || ""}</div>`}
-    </div>
+    `}
+  `;
+}
+
+function renderFeaturedMatchup(g) {
+  const fd = g.books?.fanduel || {};
+  const dk = g.books?.draftkings || {};
+  const s = fd.spread || dk.spread;
+  const favTeam = s?.fav;
+  const line = s?.line;
+  const kickoff = new Date(g.kickoff);
+  const dayLabel = kickoff.toLocaleString("en-US", { weekday: "long" }).toUpperCase();
+  const isPrimeTime = kickoff.getHours() >= 19;
+  const networkLabel = isPrimeTime ? (kickoff.getDay() === 0 ? "SUNDAY NIGHT FOOTBALL" : kickoff.getDay() === 1 ? "MONDAY NIGHT FOOTBALL" : kickoff.getDay() === 4 ? "THURSDAY NIGHT FOOTBALL" : "PRIME TIME") : "MAIN SLATE";
+
+  return `
+    <section class="relative overflow-hidden glass-panel min-h-[320px] rounded-lg group hero-bg">
+      <div class="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent z-0"></div>
+      <div class="relative z-10 p-6 md:p-8 h-full flex flex-col justify-between gap-6">
+        <div class="flex justify-between items-start">
+          <span class="bg-primary-container text-on-primary-container font-label-caps text-[10px] px-2 py-1 rounded uppercase">Featured Game</span>
+          <div class="text-right">
+            <p class="font-label-caps text-label-caps text-white uppercase">${escapeHtml(networkLabel)}</p>
+            <p class="font-data-tabular text-sm text-on-surface-variant">${escapeHtml(dayLabel)} · ${escapeHtml(fmtKickoffTime(g.kickoff))}</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-around py-6 md:py-8 gap-6">
+          <div class="flex flex-col items-center gap-3 flex-1 min-w-0">
+            <div class="w-16 h-16 md:w-20 md:h-20 bg-surface-container rounded-full flex items-center justify-center border-2 border-outline-variant">
+              <span class="font-display-lg text-2xl md:text-4xl italic">${escapeHtml(g.away.slice(0, 3).toUpperCase())}</span>
+            </div>
+            <span class="font-headline-lg text-base md:text-xl uppercase tracking-widest text-center">${escapeHtml(g.away)}</span>
+            ${favTeam === g.away ? `<span class="font-data-tabular text-primary-fixed text-sm font-bold">${line > 0 ? "+" : ""}${line}</span>` : ""}
+          </div>
+          <div class="flex flex-col items-center gap-2 shrink-0">
+            <span class="font-display-lg text-2xl md:text-3xl text-on-surface-variant opacity-30 italic">VS</span>
+            ${s ? `
+              <span class="font-data-tabular text-primary-fixed text-base md:text-lg font-bold">${escapeHtml(favTeam || "")} ${line || ""}</span>
+              <span class="font-label-caps text-on-surface-variant text-[10px] uppercase">Spread</span>
+            ` : ""}
+          </div>
+          <div class="flex flex-col items-center gap-3 flex-1 min-w-0">
+            <div class="w-16 h-16 md:w-20 md:h-20 bg-surface-container rounded-full flex items-center justify-center border-2 border-outline-variant">
+              <span class="font-display-lg text-2xl md:text-4xl italic">${escapeHtml(g.home.slice(0, 3).toUpperCase())}</span>
+            </div>
+            <span class="font-headline-lg text-base md:text-xl uppercase tracking-widest text-center">${escapeHtml(g.home)}</span>
+            ${favTeam === g.home ? `<span class="font-data-tabular text-primary-fixed text-sm font-bold">${line > 0 ? "+" : ""}${line}</span>` : ""}
+          </div>
+        </div>
+        <div class="glass-panel p-4 flex flex-col md:flex-row md:items-center gap-4 rounded-lg border-primary-fixed/20">
+          <div class="flex-1 space-y-3">
+            <div class="font-label-caps text-[10px] text-on-surface-variant uppercase">Quick Pick · Both Books</div>
+            <div class="grid grid-cols-4 gap-2">
+              ${renderBookButtons("fanduel", fd, g)}
+            </div>
+            <div class="grid grid-cols-4 gap-2">
+              ${renderBookButtons("draftkings", dk, g)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   `;
 }
 
 function renderGameCard(g) {
   const fd = g.books?.fanduel || {};
   const dk = g.books?.draftkings || {};
-  const favTeam = fd.spread?.fav || dk.spread?.fav;
+  const s = fd.spread || dk.spread;
+  const favTeam = s?.fav;
+  const kickoff = new Date(g.kickoff).getTime();
+  const isLive = kickoff <= Date.now() && Date.now() - kickoff < 4 * 3600 * 1000; // assume 4hrs live window
+  const accentClass = isLive ? "bg-live-red" : "bg-secondary-container";
+
   return `
-    <div class="game-card">
-      <div class="game-head">
-        <span>${escapeHtml(g.away)} @ ${escapeHtml(g.home)}</span>
-        <span class="kickoff">${fmtKickoff(g.kickoff)}</span>
+    <div class="glass-panel p-5 rounded hover:border-primary-fixed/40 transition-colors group relative overflow-hidden">
+      <div class="absolute top-0 left-0 w-1 h-full ${accentClass}"></div>
+      <div class="flex justify-between items-start mb-4">
+        ${gameStatusPill(g)}
+        ${isLive ? `<div class="flex items-center gap-1 text-live-red"><span class="w-1.5 h-1.5 bg-live-red rounded-full live-pulse"></span><span class="font-label-caps text-[10px] uppercase">Live</span></div>` : ""}
       </div>
-      <div class="game-teams">
-        <div class="game-team">
-          <span class="name">${escapeHtml(g.away)}</span>
-          ${favTeam === g.away ? '<span class="is-fav">FAV</span>' : ""}
+      <div class="flex justify-between items-center mb-4">
+        <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
+          <div class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center font-bold text-sm font-display-lg">${escapeHtml(g.away.slice(0,3).toUpperCase())}</div>
+          <span class="font-label-caps text-[10px] text-on-surface uppercase truncate max-w-full">${escapeHtml(g.away)}</span>
+          ${favTeam === g.away ? `<span class="font-data-tabular text-xs text-primary-fixed">${s.line > 0 ? "+" : ""}${s.line}</span>` : (s ? `<span class="font-data-tabular text-xs text-on-surface-variant">${-s.line > 0 ? "+" : ""}${-s.line}</span>` : "")}
         </div>
-        <div class="game-team">
-          <span class="name">${escapeHtml(g.home)}</span>
-          ${favTeam === g.home ? '<span class="is-fav">FAV</span>' : ""}
+        <div class="text-on-surface-variant font-display-lg text-lg opacity-30 italic">VS</div>
+        <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
+          <div class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center font-bold text-sm font-display-lg">${escapeHtml(g.home.slice(0,3).toUpperCase())}</div>
+          <span class="font-label-caps text-[10px] text-on-surface uppercase truncate max-w-full">${escapeHtml(g.home)}</span>
+          ${favTeam === g.home ? `<span class="font-data-tabular text-xs text-primary-fixed">${s.line > 0 ? "+" : ""}${s.line}</span>` : (s ? `<span class="font-data-tabular text-xs text-on-surface-variant">${-s.line > 0 ? "+" : ""}${-s.line}</span>` : "")}
         </div>
       </div>
-      <div class="lines-row">
-        ${renderBookCell("fanduel", "FD · FANDUEL", "fd", fd, g)}
-        ${renderBookCell("draftkings", "DK · DRAFTKINGS", "dk", dk, g)}
+      <div class="pt-3 border-t border-outline-variant space-y-2">
+        <div class="font-label-caps text-[9px] tracking-widest text-on-surface-variant uppercase">FD · FANDUEL</div>
+        <div class="grid grid-cols-4 gap-1.5">${renderBookButtons("fanduel", fd, g)}</div>
+        <div class="font-label-caps text-[9px] tracking-widest text-on-surface-variant uppercase pt-1">DK · DRAFTKINGS</div>
+        <div class="grid grid-cols-4 gap-1.5">${renderBookButtons("draftkings", dk, g)}</div>
       </div>
     </div>
   `;
 }
 
-function renderBookCell(bookKey, label, cls, book, game) {
+function renderBookButtons(bookKey, book, game) {
   const s = book.spread;
   const t = book.total;
   const gameKey = `${game.away}@${game.home}`;
   const dogTeam = s ? (s.fav === game.home ? game.away : game.home) : null;
   const dogLine = s ? Math.abs(s.line) : null;
 
-  const btn = (bet, side, label, value, price, text) => `
-    <div class="pick-btn" data-bet="${bet}" data-game="${gameKey}"
+  const btn = (bet, side, lbl, value, price, text) => `
+    <div class="pick-btn" data-bet="${bet}" data-game="${escapeHtml(gameKey)}"
          data-side="${side}" data-line="${s && (bet === 'Favorite' || bet === 'Dog') ? s.line : (t?.point ?? '')}"
-         data-book="${bookKey}" data-price="${price ?? ''}" data-text="${text}">
-      <span class="pb-label">${label}</span>
+         data-book="${bookKey}" data-price="${price ?? ''}" data-text="${escapeHtml(text)}">
+      <span class="pb-label">${lbl}</span>
       <span class="pb-value">${value}</span>
       <span class="pb-price">${price != null ? americanOdds(price) : ''}</span>
     </div>
   `;
+  const empty = (lbl) => `<div class="pick-btn opacity-30 cursor-not-allowed"><span class="pb-label">${lbl}</span><span class="pb-value">—</span><span class="pb-price"></span></div>`;
 
   return `
-    <div class="book-cell">
-      <div class="book-label ${cls}">${label}</div>
-      <div class="book-numbers">
-        ${s ? btn('Favorite', 'fav', 'Fav', `${s.line}`, s.favPrice,
-                  `${s.fav} ${s.line}`) : `<div class="pick-btn" style="opacity:.3;"><span class="pb-label">Fav</span><span class="pb-value">—</span></div>`}
-        ${s ? btn('Dog', 'dog', 'Dog', `+${dogLine}`, s.dogPrice,
-                  `${dogTeam} +${dogLine}`) : `<div class="pick-btn" style="opacity:.3;"><span class="pb-label">Dog</span><span class="pb-value">—</span></div>`}
-        ${t ? btn('Over', 'over', 'Over', `O${t.point}`, t.overPrice,
-                  `${game.away} / ${game.home} O${t.point}`) : `<div class="pick-btn" style="opacity:.3;"><span class="pb-label">Over</span><span class="pb-value">—</span></div>`}
-        ${t ? btn('Under', 'under', 'Under', `U${t.point}`, t.underPrice,
-                  `${game.away} / ${game.home} U${t.point}`) : `<div class="pick-btn" style="opacity:.3;"><span class="pb-label">Under</span><span class="pb-value">—</span></div>`}
+    ${s ? btn('Favorite', 'fav', 'Fav', `${s.line}`, s.favPrice, `${s.fav} ${s.line}`) : empty('Fav')}
+    ${s ? btn('Dog', 'dog', 'Dog', `+${dogLine}`, s.dogPrice, `${dogTeam} +${dogLine}`) : empty('Dog')}
+    ${t ? btn('Over', 'over', 'Over', `O${t.point}`, t.overPrice, `${game.away} / ${game.home} O${t.point}`) : empty('Over')}
+    ${t ? btn('Under', 'under', 'Under', `U${t.point}`, t.underPrice, `${game.away} / ${game.home} U${t.point}`) : empty('Under')}
+  `;
+}
+
+function renderMostPickedWidget(games) {
+  // Without picks DB queryable here, show a "favorite of the week" — biggest favorite by spread
+  if (!games || !games.length) return "";
+  let biggest = null;
+  for (const g of games) {
+    const s = g.books?.fanduel?.spread || g.books?.draftkings?.spread;
+    if (!s) continue;
+    if (!biggest || Math.abs(s.line) > Math.abs(biggest.line)) {
+      biggest = { game: g, line: s.line, fav: s.fav };
+    }
+  }
+  if (!biggest) return "";
+  return `
+    <div class="glass-panel p-6 rounded-lg border-l-4 border-primary-fixed relative overflow-hidden">
+      <h4 class="font-label-caps text-[10px] text-on-surface-variant mb-4 uppercase">Biggest Favorite</h4>
+      <div class="flex items-center gap-4">
+        <div class="w-16 h-16 bg-surface-container flex items-center justify-center rounded border border-outline-variant">
+          <span class="font-display-lg text-3xl italic">${escapeHtml(biggest.fav.slice(0,3).toUpperCase())}</span>
+        </div>
+        <div class="min-w-0">
+          <p class="font-headline-lg text-xl uppercase italic truncate">${escapeHtml(biggest.fav)}</p>
+          <p class="font-data-tabular text-primary-fixed text-sm">Line ${biggest.line}</p>
+        </div>
       </div>
     </div>
   `;
 }
 
-// Cache of the logged-in user's current picks for This Week's week, by bet_type.
-// Populated when This Week mounts; used to mark .picked buttons.
+function renderLeagueConsensusWidget(featured) {
+  if (!featured) return "";
+  const t = featured.books?.fanduel?.total || featured.books?.draftkings?.total;
+  if (!t) return "";
+  return `
+    <div class="glass-panel p-6 rounded-lg">
+      <h4 class="font-label-caps text-[10px] text-on-surface-variant mb-4 uppercase">Featured O/U</h4>
+      <p class="font-label-caps text-xs mb-3">${escapeHtml(featured.away)} @ ${escapeHtml(featured.home)} (O/U ${t.point})</p>
+      <div class="space-y-3">
+        <div>
+          <div class="flex justify-between text-[10px] font-data-tabular mb-1">
+            <span>OVER ${t.point}</span>
+            <span class="text-primary-fixed">${t.overPrice != null ? americanOdds(t.overPrice) : "—"}</span>
+          </div>
+          <div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
+            <div class="h-full bg-primary-fixed" style="width: 50%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] font-data-tabular mb-1">
+            <span>UNDER ${t.point}</span>
+            <span class="text-on-surface-variant">${t.underPrice != null ? americanOdds(t.underPrice) : "—"}</span>
+          </div>
+          <div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
+            <div class="h-full bg-outline" style="width: 50%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderRecentPicksWidget() {
+  // Placeholder until /api/picks is queryable for "recent picks across the league"
+  return `
+    <div class="glass-panel rounded-lg overflow-hidden">
+      <div class="bg-surface-container-high px-4 py-3 border-b border-outline-variant">
+        <h4 class="font-label-caps text-[10px] uppercase">Pick Tip</h4>
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="flex items-start gap-3">
+          <div class="avatar shrink-0"><span class="material-symbols-outlined text-base">tips_and_updates</span></div>
+          <div class="text-[12px] text-on-surface-variant leading-snug">Tap any line on a game card to set it as your Favorite / Dog / Over / Under pick for the week.</div>
+        </div>
+        <div class="flex items-start gap-3">
+          <div class="avatar shrink-0"><span class="material-symbols-outlined text-base">lock</span></div>
+          <div class="text-[12px] text-on-surface-variant leading-snug">Super Lock must be -120 or harder. Submit in <button class="text-primary-fixed underline jump-mypicks">My Picks</button>.</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 async function loadMyPickedSet(season, week) {
   if (!state.user) return {};
   try {
@@ -2266,7 +1800,6 @@ async function clickPickButton(btn) {
     if (!r.ok) {
       showToast(j.error === "locked" ? "LOCKED · CUTOFF PASSED" : "ERROR · " + (j.error || "unknown"), "err");
     } else {
-      // Update local mark cache: clear any prior button of same bet type, mark this one
       document.querySelectorAll(`.pick-btn[data-bet="${bet_type}"]`).forEach(b => b.classList.remove("picked"));
       btn.classList.add("picked");
       showToast(`✓ ${bet_type.toUpperCase()} · ${pick_text}`);
@@ -2280,7 +1813,6 @@ async function clickPickButton(btn) {
 
 // =================== My Picks ===================
 function currentNflWeekClient() {
-  // Mirrors lib/nfl.js. Returns {season, week} or {null, null} offseason.
   const kickoff = Date.UTC(2026, 8, 10);
   const week1Start = kickoff - 2 * 24 * 3600 * 1000;
   const now = Date.now();
@@ -2307,73 +1839,76 @@ async function loadMyPicks(season, week) {
 async function renderMyPicks() {
   if (!state.user) {
     return `
-      <div class="hero">
-        <div>
-          <div class="eyebrow">MEMBER · SIGN-IN REQUIRED</div>
-          <div class="hero-title"><span class="wreath">My Picks</span></div>
-        </div>
-      </div>
-      <div class="tw-meta" style="cursor:pointer;" onclick="document.getElementById('login-modal').classList.add('show');">
-        <div>Sign in to submit your weekly picks.</div>
-        <div><strong style="color:var(--green);">SIGN IN →</strong></div>
+      <section class="mb-stack-lg">
+        <span class="font-label-caps text-label-caps text-primary-fixed uppercase">Member · Sign-In Required</span>
+        <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">My Picks</h1>
+      </section>
+      <div class="glass-panel p-8 text-center cursor-pointer hover:border-primary-fixed/40 transition-colors" id="signin-prompt">
+        <div class="font-data-tabular text-on-surface-variant mb-4 text-sm">Sign in to submit your weekly picks.</div>
+        <div class="font-data-tabular text-primary-fixed text-sm tracking-widest uppercase">→ Sign In</div>
       </div>
     `;
   }
   const cur = currentNflWeekClient();
   const season = 2026;
   const week = state.myPicksWeek || cur.week || 1;
-  // Load existing picks for this week and pre-fill the form
   const existing = await loadMyPicks(season, week);
-  const draft = { ...existing, ...state.myPicksDraft }; // local draft overrides
+  const draft = { ...existing, ...state.myPicksDraft };
 
   const rows = BET_TYPES_ORDER.map(bt => {
     const val = draft[bt]?.pick_text || "";
+    const isSuper = bt === "Super Lock";
     return `
-      <div class="form-row">
-        <div class="bt-name ${bt === 'Super Lock' ? 'super' : ''}">${bt === 'Super Lock' ? '🔒 Super' : bt}</div>
+      <div class="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-3 md:gap-5 md:items-center">
+        <div class="font-label-caps text-[11px] tracking-widest uppercase ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${isSuper ? "🔒 Super Lock" : bt}</div>
         <input class="pick-input" data-bet="${bt}" value="${escapeHtml(val)}" placeholder="${bt === 'Favorite' ? 'e.g., Chiefs -3 vs Bills' : bt === 'Dog' ? 'e.g., Bills +3 @ Chiefs' : bt === 'Over' ? 'e.g., Chiefs / Bills O48.5' : bt === 'Under' ? 'e.g., Chiefs / Bills U48.5' : 'Player prop / specialty bet'}">
       </div>
     `;
   }).join("");
 
-  // Super Lock manual marking widget — surfaces if Super Lock pick exists for this week
   const sl = existing["Super Lock"];
   const slMarkHtml = sl ? `
-    <div class="sl-mark-box">
-      <div class="sl-mark-head">
-        <div class="sl-mark-title">🔒 Mark Your Super Lock</div>
-        <div class="sl-mark-meta">WEEK ${week} · GRADE MANUALLY</div>
+    <section class="mt-10 glass-panel p-6 md:p-7 border-l-2 border-l-tertiary-fixed-dim">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <div class="font-label-caps text-[10px] tracking-widest text-tertiary-fixed uppercase mb-1">Mark Your Super Lock</div>
+          <div class="font-display-lg text-2xl text-on-surface uppercase">🔒 Week ${week}</div>
+        </div>
+        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase">Grade Manually</div>
       </div>
-      <div class="sl-mark-pick">${escapeHtml(sl.pick_text)}</div>
-      <div class="sl-mark-buttons">
+      <div class="bg-surface-container-lowest/60 border border-outline-variant p-4 mb-5 font-data-tabular text-sm">${escapeHtml(sl.pick_text)}</div>
+      <div class="flex flex-wrap gap-2">
         <button class="sl-mark-btn W ${sl.result === 'W' ? 'current' : ''}" data-result="W">Hit · W</button>
         <button class="sl-mark-btn L ${sl.result === 'L' ? 'current' : ''}" data-result="L">Miss · L</button>
         <button class="sl-mark-btn P ${sl.result === 'P' ? 'current' : ''}" data-result="P">Push · P</button>
       </div>
-      ${sl.graded_at ? `<div class="sl-mark-meta" style="margin-top:10px;">LAST MARKED · ${new Date(sl.graded_at).toLocaleString()}</div>` : ""}
-    </div>
+      ${sl.graded_at ? `<div class="font-data-tabular text-[10px] text-on-surface-variant mt-4 tracking-widest uppercase">Last marked · ${new Date(sl.graded_at).toLocaleString()}</div>` : ""}
+    </section>
   ` : "";
 
   return `
-    <div class="hero">
+    <section class="mb-stack-lg flex flex-col md:flex-row md:items-end md:justify-between gap-4">
       <div>
-        <div class="eyebrow">WEEKLY · SUBMISSION</div>
-        <div class="hero-title"><span class="wreath">${state.user.name}</span></div>
+        <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly · Submission</div>
+        <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">${escapeHtml(state.user.name)}</h1>
       </div>
-      <div class="hero-stats">
-        <div class="hstat"><div class="hstat-l">Week</div><div class="hstat-v green">${week}</div></div>
+      <div class="glass-panel px-5 py-3 flex items-center gap-stack-sm border border-outline-variant">
+        <button class="material-symbols-outlined p-1 text-on-surface-variant hover:text-primary-fixed transition-colors disabled:opacity-30" id="week-prev" ${week <= 1 ? "disabled" : ""}>chevron_left</button>
+        <span class="font-data-tabular text-data-tabular px-4 text-primary-fixed-dim font-bold uppercase">Week ${week}</span>
+        <button class="material-symbols-outlined p-1 text-on-surface-variant hover:text-primary-fixed transition-colors disabled:opacity-30" id="week-next" ${week >= 18 ? "disabled" : ""}>chevron_right</button>
       </div>
-    </div>
-    <div class="picks-form">
+    </section>
+
+    <section class="glass-panel p-6 md:p-8 space-y-5">
       ${rows}
-      <div class="submit-row">
-        <div class="lock-status" id="lock-status">CUTOFF · SUN 12:00 AM CT</div>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <span class="save-msg" id="save-msg">${state.myPicksSaveMsg || ""}</span>
-          <button class="btn" id="picks-save">Save Picks</button>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 border-t border-outline-variant">
+        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase" id="lock-status">Cutoff · Sun 12:00 AM CT</div>
+        <div class="flex items-center gap-4">
+          <span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed" id="save-msg">${escapeHtml(state.myPicksSaveMsg || "")}</span>
+          <button class="btn-primary" id="picks-save">Save Picks <span class="material-symbols-outlined text-sm align-middle ml-1">send</span></button>
         </div>
       </div>
-    </div>
+    </section>
     ${slMarkHtml}
   `;
 }
@@ -2424,23 +1959,37 @@ async function submitMyPicks() {
 }
 
 async function render() {
-  renderYearTabs();
   renderTickerWeekSelect();
   renderTicker();
   renderUserArea();
+  syncNavActive();
   const root = document.getElementById("root");
   if (state.view === "standings") {
     root.innerHTML = renderStandings();
     attachStandingsHandlers();
+    document.querySelectorAll(".year-pill").forEach(b => {
+      b.addEventListener("click", () => {
+        state.season = b.dataset.year;
+        state.expanded = null;
+        render();
+      });
+    });
   } else if (state.view === "lifetime") {
     root.innerHTML = renderLifetime();
+    document.querySelectorAll(".archive-link").forEach(c => {
+      c.addEventListener("click", () => {
+        state.view = "standings";
+        state.season = c.dataset.season;
+        state.expanded = null;
+        render();
+      });
+    });
   } else if (state.view === "rules") {
     root.innerHTML = renderRules();
   } else if (state.view === "thisweek") {
-    root.innerHTML = `<div style="padding:60px 0; color: var(--dim); font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform:uppercase;">Loading live lines…</div>`;
+    root.innerHTML = `<div class="py-20 text-center font-data-tabular text-on-surface-variant tracking-widest uppercase text-sm">Loading live lines…</div>`;
     await loadOdds();
     root.innerHTML = renderThisWeek();
-    // Click-to-pick handlers + highlight current selections
     document.querySelectorAll(".pick-btn[data-bet]").forEach(b => {
       b.addEventListener("click", () => clickPickButton(b));
     });
@@ -2448,6 +1997,9 @@ async function render() {
     const week = state.myPicksWeek || cur.week || 1;
     const myPicks = await loadMyPickedSet(2026, week);
     markPickedButtons(myPicks);
+    document.querySelectorAll(".jump-mypicks").forEach(b => {
+      b.addEventListener("click", () => { state.view = "mypicks"; render(); });
+    });
   } else if (state.view === "mypicks") {
     root.innerHTML = await renderMyPicks();
     const saveBtn = document.getElementById("picks-save");
@@ -2455,6 +2007,22 @@ async function render() {
     document.querySelectorAll(".sl-mark-btn").forEach(b => {
       b.onclick = () => markSuperLock(b.dataset.result);
     });
+    const prompt = document.getElementById("signin-prompt");
+    if (prompt) prompt.onclick = openLogin;
+    const wkPrev = document.getElementById("week-prev");
+    const wkNext = document.getElementById("week-next");
+    if (wkPrev) wkPrev.onclick = () => {
+      const cur = currentNflWeekClient();
+      const wk = state.myPicksWeek || cur.week || 1;
+      state.myPicksWeek = Math.max(1, wk - 1);
+      render();
+    };
+    if (wkNext) wkNext.onclick = () => {
+      const cur = currentNflWeekClient();
+      const wk = state.myPicksWeek || cur.week || 1;
+      state.myPicksWeek = Math.min(18, wk + 1);
+      render();
+    };
   }
 }
 
@@ -2493,13 +2061,20 @@ function attachStandingsHandlers() {
   });
 }
 
-document.querySelectorAll(".nav-link").forEach(btn => {
+// Nav click handlers
+document.querySelectorAll(".nav-link[data-view]").forEach(btn => {
   btn.addEventListener("click", () => {
-    if (!btn.dataset.view) return;
     state.view = btn.dataset.view;
     state.expanded = null;
     render();
   });
+});
+
+// Sidebar submit picks shortcut
+document.getElementById("sidebar-submit-picks").addEventListener("click", () => {
+  if (!state.user) { openLogin(); return; }
+  state.view = "mypicks";
+  render();
 });
 
 // Login modal handlers
@@ -2514,7 +2089,7 @@ document.getElementById("login-pass").addEventListener("keydown", e => { if (e.k
   DATA = await r.json();
   render();
 })().catch(err => {
-  document.getElementById("root").innerHTML = `<div style="color:var(--red);">Failed to load data: ${err.message}</div>`;
+  document.getElementById("root").innerHTML = `<div class="text-live-red p-6">Failed to load data: ${err.message}</div>`;
 });
 </script>
 
