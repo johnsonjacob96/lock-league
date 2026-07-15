@@ -31,7 +31,7 @@ export async function onRequest({ request, env }) {
     const season = Number(url.searchParams.get("season"));
     const week = url.searchParams.get("week") ? Number(url.searchParams.get("week")) : null;
     if (!season) return json({ error: "season-required" }, { status: 400 });
-    const rows = week
+    let rows = week
       ? await sql(env)`
           SELECT p.*, m.name AS member_name
           FROM picks p JOIN members m ON m.id = p.member_id
@@ -42,6 +42,13 @@ export async function onRequest({ request, env }) {
           FROM picks p JOIN members m ON m.id = p.member_id
           WHERE p.season = ${season}
           ORDER BY p.week, m.name, p.bet_type`;
+    // Live seasons: other members' picks stay hidden until the week locks,
+    // so nobody can scout picks before the Sunday cutoff.
+    if (season >= 2026) {
+      const viewer = await verifyCookie(env, request.headers.get("cookie"));
+      const now = Date.now();
+      rows = rows.filter(p => p.member_id === viewer || now >= pickCutoff(season, p.week).getTime());
+    }
     return json({ picks: rows });
   }
 
@@ -62,8 +69,8 @@ export async function onRequest({ request, env }) {
     }
     const lockedAt = new Date().toISOString();
     const s = sql(env);
-    for (const p of picks) {
-      await s`
+    // Distinct bet_types per member → upserts are independent; run in parallel.
+    await Promise.all(picks.map(p => s`
         INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at)
         VALUES (${memberId}, ${season}, ${week}, ${p.bet_type}, ${p.pick_text},
                 ${p.game_key || null}, ${p.side || null}, ${p.line ?? null},
@@ -76,8 +83,7 @@ export async function onRequest({ request, env }) {
           line      = EXCLUDED.line,
           book      = EXCLUDED.book,
           price     = EXCLUDED.price,
-          locked_at = EXCLUDED.locked_at`;
-    }
+          locked_at = EXCLUDED.locked_at`));
     return json({ ok: true, count: picks.length });
   }
 

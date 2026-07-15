@@ -39,7 +39,7 @@ export default async (req) => {
     const season = Number(url.searchParams.get("season"));
     const week = url.searchParams.get("week") ? Number(url.searchParams.get("week")) : null;
     if (!season) return json({ error: "season-required" }, { status: 400 });
-    const rows = week
+    let rows = week
       ? await sql()`
           SELECT p.*, m.name AS member_name
           FROM picks p JOIN members m ON m.id = p.member_id
@@ -50,6 +50,13 @@ export default async (req) => {
           FROM picks p JOIN members m ON m.id = p.member_id
           WHERE p.season = ${season}
           ORDER BY p.week, m.name, p.bet_type`;
+    // Live seasons: other members' picks stay hidden until the week locks,
+    // so nobody can scout picks before the Sunday cutoff.
+    if (season >= 2026) {
+      const viewer = verifyCookie(req.headers.get("cookie"));
+      const now = Date.now();
+      rows = rows.filter(p => p.member_id === viewer || now >= pickCutoff(season, p.week).getTime());
+    }
     return json({ picks: rows });
   }
 
@@ -69,8 +76,9 @@ export default async (req) => {
       if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
     }
     const lockedAt = new Date().toISOString();
-    for (const p of picks) {
-      await sql()`
+    const s = sql();
+    // Distinct bet_types per member → upserts are independent; run in parallel.
+    await Promise.all(picks.map(p => s`
         INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at)
         VALUES (${memberId}, ${season}, ${week}, ${p.bet_type}, ${p.pick_text},
                 ${p.game_key || null}, ${p.side || null}, ${p.line ?? null},
@@ -83,8 +91,7 @@ export default async (req) => {
           line      = EXCLUDED.line,
           book      = EXCLUDED.book,
           price     = EXCLUDED.price,
-          locked_at = EXCLUDED.locked_at`;
-    }
+          locked_at = EXCLUDED.locked_at`));
     return json({ ok: true, count: picks.length });
   }
 

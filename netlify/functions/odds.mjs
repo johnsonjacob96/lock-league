@@ -1,9 +1,19 @@
 // /api/odds — proxy NFL spreads + totals from The Odds API.
 // Cached in-memory per warm container (5 min).
 
+import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS } from "../../lib/nfl.js";
+
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache = { ts: 0, data: null };
 const API_BASE = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds";
+
+// Kickoff window for the week being picked: the current week in season,
+// week 1 before kickoff, the final week once the season ends.
+function oddsWindow() {
+  const cur = currentNflWeek();
+  const week = cur.status === "postseason" ? REGULAR_SEASON_WEEKS : (cur.week || 1);
+  return weekWindow(week);
+}
 
 function normalize(events) {
   return events.map((ev) => {
@@ -52,7 +62,7 @@ function mockData() {
   const now = Date.now();
   return games.map(([away, home, fav, total], i) => ({
     id: `mock-${i}`,
-    kickoff: new Date(now + i * 3600 * 1000).toISOString(),
+    kickoff: new Date(now + (i + 1) * 3600 * 1000).toISOString(),
     home, away,
     books: {
       fanduel: { spread: { fav: home, line: fav, favPrice: -110, dogPrice: -110 }, total: { point: total, overPrice: -110, underPrice: -110 }, updated: new Date(now).toISOString() },
@@ -67,11 +77,6 @@ function json(body, init = {}) {
     headers: { "Content-Type": "application/json", ...(init.headers || {}) },
   });
 }
-
-// Week 1 2026 game window — used to filter the live API call.
-// Thu Sept 10 2026 (TNF opener) → Mon Sept 14 ~midnight ET (post-MNF, even though we ignore MNF picks)
-const WEEK1_FROM = "2026-09-10T00:00:00Z";
-const WEEK1_TO   = "2026-09-15T08:00:00Z";
 
 export default async (req) => {
   const url = new URL(req.url);
@@ -97,9 +102,9 @@ export default async (req) => {
   apiUrl.searchParams.set("oddsFormat", "american");
   apiUrl.searchParams.set("bookmakers", "fanduel,draftkings");
   apiUrl.searchParams.set("dateFormat", "iso");
-  // Restrict to Week 1 2026 window for now
-  apiUrl.searchParams.set("commenceTimeFrom", WEEK1_FROM);
-  apiUrl.searchParams.set("commenceTimeTo", WEEK1_TO);
+  const win = oddsWindow();
+  apiUrl.searchParams.set("commenceTimeFrom", win.from);
+  apiUrl.searchParams.set("commenceTimeTo", win.to);
 
   try {
     const r = await fetch(apiUrl);

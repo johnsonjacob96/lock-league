@@ -1,8 +1,7 @@
 // /api/grade — manual + cron-callable grading endpoint.
 // Auth: X-Cron-Secret header must match env.CRON_SECRET.
 // GitHub Actions cron workflow hits this 4x/week during the season.
-import { gradeWeek } from "../_shared/grader.js";
-import { currentNflWeek } from "../_shared/nfl.js";
+import { gradeWeek, gradeCurrentWeeks } from "../_shared/grader.js";
 
 function json(body, init = {}) {
   return new Response(JSON.stringify(body), {
@@ -17,16 +16,17 @@ export async function onRequest({ request, env }) {
   if (!env.CRON_SECRET || secret !== env.CRON_SECRET) {
     return json({ error: "unauthorized" }, { status: 401 });
   }
-  let season = Number(url.searchParams.get("season"));
-  let week = Number(url.searchParams.get("week"));
-  if (!season || !week) {
-    const cur = currentNflWeek();
-    if (!cur.week) return json({ ok: true, note: "offseason" });
-    season = cur.season;
-    week = Math.max(1, cur.week - 1);
-  }
+  const season = Number(url.searchParams.get("season"));
+  const week = Number(url.searchParams.get("week"));
   try {
-    const result = await gradeWeek(env, season, week);
+    if (season && week) {
+      const result = await gradeWeek(env, season, week);
+      return json({ ok: true, ...result });
+    }
+    // Default: grade the current week (games just finished) AND the previous
+    // week (late finals / MNF caught by the Tuesday run after week rollover).
+    const result = await gradeCurrentWeeks(env);
+    if (!result.ran) return json({ ok: true, note: "offseason" });
     return json({ ok: true, ...result });
   } catch (e) {
     return json({ error: e.message }, { status: 500 });

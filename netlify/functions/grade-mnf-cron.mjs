@@ -1,4 +1,4 @@
-// Scheduled grader run — Sunday 22:00 UTC — catches the Sun early slate.
+// Scheduled grader run — Tuesday 09:00 UTC — catches Monday Night Football after the week rolls over.
 // Grades the current week and the previous week (late finals).
 import { gradeCurrentWeeks } from "../../lib/grader.js";
 
@@ -13,5 +13,5 @@ export default async () => {
 };
 
 export const config = {
-  schedule: "0 22 * * 0",
+  schedule: "0 9 * * 2",
 };
