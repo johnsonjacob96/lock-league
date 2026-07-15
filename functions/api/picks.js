@@ -83,6 +83,17 @@ export async function onRequest({ request, env }) {
       const now = Date.now();
       rows = rows.filter(p => p.member_id === viewer || now >= pickCutoff(season, p.week).getTime());
     }
+    // Week view also reports who has submitted (count only, never contents),
+    // so the group can see who still owes picks before the cutoff.
+    if (week) {
+      const submitted = await sql(env)`
+        SELECT m.id AS member_id, m.name, COUNT(p.id)::int AS picks
+        FROM members m
+        LEFT JOIN picks p ON p.member_id = m.id AND p.season = ${season} AND p.week = ${week}
+        GROUP BY m.id, m.name
+        ORDER BY m.name`;
+      return json({ picks: rows, submitted });
+    }
     return json({ picks: rows });
   }
 
@@ -100,6 +111,11 @@ export async function onRequest({ request, env }) {
     for (const p of picks) {
       if (!BET_TYPES.includes(p.bet_type)) return json({ error: "bad-bet-type", bet_type: p.bet_type }, { status: 400 });
       if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
+      // League rule: Super Lock must be -120 or harder (enforced when a
+      // structured price is provided; free-text stays on the honor system).
+      if (p.bet_type === "Super Lock" && p.price != null && !(Number(p.price) <= -120)) {
+        return json({ error: "super-lock-price", detail: "Super Lock must be -120 or harder", price: p.price }, { status: 400 });
+      }
     }
     // A game that has kicked off can no longer be picked (TNF after kickoff,
     // international games that start before the Sunday noon cutoff, ...).

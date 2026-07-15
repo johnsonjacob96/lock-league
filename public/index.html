@@ -109,6 +109,20 @@
   .heat-cell.P { background: #ffe16d; }
   .heat-cell:hover { transform: scaleY(1.3); }
 
+  /* Compact heat dots — shown under the member name below lg, where the
+     full heat column is hidden */
+  .heat-dot { width: 5px; height: 10px; background: #333536; border-radius: 1px; flex-shrink: 0; }
+  .heat-dot.W { background: #61ff97; }
+  .heat-dot.L { background: #FF3B3B; }
+  .heat-dot.P { background: #ffe16d; }
+
+  /* Respect reduced-motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track { animation: none; }
+    .live-pulse { animation: none; }
+    *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  }
+
   /* Week cell (member detail grid) */
   .week-cell {
     width: 26px; height: 26px;
@@ -528,6 +542,24 @@
   </div>
 </div>
 
+<!-- Account modal (passphrase change + sign out) -->
+<div class="modal-backdrop" id="account-modal">
+  <div class="modal">
+    <h3 class="font-display-lg text-2xl text-primary-fixed mb-1 uppercase">Account</h3>
+    <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mb-6 uppercase" id="account-name"></div>
+    <label>Current passphrase</label>
+    <input id="acct-current" type="password" autocomplete="current-password" placeholder="Current passphrase">
+    <label>New passphrase (min 8 characters)</label>
+    <input id="acct-next" type="password" autocomplete="new-password" placeholder="New passphrase">
+    <div class="flex gap-3 mt-2">
+      <button class="btn" id="acct-save">Update</button>
+      <button class="btn ghost" id="acct-cancel">Close</button>
+    </div>
+    <button class="w-full mt-5 font-data-tabular text-[11px] tracking-widest uppercase text-on-surface-variant hover:text-live-red transition-colors text-center" id="acct-logout">Sign Out</button>
+    <div class="modal-err" id="acct-err"></div>
+  </div>
+</div>
+
 <main id="root" class="md:ml-64 px-margin-mobile md:px-gutter pt-6 md:pt-stack-lg pb-32"></main>
 
 <!-- Mobile Bottom Nav -->
@@ -585,6 +617,31 @@ let state = {
   myPicksSaveMsg: "",
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
+
+// Per-member accent colors — used on avatars, standings, ticker, hero.
+const MEMBER_COLORS = {
+  Brayden: "#fb923c", Chase: "#22d3ee", Chris: "#a78bfa", Jack: "#34d399",
+  Jacob: "#60a5fa", Jared: "#f472b6", Mason: "#facc15", Tyler: "#fb7185",
+};
+function memberColor(name) { return MEMBER_COLORS[name] || "#8A9296"; }
+function memberDot(name, extra = "") {
+  return `<span class="w-1.5 h-1.5 rounded-full inline-block shrink-0 ${extra}" style="background:${memberColor(name)}"></span>`;
+}
+
+// Units at -110: win = +1, loss = -1.1, push = 0.
+function fmtUnits(u) {
+  if (Math.abs(u) < 0.05) return "0.0";
+  const sign = u > 0 ? "+" : "−";
+  return sign + Math.abs(u).toFixed(1);
+}
+
+// Loose team matching, mirrors the server ("Chiefs" ↔ "Kansas City Chiefs").
+function normTeamName(s) { return String(s || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
+function sameTeamName(a, b) {
+  const na = normTeamName(a), nb = normTeamName(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
 
 // =================== Live 2026 season (from /api/picks) ===================
 // Historical seasons come from seasons.json; the live season lives in the DB.
@@ -735,7 +792,7 @@ function renderTickerItem(it) {
   const safe = escapeHtml(it.text);
   return `<span class="tk-item">
     <span class="tk-wk">WK${String(it.wk).padStart(2,"0")}</span>
-    <span class="tk-name">${escapeHtml(it.name)}</span>
+    <span class="tk-name" style="color:${memberColor(it.name)}">${escapeHtml(it.name)}</span>
     <span class="tk-type ${btClass(it.bt)}">${btShort(it.bt)}</span>
     <span class="tk-pick">${safe}</span>
     ${it.result ? `<span class="tk-res ${it.result}">${it.result}</span>` : ""}
@@ -783,6 +840,86 @@ function syncNavActive() {
   });
 }
 
+// Season stat tiles: units leader, hottest streak, best bet type, Super Lock king.
+function computeSeasonStats(season) {
+  const info = DATA.seasons[season];
+  if (!info) return null;
+  let unitsLeader = null, streakLeader = null, superKing = null;
+  const btAgg = {};
+  for (const name of info.members) {
+    const md = DATA.members[name]?.[season];
+    if (!md) continue;
+    let W = 0, L = 0, cur = 0, best = 0;
+    for (let wk = 1; wk <= WEEK_COUNT; wk++) {
+      for (const bt of BET_TYPES_ORDER) {
+        const res = md.byType?.[bt]?.picks?.[wk]?.result;
+        if (!res) continue;
+        const a = btAgg[bt] || (btAgg[bt] = { W: 0, L: 0 });
+        if (res === "W") { W++; a.W++; cur++; if (cur > best) best = cur; }
+        else if (res === "L") { L++; a.L++; cur = 0; }
+        // pushes neither extend nor break a streak
+      }
+    }
+    const units = W - 1.1 * L;
+    if ((W + L) && (!unitsLeader || units > unitsLeader.units)) unitsLeader = { name, units };
+    if (!streakLeader || best > streakLeader.len) streakLeader = { name, len: best };
+    const sr = parseRecord(md.byType?.["Super Lock"]?.record);
+    const sTot = sr.w + sr.l;
+    if (sTot) {
+      const sPct = sr.w / sTot;
+      if (!superKing || sPct > superKing.pct || (sPct === superKing.pct && sr.w > superKing.rec.w)) {
+        superKing = { name, rec: sr, pct: sPct };
+      }
+    }
+  }
+  let bestBt = null;
+  for (const [bt, a] of Object.entries(btAgg)) {
+    const tot = a.W + a.L;
+    if (!tot) continue;
+    const p = a.W / tot;
+    if (!bestBt || p > bestBt.pct) bestBt = { bt, pct: p, rec: a };
+  }
+  if (!unitsLeader && !bestBt && !streakLeader?.len && !superKing) return null;
+  return { unitsLeader, bestBt, streakLeader, superKing };
+}
+
+function statTile(icon, label, value, sub, valueStyle = "") {
+  return `
+    <div class="glass-card p-4 rounded-lg flex flex-col gap-1 min-w-0">
+      <div class="flex items-center gap-2 text-on-surface-variant">
+        <span class="material-symbols-outlined text-base text-primary-fixed">${icon}</span>
+        <span class="font-label-caps text-[9px] uppercase tracking-widest">${label}</span>
+      </div>
+      <div class="font-display-lg text-lg md:text-xl uppercase truncate" ${valueStyle}>${value}</div>
+      <div class="font-data-tabular text-[11px] text-on-surface-variant">${sub}</div>
+    </div>`;
+}
+
+function renderSeasonStatTiles(season) {
+  const st = computeSeasonStats(season);
+  if (!st) return "";
+  const tiles = [];
+  if (st.unitsLeader) {
+    tiles.push(statTile("payments", "Units Leader", escapeHtml(st.unitsLeader.name),
+      `${fmtUnits(st.unitsLeader.units)} u at −110`, `style="color:${memberColor(st.unitsLeader.name)}"`));
+  }
+  if (st.streakLeader?.len) {
+    tiles.push(statTile("local_fire_department", "Hot Streak", escapeHtml(st.streakLeader.name),
+      `${st.streakLeader.len} straight wins`, `style="color:${memberColor(st.streakLeader.name)}"`));
+  }
+  if (st.bestBt) {
+    tiles.push(statTile("query_stats", "Best Bet Type", btShort(st.bestBt.bt),
+      `${(st.bestBt.pct * 100).toFixed(1)}% · ${st.bestBt.rec.W}-${st.bestBt.rec.L} league-wide`));
+  }
+  if (st.superKing) {
+    tiles.push(statTile("lock", "Super Lock King", escapeHtml(st.superKing.name),
+      `${st.superKing.rec.w}-${st.superKing.rec.l}${st.superKing.rec.t ? "-" + st.superKing.rec.t : ""} on Super Locks`,
+      `style="color:${memberColor(st.superKing.name)}"`));
+  }
+  if (!tiles.length) return "";
+  return `<section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-stack-lg">${tiles.join("")}</section>`;
+}
+
 // ---- View: Standings ----
 function renderStandings() {
   const season = state.season;
@@ -825,7 +962,7 @@ function renderStandings() {
             <span class="material-symbols-outlined text-xs mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
             ${season} ${isLive ? "Leader" : "Champion"}
           </div>
-          <h2 class="font-display-lg text-3xl md:text-5xl text-primary-fixed leading-none uppercase mb-3 break-words">${escapeHtml(champ ? champ.name : "—")}</h2>
+          <h2 class="font-display-lg text-3xl md:text-5xl leading-none uppercase mb-3 break-words" style="color:${champ ? memberColor(champ.name) : "#61ff97"}">${escapeHtml(champ ? champ.name : "—")}</h2>
           <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div class="flex items-baseline gap-2">
               <span class="text-on-surface-variant font-label-caps text-[10px]">RECORD</span>
@@ -852,6 +989,8 @@ function renderStandings() {
         </div>
       </div>
     </section>
+
+    ${renderSeasonStatTiles(season)}
 
     <!-- Year selector + section header -->
     <section class="mb-stack-lg">
@@ -903,7 +1042,7 @@ function renderStandings() {
               <span class="absolute right-[-10px] top-[-10px] font-display-lg text-5xl opacity-5 pointer-events-none select-none">${String(wk).padStart(2,"0")}</span>
               <span class="font-label-caps text-[10px] text-on-surface-variant">WK ${String(wk).padStart(2,"0")}</span>
               <div class="mt-2">
-                <p class="font-display-lg text-xl leading-none uppercase">${escapeHtml(who)}</p>
+                <p class="font-display-lg text-xl leading-none uppercase" style="color:${memberColor(who)}">${escapeHtml(who)}</p>
                 <p class="text-primary-fixed text-[10px] font-data-tabular mt-1">WINNER</p>
               </div>
               <div class="flex justify-between items-end">
@@ -920,14 +1059,14 @@ function renderStandings() {
 function renderMemberRow(r, i, season) {
   const isExp = state.expanded === r.name;
   const isTop = i === 0;
-  const heat = Array.from({ length: WEEK_COUNT }, (_, w) => {
+  // Per-week outcome class: green if member won the week, W/L/P majority
+  // otherwise, gray when nothing is graded yet.
+  const heatCls = Array.from({ length: WEEK_COUNT }, (_, w) => {
     const wk = w + 1;
     const winner = DATA.seasons[season]?.weeklyWinners?.[String(wk)];
-    // Use overall week result: green if member won that week, red if not, gray if no picks
     const totalPicksThisWeek = BET_TYPES_ORDER.filter(bt => r.md?.byType?.[bt]?.picks?.[wk]).length;
-    if (!totalPicksThisWeek) return `<div class="heat-cell"></div>`;
-    if (winner === r.name) return `<div class="heat-cell W"></div>`;
-    // Compute W-L for this week
+    if (!totalPicksThisWeek) return "";
+    if (winner === r.name) return "W";
     let wins = 0, losses = 0, graded = 0;
     for (const bt of BET_TYPES_ORDER) {
       const res = r.md?.byType?.[bt]?.picks?.[wk]?.result;
@@ -935,20 +1074,24 @@ function renderMemberRow(r, i, season) {
       else if (res === "L") losses++;
       if (res) graded++;
     }
-    if (!graded) return `<div class="heat-cell"></div>`; // picks in, nothing graded yet
-    if (wins > losses) return `<div class="heat-cell W"></div>`;
-    if (losses > wins) return `<div class="heat-cell L"></div>`;
-    return `<div class="heat-cell P"></div>`;
-  }).join("");
+    if (!graded) return ""; // picks in, nothing graded yet
+    if (wins > losses) return "W";
+    if (losses > wins) return "L";
+    return "P";
+  });
+  const heat = heatCls.map(c => `<div class="heat-cell ${c}"></div>`).join("");
+  const heatMini = heatCls.map(c => `<div class="heat-dot ${c}"></div>`).join("");
 
   return `
     <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : ""}" data-name="${escapeHtml(r.name)}">
       <td class="px-4 md:px-6 py-5 ${isTop ? "text-primary-fixed font-bold" : "text-on-surface-variant font-bold"}">${i + 1}</td>
       <td class="px-4 md:px-6 py-5">
         <div class="flex items-center gap-2">
+          ${memberDot(r.name)}
           <span class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(r.name)}</span>
           ${isTop ? '<span class="material-symbols-outlined text-tertiary-fixed-dim text-base" style="font-variation-settings: \'FILL\' 1;">workspace_premium</span>' : ""}
         </div>
+        <div class="flex gap-[2px] mt-1.5 lg:hidden">${heatMini}</div>
       </td>
       <td class="px-4 md:px-6 py-5">${recordHtml(r.seasonRec)}</td>
       <td class="px-4 md:px-6 py-5 text-primary-fixed-dim">${pct(r.seasonRec)}${r.seasonRec.w + r.seasonRec.l ? "%" : ""}</td>
@@ -1048,11 +1191,6 @@ function renderLifetime() {
   });
   agg.sort((a, b) => b.totals.W - a.totals.W);
   const groupUnits = agg.reduce((s, m) => s + m.units, 0);
-  const fmtUnits = (u) => {
-    if (Math.abs(u) < 0.05) return "0.0";
-    const sign = u > 0 ? "+" : "−";
-    return sign + Math.abs(u).toFixed(1);
-  };
 
   // Find historical champions, one card per season
   const champBySeason = [];
@@ -1204,7 +1342,7 @@ function renderLifetime() {
                 <tr class="hover:bg-primary-fixed/5 transition-colors group">
                   <td class="py-4 px-6 font-data-tabular ${isTop ? "text-tertiary-fixed" : "text-on-surface-variant"} text-lg">${i + 1}</td>
                   <td class="py-4 px-6">
-                    <div class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(m.name)}${m.seasonsAsChamp >= 1 ? ` <span class="material-symbols-outlined text-tertiary-fixed-dim text-base align-middle" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>` : ""}</div>
+                    <div class="flex items-center gap-2 font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : "text-on-surface"}">${memberDot(m.name)}${escapeHtml(m.name)}${m.seasonsAsChamp >= 1 ? ` <span class="material-symbols-outlined text-tertiary-fixed-dim text-base align-middle" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>` : ""}</div>
                   </td>
                   <td class="py-4 px-6 font-data-tabular text-on-surface-variant">${m.seasonsPlayed}</td>
                   <td class="py-4 px-6 font-data-tabular text-on-surface">${recordHtml({w: m.totals.W, l: m.totals.L, t: m.totals.P})}</td>
@@ -1395,6 +1533,40 @@ function openLogin() {
   setTimeout(() => document.getElementById("login-pass").focus(), 50);
 }
 
+function openAccount() {
+  if (!state.user) { openLogin(); return; }
+  document.getElementById("account-name").textContent = `${state.user.name} · Lock League Member`;
+  document.getElementById("acct-current").value = "";
+  document.getElementById("acct-next").value = "";
+  document.getElementById("acct-err").textContent = "";
+  document.getElementById("account-modal").classList.add("show");
+}
+async function changePassphrase() {
+  const current = document.getElementById("acct-current").value;
+  const next = document.getElementById("acct-next").value;
+  const err = document.getElementById("acct-err");
+  err.textContent = "";
+  if (!current || !next) { err.textContent = "Both fields are required."; return; }
+  if (next.length < 8) { err.textContent = "New passphrase must be at least 8 characters."; return; }
+  try {
+    const r = await fetch("/api/auth?action=change-pass", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current, next }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      err.textContent = j.error === "bad-passphrase" ? "Current passphrase is wrong."
+        : j.error === "too-short" ? "New passphrase must be at least 8 characters."
+        : "Update failed.";
+      return;
+    }
+    document.getElementById("account-modal").classList.remove("show");
+    showToast("PASSPHRASE UPDATED");
+  } catch (e) { err.textContent = "Network error: " + e.message; }
+}
+
 function renderUserArea() {
   // Only rebuild when the signed-in user actually changes.
   const key = state.user ? `u${state.user.id}` : "anon";
@@ -1406,20 +1578,28 @@ function renderUserArea() {
   const elMobile = document.getElementById("user-area-mobile");
 
   if (state.user) {
+    const c = memberColor(state.user.name);
     el.innerHTML = `
       <div class="flex items-center gap-3 p-3 border-t border-outline-variant -mx-4 -mb-4 mt-2">
-        <div class="avatar">${initials(state.user.name)}</div>
+        <div class="avatar" style="border-color:${c};color:${c}">${initials(state.user.name)}</div>
         <div class="flex-1 min-w-0">
           <div class="font-label-caps text-xs text-on-surface truncate uppercase">${escapeHtml(state.user.name)}</div>
-          <button class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant hover:text-primary-fixed uppercase" id="logout-btn">Sign Out</button>
+          <div class="flex items-center gap-2">
+            <button class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant hover:text-primary-fixed uppercase" id="account-btn">Account</button>
+            <span class="text-on-surface-variant/40 text-[10px]">·</span>
+            <button class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant hover:text-live-red uppercase" id="logout-btn">Sign Out</button>
+          </div>
         </div>
       </div>
     `;
     el.querySelector("#logout-btn").onclick = logout;
+    el.querySelector("#account-btn").onclick = openAccount;
     elMobile.innerHTML = `
-      <button id="logout-btn-mobile" class="user-chip"><span class="dot"></span>${escapeHtml(state.user.name)}</button>
+      <button id="account-btn-mobile" class="user-chip" style="color:${c}"><span class="dot" style="background:${c};box-shadow:0 0 8px ${c}99"></span>${escapeHtml(state.user.name)}</button>
     `;
-    elMobile.querySelector("#logout-btn-mobile").onclick = logout;
+    // Opens the account modal (passphrase + sign out) — tapping your name
+    // should never instantly log you out.
+    elMobile.querySelector("#account-btn-mobile").onclick = openAccount;
   } else {
     el.innerHTML = `<button class="user-chip w-full justify-center" id="login-btn"><span class="material-symbols-outlined text-base">login</span>Sign In</button>`;
     el.querySelector("#login-btn").onclick = openLogin;
@@ -1429,6 +1609,26 @@ function renderUserArea() {
 }
 
 // =================== This Week ===================
+// Live scores (ESPN via /api/scores) — real LIVE pills and in-game scores.
+const SCORES_TTL_MS = 60 * 1000;
+async function loadScores(force = false) {
+  if (!force && state.liveScores && Date.now() - (state.liveScoresAt || 0) < SCORES_TTL_MS) {
+    return state.liveScores;
+  }
+  try {
+    const r = await fetch("/api/scores");
+    if (r.ok) {
+      const j = await r.json();
+      state.liveScores = j.games || [];
+      state.liveScoresAt = Date.now();
+    }
+  } catch {}
+  return state.liveScores || [];
+}
+function scoreFor(g) {
+  return (state.liveScores || []).find(e => sameTeamName(e.away, g.away) && sameTeamName(e.home, g.home)) || null;
+}
+
 const ODDS_CLIENT_TTL_MS = 5 * 60 * 1000;
 async function loadOdds(force = false) {
   // Serve from memory for 5 minutes; never cache a failure — the next visit
@@ -1478,13 +1678,18 @@ function nextKickoffCountdown(games) {
 }
 
 function gameStatusPill(g) {
-  // We only have kickoff iso. Approximate live vs upcoming vs final.
+  const sc = scoreFor(g);
+  if (sc && sc.state === "in") {
+    return `<span class="font-data-tabular text-[11px] text-on-surface font-bold">${teamShort(g.away)} ${sc.away_score ?? 0} — ${teamShort(g.home)} ${sc.home_score ?? 0} <span class="text-live-red ml-1">${escapeHtml(sc.detail || "LIVE")}</span></span>`;
+  }
+  if (sc && sc.state === "post") {
+    return `<span class="font-data-tabular text-[11px] text-on-surface font-bold">${teamShort(g.away)} ${sc.away_score ?? "—"} — ${teamShort(g.home)} ${sc.home_score ?? "—"} <span class="text-on-surface-variant ml-1 uppercase">Final</span></span>`;
+  }
   const kickoff = new Date(g.kickoff).getTime();
-  const now = Date.now();
-  if (kickoff > now) {
+  if (kickoff > Date.now()) {
     return `<span class="font-data-tabular text-[10px] text-on-surface-variant font-medium uppercase">${fmtKickoffDay(g.kickoff)} · ${fmtKickoffTime(g.kickoff)}</span>`;
   }
-  // Past kickoff — without real status, show "POST" but no live indicator
+  // Past kickoff but no scoreboard match — show "POST" without a live badge
   return `<span class="font-data-tabular text-[10px] text-text-dim font-bold uppercase tracking-widest">POST KICKOFF</span>`;
 }
 
@@ -1563,6 +1768,7 @@ function renderThisWeek() {
 
         <!-- Sidebar widgets -->
         <aside class="lg:col-span-4 space-y-gutter">
+          ${renderWhosInWidget()}
           ${renderMostPickedWidget(games)}
           ${renderLeagueConsensusWidget(featured)}
           ${renderRecentPicksWidget()}
@@ -1603,7 +1809,16 @@ function renderFeaturedMatchup(g) {
             ${favTeam === g.away ? `<span class="font-data-tabular text-primary-fixed text-sm font-bold">${line > 0 ? "+" : ""}${line}</span>` : ""}
           </div>
           <div class="flex flex-col items-center gap-2 shrink-0">
-            <span class="font-display-lg text-2xl md:text-3xl text-on-surface-variant opacity-30 italic">VS</span>
+            ${(() => {
+              const sc = scoreFor(g);
+              if (sc && sc.state !== "pre") {
+                return `
+                  <span class="font-display-lg text-3xl md:text-4xl text-on-surface">${sc.away_score ?? 0} — ${sc.home_score ?? 0}</span>
+                  <span class="font-data-tabular text-[11px] ${sc.state === "in" ? "text-live-red" : "text-on-surface-variant"} uppercase">${escapeHtml(sc.detail || (sc.state === "in" ? "LIVE" : "FINAL"))}</span>
+                `;
+              }
+              return `<span class="font-display-lg text-2xl md:text-3xl text-on-surface-variant opacity-30 italic">VS</span>`;
+            })()}
             ${s ? `
               <span class="font-data-tabular text-primary-fixed text-base md:text-lg font-bold">${escapeHtml(favTeam || "")} ${line || ""}</span>
               <span class="font-label-caps text-on-surface-variant text-[10px] uppercase">Spread</span>
@@ -1639,8 +1854,12 @@ function renderGameCard(g) {
   const s = fd.spread || dk.spread;
   const favTeam = s?.fav;
   const kickoff = new Date(g.kickoff).getTime();
-  const isLive = kickoff <= Date.now() && Date.now() - kickoff < 4 * 3600 * 1000; // assume 4hrs live window
-  const accentClass = isLive ? "bg-live-red" : "bg-secondary-container";
+  const sc = scoreFor(g);
+  // Real state when the scoreboard knows the game; kickoff-window guess otherwise.
+  const isLive = sc ? sc.state === "in"
+    : (kickoff <= Date.now() && Date.now() - kickoff < 4 * 3600 * 1000);
+  const isFinal = sc?.state === "post";
+  const accentClass = isLive ? "bg-live-red" : isFinal ? "bg-surface-container-highest" : "bg-secondary-container";
 
   return `
     <div class="glass-panel p-5 rounded hover:border-primary-fixed/40 transition-colors group relative overflow-hidden">
@@ -1868,17 +2087,55 @@ function currentNflWeekClient() {
 }
 
 async function loadMyPicks(season, week) {
-  if (!state.user) return {};
   try {
     const r = await fetch(`/api/picks?season=${season}&week=${week}`, { credentials: "include" });
     if (!r.ok) return {};
     const j = await r.json();
+    // Who's-in counts come along for the ride (no pick contents, just counts).
+    state.whosIn = { week, list: j.submitted || [] };
+    if (!state.user) return {};
     const mine = {};
     for (const p of j.picks || []) {
       if (p.member_id === state.user.id) mine[p.bet_type] = p;
     }
     return mine;
   } catch { return {}; }
+}
+
+// ---- Who's In widget (This Week sidebar) ----
+function whosInBodyHtml() {
+  const list = state.whosIn?.list;
+  if (!list || !list.length) {
+    return `<div class="font-data-tabular text-[11px] text-on-surface-variant uppercase tracking-widest">Loading…</div>`;
+  }
+  return `<div class="grid grid-cols-2 gap-x-4 gap-y-2">` + list.map(m => {
+    const done = m.picks >= 5;
+    const some = m.picks > 0;
+    return `<div class="flex items-center gap-2 min-w-0">
+      <span class="w-2 h-2 rounded-full shrink-0" style="background:${done ? "#61ff97" : some ? "#ffe16d" : "#3b4b3d"}"></span>
+      <span class="font-data-tabular text-[11px] truncate ${done ? "text-on-surface" : "text-on-surface-variant"}">${escapeHtml(m.name)}</span>
+      <span class="ml-auto font-data-tabular text-[10px] text-on-surface-variant shrink-0">${m.picks}/5</span>
+    </div>`;
+  }).join("") + `</div>`;
+}
+function renderWhosInWidget() {
+  const cur = currentNflWeekClient();
+  const week = state.myPicksWeek || cur.week || 1;
+  return `
+    <div class="glass-panel rounded-lg overflow-hidden">
+      <div class="bg-surface-container-high px-4 py-3 border-b border-outline-variant flex items-center justify-between">
+        <h4 class="font-label-caps text-[10px] uppercase">Who's In · Week ${week}</h4>
+        <span class="font-data-tabular text-[10px] text-primary-fixed" id="whosin-count"></span>
+      </div>
+      <div class="p-4" id="whosin-body">${whosInBodyHtml()}</div>
+    </div>`;
+}
+function fillWhosIn() {
+  const el = document.getElementById("whosin-body");
+  if (el) el.innerHTML = whosInBodyHtml();
+  const c = document.getElementById("whosin-count");
+  const list = state.whosIn?.list;
+  if (c && list?.length) c.textContent = `${list.filter(m => m.picks >= 5).length}/${list.length} IN`;
 }
 
 async function renderMyPicks() {
@@ -2000,12 +2257,25 @@ async function submitMyPicks() {
     if (!r.ok) {
       state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
         : j.error === "game-started" ? "GAME STARTED · PICK LOCKED"
+        : j.error === "super-lock-price" ? "SUPER 🔒 MUST BE -120 OR HARDER"
         : "ERROR · " + j.error;
     } else {
       state.myPicksSaveMsg = `SAVED · ${j.count} PICKS`;
     }
   } catch (e) { state.myPicksSaveMsg = "NETWORK ERROR"; }
   render();
+}
+
+// Poll live scores every 60s while This Week is open; re-render on change.
+let scoresTimer = null;
+function startScoresPoll() {
+  clearInterval(scoresTimer);
+  scoresTimer = setInterval(async () => {
+    if (state.view !== "thisweek") { clearInterval(scoresTimer); scoresTimer = null; return; }
+    const before = JSON.stringify(state.liveScores || null);
+    await loadScores(true);
+    if (state.view === "thisweek" && JSON.stringify(state.liveScores || null) !== before) render();
+  }, 60000);
 }
 
 // Update the "Kickoff In" numbers in place — no full re-render.
@@ -2057,7 +2327,7 @@ async function render() {
     root.innerHTML = renderRules();
   } else if (state.view === "thisweek") {
     root.innerHTML = `<div class="py-20 text-center font-data-tabular text-on-surface-variant tracking-widest uppercase text-sm">Loading live lines…</div>`;
-    await loadOdds();
+    await Promise.all([loadOdds(), loadScores()]);
     root.innerHTML = renderThisWeek();
     document.querySelectorAll(".pick-btn[data-bet]").forEach(b => {
       b.addEventListener("click", () => clickPickButton(b));
@@ -2069,10 +2339,12 @@ async function render() {
       render();
     };
     startCountdownTick();
+    startScoresPoll();
     const cur = currentNflWeekClient();
     const week = state.myPicksWeek || cur.week || 1;
     const myPicks = await loadMyPicks(2026, week);
     markPickedButtons(myPicks);
+    fillWhosIn();
     document.querySelectorAll(".jump-mypicks").forEach(b => {
       b.addEventListener("click", () => { state.view = "mypicks"; render(); });
     });
@@ -2111,21 +2383,26 @@ function attachStandingsHandlers() {
     });
   });
   const tt = document.getElementById("tooltip");
+  const fillTooltip = (cell) => {
+    const wk = cell.dataset.week;
+    const bet = cell.dataset.bet;
+    const text = cell.dataset.text;
+    const result = cell.dataset.result;
+    if (!text && !result) return false;
+    tt.innerHTML = `
+      <div class="tt-meta">${bet} · WEEK ${String(wk).padStart(2,"0")}</div>
+      <div class="tt-pick">${escapeHtml(text || "—")}</div>
+      ${result ? `<span class="tt-result ${result}">${ {W:"WIN",L:"LOSS",P:"PUSH"}[result] }</span>` : ""}
+    `;
+    return true;
+  };
   document.querySelectorAll(".week-cell").forEach(cell => {
     cell.addEventListener("mouseenter", () => {
-      const wk = cell.dataset.week;
-      const bet = cell.dataset.bet;
-      const text = cell.dataset.text;
-      const result = cell.dataset.result;
-      if (!text && !result) return;
-      tt.innerHTML = `
-        <div class="tt-meta">${bet} · WEEK ${String(wk).padStart(2,"0")}</div>
-        <div class="tt-pick">${escapeHtml(text || "—")}</div>
-        ${result ? `<span class="tt-result ${result}">${ {W:"WIN",L:"LOSS",P:"PUSH"}[result] }</span>` : ""}
-      `;
-      tt.classList.add("show");
+      if (tt._pin) return;
+      if (fillTooltip(cell)) tt.classList.add("show");
     });
     cell.addEventListener("mousemove", (e) => {
+      if (tt._pin) return;
       const pad = 14;
       let x = e.clientX + pad, y = e.clientY + pad;
       const r = tt.getBoundingClientRect();
@@ -2133,8 +2410,29 @@ function attachStandingsHandlers() {
       if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - pad;
       tt.style.left = x + "px"; tt.style.top = y + "px";
     });
-    cell.addEventListener("mouseleave", () => tt.classList.remove("show"));
+    cell.addEventListener("mouseleave", () => { if (!tt._pin) tt.classList.remove("show"); });
+    // Tap-to-toggle for touch screens: pin the tooltip under the cell,
+    // tap again (or anywhere else) to dismiss.
+    cell.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (tt._pin === cell) { tt._pin = null; tt.classList.remove("show"); return; }
+      if (!fillTooltip(cell)) { tt._pin = null; tt.classList.remove("show"); return; }
+      tt._pin = cell;
+      tt.classList.add("show");
+      const cr = cell.getBoundingClientRect();
+      const r = tt.getBoundingClientRect();
+      let x = cr.left, y = cr.bottom + 8;
+      if (x + r.width > window.innerWidth - 8) x = window.innerWidth - r.width - 8;
+      if (y + r.height > window.innerHeight - 8) y = cr.top - r.height - 8;
+      tt.style.left = Math.max(8, x) + "px"; tt.style.top = Math.max(8, y) + "px";
+    });
   });
+  if (!attachStandingsHandlers._dismissBound) {
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".week-cell")) { tt._pin = null; tt.classList.remove("show"); }
+    });
+    attachStandingsHandlers._dismissBound = true;
+  }
 }
 
 // Nav click handlers
@@ -2157,6 +2455,15 @@ document.getElementById("sidebar-submit-picks").addEventListener("click", () => 
 document.getElementById("login-submit").onclick = loginSubmit;
 document.getElementById("login-cancel").onclick = () => document.getElementById("login-modal").classList.remove("show");
 document.getElementById("login-pass").addEventListener("keydown", e => { if (e.key === "Enter") loginSubmit(); });
+
+// Account modal handlers
+document.getElementById("acct-save").onclick = changePassphrase;
+document.getElementById("acct-cancel").onclick = () => document.getElementById("account-modal").classList.remove("show");
+document.getElementById("acct-logout").onclick = () => {
+  document.getElementById("account-modal").classList.remove("show");
+  logout();
+};
+document.getElementById("acct-next").addEventListener("keydown", e => { if (e.key === "Enter") changePassphrase(); });
 
 // Boot — session check and data load in parallel
 (async () => {
