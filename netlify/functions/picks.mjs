@@ -2,6 +2,40 @@
 import { sql } from "../../lib/db.js";
 import { verifyCookie } from "./auth.mjs";
 import { pickCutoff, BET_TYPES } from "../../lib/nfl.js";
+import { fetchScoreboard, sameTeam } from "../../lib/grader.js";
+
+// ESPN scoreboard, cached briefly per warm container — used to reject picks
+// on games that have already kicked off.
+const SB_TTL_MS = 60 * 1000;
+const sbCache = new Map(); // "season:week" -> { ts, events }
+async function scoreboardFor(season, week) {
+  const key = `${season}:${week}`;
+  const hit = sbCache.get(key);
+  if (hit && Date.now() - hit.ts < SB_TTL_MS) return hit.events;
+  try {
+    const events = await fetchScoreboard(season, week);
+    sbCache.set(key, { ts: Date.now(), events });
+    return events;
+  } catch {
+    return hit ? hit.events : []; // fail open — the weekly cutoff still applies
+  }
+}
+
+// Returns the offending pick if any submitted game has already started.
+async function findStartedGame(picks, season, week) {
+  const keyed = picks.filter(p => p.game_key);
+  if (!keyed.length) return null;
+  const events = await scoreboardFor(season, week);
+  const now = Date.now();
+  for (const p of keyed) {
+    const [away, home] = String(p.game_key).split("@");
+    const ev = events.find(e => sameTeam(e.away, away) && sameTeam(e.home, home));
+    if (ev?.kickoff && new Date(ev.kickoff).getTime() <= now) {
+      return { game_key: p.game_key, kickoff: ev.kickoff };
+    }
+  }
+  return null;
+}
 
 function json(body, init = {}) {
   return new Response(JSON.stringify(body), {
@@ -39,7 +73,7 @@ export default async (req) => {
     const season = Number(url.searchParams.get("season"));
     const week = url.searchParams.get("week") ? Number(url.searchParams.get("week")) : null;
     if (!season) return json({ error: "season-required" }, { status: 400 });
-    const rows = week
+    let rows = week
       ? await sql()`
           SELECT p.*, m.name AS member_name
           FROM picks p JOIN members m ON m.id = p.member_id
@@ -50,6 +84,13 @@ export default async (req) => {
           FROM picks p JOIN members m ON m.id = p.member_id
           WHERE p.season = ${season}
           ORDER BY p.week, m.name, p.bet_type`;
+    // Live seasons: other members' picks stay hidden until the week locks,
+    // so nobody can scout picks before the Sunday cutoff.
+    if (season >= 2026) {
+      const viewer = verifyCookie(req.headers.get("cookie"));
+      const now = Date.now();
+      rows = rows.filter(p => p.member_id === viewer || now >= pickCutoff(season, p.week).getTime());
+    }
     return json({ picks: rows });
   }
 
@@ -68,9 +109,16 @@ export default async (req) => {
       if (!BET_TYPES.includes(p.bet_type)) return json({ error: "bad-bet-type", bet_type: p.bet_type }, { status: 400 });
       if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
     }
+    // A game that has kicked off can no longer be picked (TNF after kickoff,
+    // international games that start before the Sunday noon cutoff, ...).
+    const started = await findStartedGame(picks, season, week);
+    if (started) {
+      return json({ error: "game-started", ...started }, { status: 423 });
+    }
     const lockedAt = new Date().toISOString();
-    for (const p of picks) {
-      await sql()`
+    const s = sql();
+    // Distinct bet_types per member → upserts are independent; run in parallel.
+    await Promise.all(picks.map(p => s`
         INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at)
         VALUES (${memberId}, ${season}, ${week}, ${p.bet_type}, ${p.pick_text},
                 ${p.game_key || null}, ${p.side || null}, ${p.line ?? null},
@@ -83,8 +131,7 @@ export default async (req) => {
           line      = EXCLUDED.line,
           book      = EXCLUDED.book,
           price     = EXCLUDED.price,
-          locked_at = EXCLUDED.locked_at`;
-    }
+          locked_at = EXCLUDED.locked_at`));
     return json({ ok: true, count: picks.length });
   }
 

@@ -1,13 +1,11 @@
-// Scheduled grader run #4 — Monday 05:30 UTC.
-// Catches Sunday Night Football (8:20pm ET kickoff, ends ~11:30pm ET = 03:30-04:30 UTC Mon).
-import { gradeWeek } from "../../lib/grader.js";
-import { currentNflWeek } from "../../lib/nfl.js";
+// Scheduled grader run — Monday 05:30 UTC — catches Sunday Night Football.
+// Grades the current week and the previous week (late finals).
+import { gradeCurrentWeeks } from "../../lib/grader.js";
 
 export default async () => {
-  const cur = currentNflWeek();
-  if (!cur.week) return new Response("offseason");
   try {
-    const r = await gradeWeek(cur.season, cur.week);
+    const r = await gradeCurrentWeeks();
+    if (!r.ran) return new Response("offseason");
     return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });

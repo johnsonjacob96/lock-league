@@ -19,8 +19,8 @@ NFL pick-league site for an 8-member group: historical browse (2023–25) + live
 |-------|----------|-------|
 | `/api/odds` | `odds.mjs` | NFL spreads + totals, FD + DK, 5-min cache, mock fallback |
 | `/api/auth?action=login\|logout\|me` | `auth.mjs` | Passphrase login, signed cookie |
-| `/api/picks` | `picks.mjs` | GET season picks; POST your week (locks Sun 12am CT) |
-| `/api/grade` | `grade.mjs` | Scheduled Tue 11 UTC; grades the prior week |
+| `/api/picks` | `picks.mjs` | GET season picks (others' picks hidden until the week locks); POST your week (locks Sun 12pm CT; a game locks at its kickoff) |
+| `/api/grade` | `grade.mjs` | Manual fire (CRON_SECRET); default grades current + previous week. Scheduled runs: Fri (TNF), Sun (early), Mon ×2 (late/SNF), Tue (MNF) |
 
 ## History vs. live
 
@@ -28,6 +28,16 @@ NFL pick-league site for an 8-member group: historical browse (2023–25) + live
 - **2026+** lives in Neon Postgres (picks, games, grading)
 
 Frontend reads static JSON for history and `/api/picks?season=2026` for the live season.
+
+## CSS build
+
+Tailwind is precompiled (no runtime CDN). After changing classes in
+`public/index.html`, rebuild the stylesheet:
+
+```
+npm install
+npm run build:css   # writes public/assets/tailwind.css — commit it
+```
 
 ## Updating historical data
 

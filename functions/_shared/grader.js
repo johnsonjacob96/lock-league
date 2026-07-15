@@ -1,8 +1,18 @@
 // Shared grading logic for /api/grade (manual + GitHub Actions cron).
+// Mirrors lib/grader.js (kept in sync for Cloudflare Pages Functions runtime).
 import { sql } from "./db.js";
+import { weeksToGrade } from "./nfl.js";
 
 const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
-function normTeam(s) { return s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
+function normTeam(s) { return String(s || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
+
+// True when one name is (or contains) the other after normalization, so
+// "Chiefs" matches "Kansas City Chiefs" and "49ers" matches "San Francisco 49ers".
+export function sameTeam(a, b) {
+  const na = normTeam(a), nb = normTeam(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
 
 export async function fetchScoreboard(season, week) {
   const url = new URL(ESPN_SCOREBOARD);
@@ -21,26 +31,45 @@ export async function fetchScoreboard(season, week) {
     return {
       home: home?.team?.displayName,
       away: away?.team?.displayName,
-      home_score: home?.score ? Number(home.score) : null,
-      away_score: away?.score ? Number(away.score) : null,
+      home_score: home?.score != null ? Number(home.score) : null,
+      away_score: away?.score != null ? Number(away.score) : null,
       kickoff: ev.date,
       status,
     };
   });
 }
 
-function gradeSpread(pickSide, pickLine, awayScore, homeScore, awayTeam, homeTeam, favTeam) {
-  const margin = homeScore - awayScore;
-  const favMargin = favTeam === homeTeam ? margin : -margin;
-  const adjusted = favMargin + pickLine;
+export function gradeSpread(pickSide, favLine, awayScore, homeScore, favIsHome) {
+  const favMargin = favIsHome ? homeScore - awayScore : awayScore - homeScore;
+  const adjusted = favMargin + favLine; // favLine is the favorite's negative number
   if (adjusted === 0) return "P";
   const favCovered = adjusted > 0;
   return pickSide === "fav" ? (favCovered ? "W" : "L") : (favCovered ? "L" : "W");
 }
-function gradeTotal(side, line, total) {
+
+export function gradeTotal(side, line, total) {
   if (total === line) return "P";
   const wentOver = total > line;
   return side === "over" ? (wentOver ? "W" : "L") : (wentOver ? "L" : "W");
+}
+
+// Grade a Favorite/Dog pick against a final game. pick_text starts with the
+// *picked* team ("Kansas City Chiefs -3.5", "San Francisco 49ers +6");
+// p.side says whether that team is the favorite or the dog, and p.line is
+// the favorite's (negative) spread. Returns 'W'|'L'|'P' or null if the
+// pick can't be resolved (leave for manual review).
+export function resolveSpreadResult(p, ev) {
+  if (p.side !== "fav" && p.side !== "dog") return null;
+  const m = (p.pick_text || "").match(/^(.+?)\s+[-+]\d/);
+  if (!m) return null;
+  const picked = m[1].trim();
+  const pickedIsHome = sameTeam(picked, ev.home);
+  const pickedIsAway = sameTeam(picked, ev.away);
+  if (pickedIsHome === pickedIsAway) return null; // no match, or ambiguous
+  const favIsHome = p.side === "fav" ? pickedIsHome : !pickedIsHome;
+  const favLine = -Math.abs(Number(p.line));
+  if (Number.isNaN(favLine)) return null;
+  return gradeSpread(p.side, favLine, ev.away_score, ev.home_score, favIsHome);
 }
 
 export async function gradeWeek(env, season, week) {
@@ -59,22 +88,20 @@ export async function gradeWeek(env, season, week) {
   const picks = await s`
     SELECT * FROM picks WHERE season = ${season} AND week = ${week} AND result IS NULL`;
   for (const p of picks) {
-    if (!p.game_key) continue;
+    if (!p.game_key) continue; // free-text picks (incl. Super Lock) need manual mark
     const [pAway, pHome] = p.game_key.split("@");
-    const ev = events.find((e) => normTeam(e.away) === normTeam(pAway) && normTeam(e.home) === normTeam(pHome));
+    const ev = events.find((e) => sameTeam(e.away, pAway) && sameTeam(e.home, pHome));
     if (!ev || ev.status !== "final") continue;
+    if (ev.home_score == null || ev.away_score == null) continue;
 
     let result = null;
     if (p.bet_type === "Favorite" || p.bet_type === "Dog") {
-      const m = (p.pick_text || "").match(/^([A-Za-z .'-]+?)\s+[-+]/);
-      const favTeam = m ? m[1].trim() : null;
-      if (!favTeam) continue;
-      result = gradeSpread(p.side, Number(p.line), ev.away_score, ev.home_score, ev.away, ev.home, favTeam);
+      result = resolveSpreadResult(p, ev);
     } else if (p.bet_type === "Over" || p.bet_type === "Under") {
       const total = ev.home_score + ev.away_score;
       result = gradeTotal(p.side, Number(p.line), total);
     } else if (p.bet_type === "Super Lock") {
-      continue;
+      continue; // player props / specialty — manual via mark-super-lock action
     }
     if (result) {
       await s`UPDATE picks SET result = ${result}, graded_at = NOW() WHERE id = ${p.id}`;
@@ -82,4 +109,14 @@ export async function gradeWeek(env, season, week) {
     }
   }
   return { season, week, events: updated, graded };
+}
+
+// Grade every week a scheduled run should cover (current + previous).
+export async function gradeCurrentWeeks(env, now = new Date()) {
+  const weeks = weeksToGrade(now);
+  const results = [];
+  for (const week of weeks) {
+    results.push(await gradeWeek(env, 2026, week));
+  }
+  return { ran: weeks.length, results };
 }

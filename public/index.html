@@ -3,107 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <title>LOCK LEAGUE // 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<script id="tailwind-config">
-  tailwind.config = {
-    darkMode: "class",
-    theme: {
-      extend: {
-        colors: {
-          "on-primary": "#003919",
-          "on-secondary-fixed-variant": "#004e5a",
-          "inverse-on-surface": "#2f3132",
-          "surface-container": "#1e2021",
-          "primary-fixed": "#61ff97",
-          "on-tertiary": "#3a3000",
-          "surface-container-highest": "#333536",
-          "on-background": "#e2e2e3",
-          "on-primary-container": "#007137",
-          "inverse-surface": "#e2e2e3",
-          "on-tertiary-container": "#736000",
-          "inverse-primary": "#006d35",
-          "text-dim": "#8A9296",
-          "tertiary-container": "#ffdc49",
-          "surface-container-low": "#1a1c1d",
-          "live-red": "#FF3B3B",
-          "surface-container-high": "#282a2b",
-          "on-primary-fixed": "#00210c",
-          "on-secondary-container": "#005f6d",
-          "outline": "#849584",
-          "on-tertiary-fixed": "#221b00",
-          "error-container": "#93000a",
-          "tertiary": "#fffaf5",
-          "outline-variant": "#3b4b3d",
-          "primary-container": "#00ff85",
-          "secondary": "#b9f1ff",
-          "surface-container-lowest": "#0c0e0f",
-          "tertiary-fixed": "#ffe16d",
-          "on-surface-variant": "#b9cbb9",
-          "error": "#ffb4ab",
-          "surface-glass": "rgba(25, 28, 30, 0.6)",
-          "on-primary-fixed-variant": "#005227",
-          "surface": "#121415",
-          "secondary-fixed": "#a5eeff",
-          "primary": "#f0ffee",
-          "on-error": "#690005",
-          "surface-dim": "#121415",
-          "secondary-fixed-dim": "#00daf8",
-          "background": "#121415",
-          "on-secondary-fixed": "#001f25",
-          "border-muted": "#1F2427",
-          "surface-bright": "#38393a",
-          "tertiary-fixed-dim": "#e9c400",
-          "secondary-container": "#00e0ff",
-          "primary-fixed-dim": "#00e476",
-          "on-error-container": "#ffdad6",
-          "on-tertiary-fixed-variant": "#544600",
-          "surface-tint": "#00e476",
-          "on-surface": "#e2e2e3"
-        },
-        borderRadius: {
-          DEFAULT: "0.125rem",
-          lg: "0.25rem",
-          xl: "0.5rem",
-          full: "9999px"
-        },
-        spacing: {
-          "stack-sm": "0.5rem",
-          "container-max": "1280px",
-          "stack-lg": "2rem",
-          "stack-md": "1rem",
-          "margin-mobile": "1rem",
-          "gutter": "1.5rem"
-        },
-        maxWidth: {
-          "container-max": "1280px"
-        },
-        fontFamily: {
-          "display-lg": ["Oswald"],
-          "label-caps": ["Inter"],
-          "headline-lg": ["Oswald"],
-          "body-md": ["Inter"],
-          "data-tabular": ["JetBrains Mono"]
-        },
-        fontSize: {
-          "display-lg": ["72px", {"lineHeight": "80px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
-          "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "700"}],
-          "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "0.02em", "fontWeight": "600"}],
-          "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
-          "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
-          "data-tabular": ["14px", {"lineHeight": "20px", "fontWeight": "500"}]
-        }
-      }
-    }
-  }
-</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet">
+<!-- Prebuilt Tailwind (tailwind.config.js). After editing classes here, rebuild: npm run build:css -->
+<link rel="stylesheet" href="assets/tailwind.css">
 <style>
   * { box-sizing: border-box; }
   html, body { background: #121415; }
@@ -299,6 +205,7 @@
   .pick-btn:hover { border-color: #61ff97; background: rgba(97, 255, 151, 0.06); transform: translateY(-1px); }
   .pick-btn.picked { background: rgba(97, 255, 151, 0.18); border-color: #61ff97; box-shadow: 0 0 14px rgba(97, 255, 151, 0.22); }
   .pick-btn.saving { opacity: 0.5; pointer-events: none; }
+  .pick-btn.locked { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
   .pick-btn .pb-label { font-size: 9px; letter-spacing: 0.14em; color: #b9cbb9; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 700; }
   .pick-btn .pb-value { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #61ff97; font-weight: 600; }
   .pick-btn .pb-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A9296; }
@@ -653,7 +560,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const DATA_URL = `data/seasons.json?v=${Date.now()}`;
+// Plain URL — the host serves an ETag, so repeat visits get a 304 instead of
+// re-downloading ~270KB of history every load.
+const DATA_URL = "data/seasons.json";
 const SEASONS_ORDER = ["2023", "2024", "2025", "2026"];
 const SEASON_2026_KICKOFF_MS = Date.UTC(2026, 8, 10, 0, 0, 0);
 function seasonsVisible() {
@@ -676,6 +585,75 @@ let state = {
   myPicksSaveMsg: "",
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
+
+// =================== Live 2026 season (from /api/picks) ===================
+// Historical seasons come from seasons.json; the live season lives in the DB.
+// Merge it into DATA so standings / ticker / lifetime render it identically.
+let DATA_VERSION = 0;
+let live2026Promise = null;
+
+function ensureLive2026() {
+  if (!seasonsVisible().includes("2026")) return Promise.resolve();
+  if (!live2026Promise) {
+    live2026Promise = fetch("/api/picks?season=2026", { credentials: "include" })
+      .then(r => (r.ok ? r.json() : { picks: [] }))
+      .then(j => { mergeLiveSeason(j.picks || []); DATA_VERSION++; })
+      .catch(() => {});
+  }
+  return live2026Promise;
+}
+
+function mergeLiveSeason(rows) {
+  const byMember = {};
+  for (const p of rows) {
+    if (!p.member_name || p.season !== 2026) continue;
+    const m = byMember[p.member_name] || (byMember[p.member_name] = {});
+    const bt = m[p.bet_type] || (m[p.bet_type] = {});
+    bt[p.week] = { text: p.pick_text || "", result: p.result || "" };
+  }
+  const names = Object.keys(byMember).length ? Object.keys(byMember).sort() : MEMBERS_ALL.slice();
+
+  // Provisional weekly winners: unique best W (fewest L breaks ties) among
+  // graded picks. Ties stay open — no winner shown for that week.
+  const weeklyWinners = {};
+  for (let wk = 1; wk <= WEEK_COUNT; wk++) {
+    let best = null, tied = false;
+    for (const name of names) {
+      let w = 0, l = 0, any = false;
+      for (const bt of BET_TYPES_ORDER) {
+        const r = byMember[name]?.[bt]?.[wk]?.result;
+        if (r === "W") { w++; any = true; }
+        else if (r === "L") { l++; any = true; }
+        else if (r === "P") { any = true; }
+      }
+      if (!any) continue;
+      if (!best || w > best.w || (w === best.w && l < best.l)) { best = { name, w, l }; tied = false; }
+      else if (w === best.w && l === best.l) tied = true;
+    }
+    if (best && !tied && best.w > 0) weeklyWinners[String(wk)] = best.name;
+  }
+
+  for (const name of names) {
+    const byType = {};
+    let W = 0, L = 0, P = 0;
+    for (const bt of BET_TYPES_ORDER) {
+      const src = byMember[name]?.[bt] || {};
+      const picks = {};
+      let w = 0, l = 0, t = 0;
+      for (const wk of Object.keys(src)) {
+        picks[wk] = src[wk];
+        if (src[wk].result === "W") w++;
+        else if (src[wk].result === "L") l++;
+        else if (src[wk].result === "P") t++;
+      }
+      byType[bt] = { record: `${w}-${l}${t ? "-" + t : ""}`, picks };
+      W += w; L += l; P += t;
+    }
+    if (!DATA.members[name]) DATA.members[name] = {};
+    DATA.members[name]["2026"] = { seasonRecord: `${W}-${L}${P ? "-" + P : ""}`, byType };
+  }
+  DATA.seasons["2026"] = { members: names, weeklyWinners, live: true };
+}
 
 function initials(name) {
   if (!name) return "—";
@@ -766,6 +744,11 @@ function renderTickerItem(it) {
 
 function renderTicker() {
   const track = document.getElementById("ticker-track");
+  // Rebuilding the marquee restarts its animation and re-creates ~1400 nodes,
+  // so skip unless the season / week filter / data actually changed.
+  const key = `${state.season}|${state.tickerWeek}|${DATA_VERSION}`;
+  if (renderTicker._key === key) return;
+  renderTicker._key = key;
   const items = buildTickerItems(state.season, state.tickerWeek);
 
   if (!items.length) {
@@ -783,13 +766,15 @@ function renderTicker() {
 
 function renderTickerWeekSelect() {
   const sel = document.getElementById("ticker-week-select");
-  sel.innerHTML = `<option value="ALL">ALL</option>` +
-    Array.from({ length: WEEK_COUNT }, (_, i) => {
-      const w = i + 1;
-      return `<option value="${w}" ${String(w) === state.tickerWeek ? "selected" : ""}>${String(w).padStart(2,"0")}</option>`;
-    }).join("");
+  if (!sel.dataset.built) {
+    sel.innerHTML = `<option value="ALL">ALL</option>` +
+      Array.from({ length: WEEK_COUNT }, (_, i) =>
+        `<option value="${i + 1}">${String(i + 1).padStart(2,"0")}</option>`
+      ).join("");
+    sel.onchange = () => { state.tickerWeek = sel.value; renderTicker(); };
+    sel.dataset.built = "1";
+  }
   sel.value = state.tickerWeek;
-  sel.onchange = () => { state.tickerWeek = sel.value; renderTicker(); };
 }
 
 function syncNavActive() {
@@ -805,8 +790,9 @@ function renderStandings() {
   const seasonInfo = DATA.seasons[season];
   const winners = seasonInfo?.weeklyWinners || {};
   const champ = rows[0];
+  const isLive = !!seasonInfo?.live;
 
-  const champPct = champ ? pct(champ.seasonRec) : "—";
+  const champPct = champ && (champ.seasonRec.w + champ.seasonRec.l) ? pct(champ.seasonRec) + "%" : "—";
   const champSuper = champ ? parseRecord(champ.md?.byType?.["Super Lock"]?.record) : { w: 0, l: 0, t: 0 };
   let bestBt = null, bestPct = -1, bestRec = { w: 0, l: 0, t: 0 };
   if (champ) {
@@ -837,7 +823,7 @@ function renderStandings() {
         <div class="min-w-0 flex-1">
           <div class="inline-flex items-center px-2.5 py-0.5 bg-tertiary-fixed-dim text-on-tertiary-fixed font-label-caps text-[10px] rounded-sm mb-2 uppercase">
             <span class="material-symbols-outlined text-xs mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
-            ${season} Champion
+            ${season} ${isLive ? "Leader" : "Champion"}
           </div>
           <h2 class="font-display-lg text-3xl md:text-5xl text-primary-fixed leading-none uppercase mb-3 break-words">${escapeHtml(champ ? champ.name : "—")}</h2>
           <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -853,15 +839,15 @@ function renderStandings() {
             <span class="w-px h-4 bg-outline-variant"></span>
             <div class="flex items-baseline gap-2">
               <span class="text-on-surface-variant font-label-caps text-[10px]">WIN %</span>
-              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champPct}%</span>
+              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champPct}</span>
             </div>
           </div>
         </div>
         <div class="glass-card px-4 py-2.5 flex items-center gap-3 border-l-2 border-l-secondary-fixed-dim shrink-0">
-          <span class="material-symbols-outlined text-2xl text-live-red">event_available</span>
+          <span class="material-symbols-outlined text-2xl ${isLive ? "text-primary-fixed" : "text-live-red"}">${isLive ? "sports_football" : "event_available"}</span>
           <div>
             <div class="text-on-surface-variant font-label-caps text-[9px] uppercase tracking-widest">Status</div>
-            <div class="font-display-lg text-base text-live-red uppercase leading-none mt-0.5">Season Final</div>
+            <div class="font-display-lg text-base ${isLive ? "text-primary-fixed" : "text-live-red"} uppercase leading-none mt-0.5">${isLive ? "In Progress" : "Season Final"}</div>
           </div>
         </div>
       </div>
@@ -942,12 +928,14 @@ function renderMemberRow(r, i, season) {
     if (!totalPicksThisWeek) return `<div class="heat-cell"></div>`;
     if (winner === r.name) return `<div class="heat-cell W"></div>`;
     // Compute W-L for this week
-    let wins = 0, losses = 0;
+    let wins = 0, losses = 0, graded = 0;
     for (const bt of BET_TYPES_ORDER) {
       const res = r.md?.byType?.[bt]?.picks?.[wk]?.result;
       if (res === "W") wins++;
       else if (res === "L") losses++;
+      if (res) graded++;
     }
+    if (!graded) return `<div class="heat-cell"></div>`; // picks in, nothing graded yet
     if (wins > losses) return `<div class="heat-cell W"></div>`;
     if (losses > wins) return `<div class="heat-cell L"></div>`;
     return `<div class="heat-cell P"></div>`;
@@ -1026,6 +1014,9 @@ function renderMemberDetail(r) {
 // ---- View: Lifetime ----
 function renderLifetime() {
   const members = Object.keys(DATA.members).sort();
+  // Compute each season's standings once instead of once per member.
+  const standingsBySeason = {};
+  for (const s of SEASONS_ORDER) standingsBySeason[s] = buildStandings(s);
   const agg = members.map(name => {
     const totals = { W: 0, L: 0, P: 0 };
     const byType = {};
@@ -1039,8 +1030,8 @@ function renderLifetime() {
       seasonsPlayed++;
       const winners = DATA.seasons[season]?.weeklyWinners || {};
       for (const wk of Object.keys(winners)) if (winners[wk] === name) weeksWon++;
-      const seasonRows = buildStandings(season);
-      if (seasonRows[0]?.name === name) seasonsAsChamp++;
+      // A live season has no champion yet — only count finished seasons.
+      if (!DATA.seasons[season]?.live && standingsBySeason[season][0]?.name === name) seasonsAsChamp++;
       for (const bt of BET_TYPES_ORDER) {
         const picks = md.byType?.[bt]?.picks || {};
         for (const wk of Object.keys(picks)) {
@@ -1066,19 +1057,15 @@ function renderLifetime() {
   // Find historical champions, one card per season
   const champBySeason = [];
   for (const season of SEASONS_ORDER) {
-    if (season === "2026") continue; // upcoming
-    const rows = buildStandings(season);
+    if (season === "2026") continue; // in progress
+    const rows = standingsBySeason[season];
     if (!rows.length) continue;
-    const champ = rows[0];
-    champBySeason.push({ season, champ });
+    champBySeason.push({ season, champ: rows[0] });
   }
 
-  // Live race for current season (if any season has data but no clear "final" feel — pick latest with data)
+  // Live race for the current season
   const liveSeason = "2026";
-  const liveLeader = (() => {
-    const rows = buildStandings(liveSeason);
-    return rows[0] || null;
-  })();
+  const liveLeader = standingsBySeason[liveSeason][0] || null;
 
   // Filter toggle (visual only for now)
   return `
@@ -1388,6 +1375,7 @@ async function loginSubmit() {
     const j = await r.json();
     if (!r.ok) { err.textContent = j.error === "bad-passphrase" ? "Wrong passphrase." : "Login failed."; return; }
     state.user = j.member;
+    live2026Promise = null; // pick visibility depends on who's signed in
     document.getElementById("login-modal").classList.remove("show");
     render();
   } catch (e) { err.textContent = "Network error: " + e.message; }
@@ -1395,6 +1383,7 @@ async function loginSubmit() {
 async function logout() {
   await fetch("/api/auth?action=logout", { method: "POST", credentials: "include" }).catch(()=>{});
   state.user = null;
+  live2026Promise = null; // pick visibility depends on who's signed in
   render();
 }
 function openLogin() {
@@ -1407,6 +1396,10 @@ function openLogin() {
 }
 
 function renderUserArea() {
+  // Only rebuild when the signed-in user actually changes.
+  const key = state.user ? `u${state.user.id}` : "anon";
+  if (renderUserArea._key === key) return;
+  renderUserArea._key = key;
   // Desktop sidebar version: profile chip at bottom
   const el = document.getElementById("user-area");
   // Mobile top-bar version: icon button
@@ -1436,14 +1429,22 @@ function renderUserArea() {
 }
 
 // =================== This Week ===================
-async function loadOdds() {
-  if (state.thisWeekData) return state.thisWeekData;
+const ODDS_CLIENT_TTL_MS = 5 * 60 * 1000;
+async function loadOdds(force = false) {
+  // Serve from memory for 5 minutes; never cache a failure — the next visit
+  // to the view retries instead of showing a stale error until reload.
+  const fresh = state.thisWeekData && state.thisWeekData.source !== "error" &&
+    Date.now() - (state.thisWeekFetchedAt || 0) < ODDS_CLIENT_TTL_MS;
+  if (fresh && !force) return state.thisWeekData;
   try {
     const r = await fetch("/api/odds", { credentials: "include" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     state.thisWeekData = await r.json();
+    state.thisWeekFetchedAt = Date.now();
   } catch (e) {
-    state.thisWeekData = { source: "error", error: e.message, games: [] };
+    if (!state.thisWeekData || state.thisWeekData.source === "error") {
+      state.thisWeekData = { source: "error", error: e.message, games: [] };
+    }
   }
   return state.thisWeekData;
 }
@@ -1512,15 +1513,15 @@ function renderThisWeek() {
           <span class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Kickoff In</span>
           <div class="flex gap-2">
             <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
-              <span class="font-data-tabular text-xl text-primary-fixed">${String(cd.days).padStart(2,"0")}</span>
+              <span class="font-data-tabular text-xl text-primary-fixed" id="cd-days">${String(cd.days).padStart(2,"0")}</span>
               <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Days</span>
             </div>
             <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
-              <span class="font-data-tabular text-xl text-primary-fixed">${String(cd.hrs).padStart(2,"0")}</span>
+              <span class="font-data-tabular text-xl text-primary-fixed" id="cd-hrs">${String(cd.hrs).padStart(2,"0")}</span>
               <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Hrs</span>
             </div>
             <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
-              <span class="font-data-tabular text-xl text-primary-fixed">${String(cd.mins).padStart(2,"0")}</span>
+              <span class="font-data-tabular text-xl text-primary-fixed" id="cd-min">${String(cd.mins).padStart(2,"0")}</span>
               <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Min</span>
             </div>
           </div>
@@ -1534,7 +1535,12 @@ function renderThisWeek() {
         <span>Source · <strong class="text-on-surface">${escapeHtml((data.source || "—").toUpperCase())}</strong></span>
         ${data.remaining ? `<span>Api · <strong class="text-on-surface">${data.remaining}</strong> left</span>` : ""}
       </div>
-      <div>Updated · <strong class="text-on-surface">${data.fetched_at ? new Date(data.fetched_at).toLocaleTimeString() : "—"}</strong></div>
+      <div class="flex items-center gap-3">
+        <span>Updated · <strong class="text-on-surface">${data.fetched_at ? new Date(data.fetched_at).toLocaleTimeString() : "—"}</strong></span>
+        <button id="odds-refresh" class="flex items-center gap-1 text-primary-fixed hover:text-primary-container transition-colors uppercase tracking-widest" title="Refresh lines">
+          <span class="material-symbols-outlined text-sm">refresh</span> Refresh
+        </button>
+      </div>
     </div>
 
     ${games.length === 0 ? `
@@ -1676,8 +1682,16 @@ function renderBookButtons(bookKey, book, game) {
   const gameKey = `${game.away}@${game.home}`;
   const dogTeam = s ? (s.fav === game.home ? game.away : game.home) : null;
   const dogLine = s ? Math.abs(s.line) : null;
+  // A game that has kicked off can no longer be picked (server enforces too).
+  const started = game.kickoff && new Date(game.kickoff).getTime() <= Date.now();
 
-  const btn = (bet, side, lbl, value, price, text) => `
+  const btn = (bet, side, lbl, value, price, text) => started ? `
+    <div class="pick-btn locked" title="Game started — pick locked">
+      <span class="pb-label">${lbl}</span>
+      <span class="pb-value">${value}</span>
+      <span class="pb-price">${price != null ? americanOdds(price) : ''}</span>
+    </div>
+  ` : `
     <div class="pick-btn" data-bet="${bet}" data-game="${escapeHtml(gameKey)}"
          data-side="${side}" data-line="${s && (bet === 'Favorite' || bet === 'Dog') ? s.line : (t?.point ?? '')}"
          data-book="${bookKey}" data-price="${price ?? ''}" data-text="${escapeHtml(text)}">
@@ -1777,20 +1791,6 @@ function renderRecentPicksWidget() {
   `;
 }
 
-async function loadMyPickedSet(season, week) {
-  if (!state.user) return {};
-  try {
-    const r = await fetch(`/api/picks?season=${season}&week=${week}`, { credentials: "include" });
-    if (!r.ok) return {};
-    const j = await r.json();
-    const mine = {};
-    for (const p of j.picks || []) {
-      if (p.member_id === state.user.id) mine[p.bet_type] = p;
-    }
-    return mine;
-  } catch { return {}; }
-}
-
 function showToast(msg, kind = "ok") {
   const el = document.getElementById("toast");
   if (!el) return;
@@ -1840,7 +1840,9 @@ async function clickPickButton(btn) {
     });
     const j = await r.json();
     if (!r.ok) {
-      showToast(j.error === "locked" ? "LOCKED · CUTOFF PASSED" : "ERROR · " + (j.error || "unknown"), "err");
+      showToast(j.error === "locked" ? "LOCKED · CUTOFF PASSED"
+        : j.error === "game-started" ? "GAME STARTED · PICK LOCKED"
+        : "ERROR · " + (j.error || "unknown"), "err");
     } else {
       document.querySelectorAll(`.pick-btn[data-bet="${bet_type}"]`).forEach(b => b.classList.remove("picked"));
       btn.classList.add("picked");
@@ -1855,8 +1857,9 @@ async function clickPickButton(btn) {
 
 // =================== My Picks ===================
 function currentNflWeekClient() {
-  const kickoff = Date.UTC(2026, 8, 10);
-  const week1Start = kickoff - 2 * 24 * 3600 * 1000;
+  // Week 1 starts Tue Sept 8 2026, 08:00 UTC — mirrors lib/nfl.js so client
+  // and server agree on week boundaries (MNF stays in its own week).
+  const week1Start = Date.UTC(2026, 8, 8, 8);
   const now = Date.now();
   if (now < week1Start) return { season: null, week: null };
   const wk = Math.floor((now - week1Start) / (7 * 24 * 3600 * 1000));
@@ -1944,7 +1947,7 @@ async function renderMyPicks() {
     <section class="glass-panel p-6 md:p-8 space-y-5">
       ${rows}
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 border-t border-outline-variant">
-        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase" id="lock-status">Cutoff · Sun 12:00 AM CT</div>
+        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase" id="lock-status">Cutoff · Sun 12:00 PM CT · Started games lock at kickoff</div>
         <div class="flex items-center gap-4">
           <span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed" id="save-msg">${escapeHtml(state.myPicksSaveMsg || "")}</span>
           <button class="btn-primary" id="picks-save">Save Picks <span class="material-symbols-outlined text-sm align-middle ml-1">send</span></button>
@@ -1981,7 +1984,10 @@ async function submitMyPicks() {
     if (text) picks.push({ bet_type: inp.dataset.bet, pick_text: text });
   });
   if (!picks.length) return;
-  const week = state.myPicksWeek || 1;
+  // Same fallback as renderMyPicks — otherwise mid-season saves with no week
+  // navigation would silently post to week 1 (already locked).
+  const cur = currentNflWeekClient();
+  const week = state.myPicksWeek || cur.week || 1;
   const season = 2026;
   try {
     const r = await fetch("/api/picks", {
@@ -1992,7 +1998,9 @@ async function submitMyPicks() {
     });
     const j = await r.json();
     if (!r.ok) {
-      state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED" : "ERROR · " + j.error;
+      state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
+        : j.error === "game-started" ? "GAME STARTED · PICK LOCKED"
+        : "ERROR · " + j.error;
     } else {
       state.myPicksSaveMsg = `SAVED · ${j.count} PICKS`;
     }
@@ -2000,12 +2008,31 @@ async function submitMyPicks() {
   render();
 }
 
+// Update the "Kickoff In" numbers in place — no full re-render.
+let countdownTimer = null;
+function startCountdownTick() {
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    if (state.view !== "thisweek") { clearInterval(countdownTimer); countdownTimer = null; return; }
+    const cd = nextKickoffCountdown(state.thisWeekData?.games || []);
+    const d = document.getElementById("cd-days");
+    if (!cd || !d) return;
+    d.textContent = String(cd.days).padStart(2, "0");
+    document.getElementById("cd-hrs").textContent = String(cd.hrs).padStart(2, "0");
+    document.getElementById("cd-min").textContent = String(cd.mins).padStart(2, "0");
+  }, 30000);
+}
+
 async function render() {
+  syncNavActive();
+  const root = document.getElementById("root");
+  // Live season data comes from the DB; load it before views that show it.
+  if ((state.view === "standings" && state.season === "2026") || state.view === "lifetime") {
+    await ensureLive2026();
+  }
   renderTickerWeekSelect();
   renderTicker();
   renderUserArea();
-  syncNavActive();
-  const root = document.getElementById("root");
   if (state.view === "standings") {
     root.innerHTML = renderStandings();
     attachStandingsHandlers();
@@ -2035,9 +2062,16 @@ async function render() {
     document.querySelectorAll(".pick-btn[data-bet]").forEach(b => {
       b.addEventListener("click", () => clickPickButton(b));
     });
+    const refreshBtn = document.getElementById("odds-refresh");
+    if (refreshBtn) refreshBtn.onclick = async () => {
+      refreshBtn.disabled = true;
+      await loadOdds(true);
+      render();
+    };
+    startCountdownTick();
     const cur = currentNflWeekClient();
     const week = state.myPicksWeek || cur.week || 1;
-    const myPicks = await loadMyPickedSet(2026, week);
+    const myPicks = await loadMyPicks(2026, week);
     markPickedButtons(myPicks);
     document.querySelectorAll(".jump-mypicks").forEach(b => {
       b.addEventListener("click", () => { state.view = "mypicks"; render(); });
@@ -2124,11 +2158,13 @@ document.getElementById("login-submit").onclick = loginSubmit;
 document.getElementById("login-cancel").onclick = () => document.getElementById("login-modal").classList.remove("show");
 document.getElementById("login-pass").addEventListener("keydown", e => { if (e.key === "Enter") loginSubmit(); });
 
-// Boot
+// Boot — session check and data load in parallel
 (async () => {
-  state.user = await fetchMe();
-  const r = await fetch(DATA_URL);
+  const [me, r] = await Promise.all([fetchMe(), fetch(DATA_URL)]);
+  state.user = me;
   DATA = await r.json();
+  // Once the live season has kicked off, land on it by default.
+  if (seasonsVisible().includes("2026")) state.season = "2026";
   render();
 })().catch(err => {
   document.getElementById("root").innerHTML = `<div class="text-live-red p-6">Failed to load data: ${err.message}</div>`;
