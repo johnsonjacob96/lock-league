@@ -18,7 +18,8 @@ NFL pick-league site for an 8-member group: historical browse (2023–25) + live
 | Route | Function | Notes |
 |-------|----------|-------|
 | `/api/odds` | `odds.mjs` | NFL spreads + totals, FD + DK, 5-min cache, mock fallback |
-| `/api/auth?action=login\|logout\|me` | `auth.mjs` | Passphrase login, signed cookie |
+| `/api/scores` | `scores.mjs` | Live scores for the current week (ESPN, 60s cache) |
+| `/api/auth?action=login\|logout\|me\|change-pass` | `auth.mjs` | Passphrase login, signed cookie, passphrase change |
 | `/api/picks` | `picks.mjs` | GET season picks (others' picks hidden until the week locks); POST your week (locks Sun 12pm CT; a game locks at its kickoff) |
 | `/api/grade` | `grade.mjs` | Manual fire (CRON_SECRET); default grades current + previous week. Scheduled runs: Fri (TNF), Sun (early), Mon ×2 (late/SNF), Tue (MNF) |
 
@@ -56,6 +57,8 @@ Cell-color → outcome mapping in the source sheet:
 | `SESSION_SECRET` | Netlify | HMAC for auth cookies |
 | `CRON_SECRET` | Netlify | Manual `/api/grade` fire |
 | `NETLIFY_DATABASE_URL` | injected by Neon extension | Postgres connection |
+| `DISCORD_WEBHOOK_URL` | optional | Grade runs post a week summary to this Discord webhook |
+| `GROUPME_BOT_ID` | optional | Grade runs post a week summary via this GroupMe bot |
 
 ## Bootstrapping the DB
 

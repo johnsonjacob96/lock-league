@@ -27,6 +27,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/scores"
+  to = "/.netlify/functions/scores"
+  status = 200
+
+[[redirects]]
   from = "/api/_init"
   to = "/.netlify/functions/init"
   status = 200

@@ -33,5 +33,21 @@ export async function onRequest({ request, env }) {
     return json({ ok: true }, { headers: { "Set-Cookie": clearCookieHeader() } });
   }
 
+  if (request.method === "POST" && action === "change-pass") {
+    const id = await verifyCookie(env, request.headers.get("cookie"));
+    if (!id) return json({ error: "not-authenticated" }, { status: 401 });
+    const { current, next } = await request.json().catch(() => ({}));
+    if (!current || !next) return json({ error: "missing" }, { status: 400 });
+    if (String(next).length < 8) return json({ error: "too-short", min: 8 }, { status: 400 });
+    const rows = await sql(env)`SELECT id, passphrase_h FROM members WHERE id = ${id}`;
+    const m = rows[0];
+    if (!m) return json({ error: "no-member" }, { status: 401 });
+    const ok = await bcrypt.compare(current, m.passphrase_h);
+    if (!ok) return json({ error: "bad-passphrase" }, { status: 401 });
+    const hash = await bcrypt.hash(next, 10);
+    await sql(env)`UPDATE members SET passphrase_h = ${hash} WHERE id = ${id}`;
+    return json({ ok: true });
+  }
+
   return json({ error: "unknown-action" }, { status: 404 });
 }
