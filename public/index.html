@@ -205,6 +205,7 @@
   .pick-btn:hover { border-color: #61ff97; background: rgba(97, 255, 151, 0.06); transform: translateY(-1px); }
   .pick-btn.picked { background: rgba(97, 255, 151, 0.18); border-color: #61ff97; box-shadow: 0 0 14px rgba(97, 255, 151, 0.22); }
   .pick-btn.saving { opacity: 0.5; pointer-events: none; }
+  .pick-btn.locked { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
   .pick-btn .pb-label { font-size: 9px; letter-spacing: 0.14em; color: #b9cbb9; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 700; }
   .pick-btn .pb-value { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #61ff97; font-weight: 600; }
   .pick-btn .pb-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A9296; }
@@ -1681,8 +1682,16 @@ function renderBookButtons(bookKey, book, game) {
   const gameKey = `${game.away}@${game.home}`;
   const dogTeam = s ? (s.fav === game.home ? game.away : game.home) : null;
   const dogLine = s ? Math.abs(s.line) : null;
+  // A game that has kicked off can no longer be picked (server enforces too).
+  const started = game.kickoff && new Date(game.kickoff).getTime() <= Date.now();
 
-  const btn = (bet, side, lbl, value, price, text) => `
+  const btn = (bet, side, lbl, value, price, text) => started ? `
+    <div class="pick-btn locked" title="Game started — pick locked">
+      <span class="pb-label">${lbl}</span>
+      <span class="pb-value">${value}</span>
+      <span class="pb-price">${price != null ? americanOdds(price) : ''}</span>
+    </div>
+  ` : `
     <div class="pick-btn" data-bet="${bet}" data-game="${escapeHtml(gameKey)}"
          data-side="${side}" data-line="${s && (bet === 'Favorite' || bet === 'Dog') ? s.line : (t?.point ?? '')}"
          data-book="${bookKey}" data-price="${price ?? ''}" data-text="${escapeHtml(text)}">
@@ -1831,7 +1840,9 @@ async function clickPickButton(btn) {
     });
     const j = await r.json();
     if (!r.ok) {
-      showToast(j.error === "locked" ? "LOCKED · CUTOFF PASSED" : "ERROR · " + (j.error || "unknown"), "err");
+      showToast(j.error === "locked" ? "LOCKED · CUTOFF PASSED"
+        : j.error === "game-started" ? "GAME STARTED · PICK LOCKED"
+        : "ERROR · " + (j.error || "unknown"), "err");
     } else {
       document.querySelectorAll(`.pick-btn[data-bet="${bet_type}"]`).forEach(b => b.classList.remove("picked"));
       btn.classList.add("picked");
@@ -1936,7 +1947,7 @@ async function renderMyPicks() {
     <section class="glass-panel p-6 md:p-8 space-y-5">
       ${rows}
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 border-t border-outline-variant">
-        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase" id="lock-status">Cutoff · Sun 12:00 AM CT</div>
+        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase" id="lock-status">Cutoff · Sun 12:00 PM CT · Started games lock at kickoff</div>
         <div class="flex items-center gap-4">
           <span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed" id="save-msg">${escapeHtml(state.myPicksSaveMsg || "")}</span>
           <button class="btn-primary" id="picks-save">Save Picks <span class="material-symbols-outlined text-sm align-middle ml-1">send</span></button>
@@ -1987,7 +1998,9 @@ async function submitMyPicks() {
     });
     const j = await r.json();
     if (!r.ok) {
-      state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED" : "ERROR · " + j.error;
+      state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
+        : j.error === "game-started" ? "GAME STARTED · PICK LOCKED"
+        : "ERROR · " + j.error;
     } else {
       state.myPicksSaveMsg = `SAVED · ${j.count} PICKS`;
     }

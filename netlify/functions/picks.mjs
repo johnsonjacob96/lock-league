@@ -2,6 +2,40 @@
 import { sql } from "../../lib/db.js";
 import { verifyCookie } from "./auth.mjs";
 import { pickCutoff, BET_TYPES } from "../../lib/nfl.js";
+import { fetchScoreboard, sameTeam } from "../../lib/grader.js";
+
+// ESPN scoreboard, cached briefly per warm container — used to reject picks
+// on games that have already kicked off.
+const SB_TTL_MS = 60 * 1000;
+const sbCache = new Map(); // "season:week" -> { ts, events }
+async function scoreboardFor(season, week) {
+  const key = `${season}:${week}`;
+  const hit = sbCache.get(key);
+  if (hit && Date.now() - hit.ts < SB_TTL_MS) return hit.events;
+  try {
+    const events = await fetchScoreboard(season, week);
+    sbCache.set(key, { ts: Date.now(), events });
+    return events;
+  } catch {
+    return hit ? hit.events : []; // fail open — the weekly cutoff still applies
+  }
+}
+
+// Returns the offending pick if any submitted game has already started.
+async function findStartedGame(picks, season, week) {
+  const keyed = picks.filter(p => p.game_key);
+  if (!keyed.length) return null;
+  const events = await scoreboardFor(season, week);
+  const now = Date.now();
+  for (const p of keyed) {
+    const [away, home] = String(p.game_key).split("@");
+    const ev = events.find(e => sameTeam(e.away, away) && sameTeam(e.home, home));
+    if (ev?.kickoff && new Date(ev.kickoff).getTime() <= now) {
+      return { game_key: p.game_key, kickoff: ev.kickoff };
+    }
+  }
+  return null;
+}
 
 function json(body, init = {}) {
   return new Response(JSON.stringify(body), {
@@ -74,6 +108,12 @@ export default async (req) => {
     for (const p of picks) {
       if (!BET_TYPES.includes(p.bet_type)) return json({ error: "bad-bet-type", bet_type: p.bet_type }, { status: 400 });
       if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
+    }
+    // A game that has kicked off can no longer be picked (TNF after kickoff,
+    // international games that start before the Sunday noon cutoff, ...).
+    const started = await findStartedGame(picks, season, week);
+    if (started) {
+      return json({ error: "game-started", ...started }, { status: 423 });
     }
     const lockedAt = new Date().toISOString();
     const s = sql();

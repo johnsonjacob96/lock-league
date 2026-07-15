@@ -19,7 +19,7 @@ NFL pick-league site for an 8-member group: historical browse (2023–25) + live
 |-------|----------|-------|
 | `/api/odds` | `odds.mjs` | NFL spreads + totals, FD + DK, 5-min cache, mock fallback |
 | `/api/auth?action=login\|logout\|me` | `auth.mjs` | Passphrase login, signed cookie |
-| `/api/picks` | `picks.mjs` | GET season picks (others' picks hidden until the week locks); POST your week (locks Sun 12am CT) |
+| `/api/picks` | `picks.mjs` | GET season picks (others' picks hidden until the week locks); POST your week (locks Sun 12pm CT; a game locks at its kickoff) |
 | `/api/grade` | `grade.mjs` | Manual fire (CRON_SECRET); default grades current + previous week. Scheduled runs: Fri (TNF), Sun (early), Mon ×2 (late/SNF), Tue (MNF) |
 
 ## History vs. live
