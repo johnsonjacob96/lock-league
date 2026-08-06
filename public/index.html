@@ -2,8 +2,26 @@
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LOCK LEAGUE // 2026</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Lock League // 2026</title>
+<meta name="description" content="NFL weekly pick league. Lock your Favorite, Dog, Over, Under, and Super Lock every week.">
+
+<!-- PWA / home-screen -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e1011">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="icons/mark.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lock League">
+<meta property="og:title" content="Lock League">
+<meta property="og:description" content="NFL weekly pick league. Lock 5 every week.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="icons/icon-512.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -12,18 +30,36 @@
 <link rel="stylesheet" href="assets/tailwind.css">
 <style>
   * { box-sizing: border-box; }
-  html, body { background: #121415; }
+  html, body { background: #0e1011; }
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    color: #e2e2e3;
+    color: #e6e8e8;
     -webkit-font-smoothing: antialiased;
-    min-height: 100vh;
+    text-rendering: optimizeLegibility;
+    min-height: 100dvh;
   }
+  ::selection { background: rgba(34, 227, 127, 0.25); color: #eef2ef; }
 
-  /* Turf overlay */
-  .turf-overlay {
-    background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.03) 1px, transparent 0);
-    background-size: 24px 24px;
+  /* Keyboard focus ring (a11y) */
+  :focus-visible { outline: 2px solid #46e08a; outline-offset: 2px; border-radius: 4px; }
+  button:focus:not(:focus-visible) { outline: none; }
+
+  /* Slim neutral scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #272b2e; border-radius: 8px; border: 2px solid #0e1011; }
+  ::-webkit-scrollbar-thumb:hover { background: #333a3a; }
+
+  /* Turf overlay retired (kept as no-op so existing class refs are harmless) */
+  .turf-overlay {}
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+    .marquee-track { animation: none !important; }
   }
 
   .display { font-family: 'Oswald', sans-serif; }
@@ -45,25 +81,40 @@
     vertical-align: middle;
   }
 
-  /* Glass panel */
+  /* Surface panels (was glassmorphism everywhere; now clean solid surfaces
+     so the accent green can actually pop). Blur is reserved for the sticky
+     nav + modal, which opt in themselves. */
   .glass-card, .glass-panel {
-    background: rgba(25, 28, 30, 0.5);
-    backdrop-filter: blur(12px);
-    border: 1px solid #1F2427;
+    background: #16191b;
+    border: 1px solid #29302f;
+    border-radius: 0.625rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 10px 30px -22px rgba(0,0,0,0.9);
   }
+  .card-hover { transition: border-color 0.15s, transform 0.15s, background 0.15s; }
+  .card-hover:hover { border-color: #33403a; }
 
   /* Record colors */
-  .rec-W { color: #61ff97; }
-  .rec-L { color: #FF3B3B; }
-  .rec-T, .rec-P { color: #ffe16d; }
+  .rec-W { color: #46e08a; }
+  .rec-L { color: #ef4444; }
+  .rec-T, .rec-P { color: #f4cf5a; }
 
-  /* Live pulse */
+  /* Live pulse (calmer) */
   @keyframes pulse-red {
-    0% { box-shadow: 0 0 0 0 rgba(255, 59, 59, 0.55); }
-    70% { box-shadow: 0 0 0 8px rgba(255, 59, 59, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 59, 59, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+    70% { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
   }
-  .live-pulse { animation: pulse-red 2s infinite; }
+  .live-pulse { animation: pulse-red 2.4s infinite; }
+
+  /* Skeleton loader (taste: skeletal loaders matching layout, not spinners) */
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+  .skeleton { position: relative; overflow: hidden; background: #16191b; border: 1px solid #212725; border-radius: 0.625rem; }
+  .skeleton::after {
+    content: ""; position: absolute; inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+    animation: shimmer 1.4s infinite;
+  }
 
   /* Ticker marquee */
   @keyframes marquee {
@@ -78,73 +129,67 @@
     align-items: center;
   }
   .marquee-track:hover { animation-play-state: paused; }
-  .tk-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 22px; height: 100%; border-right: 1px solid #1F2427; }
-  .tk-wk { color: #8A9296; font-size: 10px; letter-spacing: 0.12em; }
-  .tk-name { color: #e2e2e3; font-weight: 600; font-size: 11px; }
-  .tk-type { font-size: 10px; letter-spacing: 0.08em; padding: 2px 6px; border: 1px solid #3b4b3d; }
-  .tk-type.fav { color: #61ff97; border-color: rgba(97,255,151,0.35); }
-  .tk-type.dog { color: #a5eeff; border-color: rgba(165,238,255,0.35); }
-  .tk-type.over { color: #ffe16d; border-color: rgba(255,225,109,0.35); }
-  .tk-type.under { color: #00daf8; border-color: rgba(0,218,248,0.35); }
-  .tk-type.super { color: #FF3B3B; border-color: rgba(255,59,59,0.35); }
-  .tk-pick { color: #b9cbb9; font-size: 11px; }
-  .tk-res { font-size: 10px; padding: 1px 5px; font-weight: 700; }
-  .tk-res.W { background: rgba(97,255,151,0.18); color: #61ff97; }
-  .tk-res.L { background: rgba(255,59,59,0.18); color: #FF3B3B; }
-  .tk-res.P { background: rgba(255,225,109,0.18); color: #ffe16d; }
+  .tk-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 20px; height: 100%; border-right: 1px solid #212725; }
+  .tk-wk { color: #6f7877; font-size: 10px; letter-spacing: 0.12em; }
+  .tk-name { color: #e6e8e8; font-weight: 600; font-size: 11px; }
+  .tk-type { font-size: 10px; letter-spacing: 0.08em; padding: 2px 6px; border: 1px solid #2c332f; border-radius: 4px; }
+  .tk-type.fav { color: #46e08a; border-color: rgba(70,224,138,0.30); }
+  .tk-type.dog { color: #38bdf8; border-color: rgba(56,189,248,0.30); }
+  .tk-type.over { color: #f5a24a; border-color: rgba(245,162,74,0.30); }
+  .tk-type.under { color: #22d3cf; border-color: rgba(34,211,207,0.30); }
+  .tk-type.super { color: #f4cf5a; border-color: rgba(244,207,90,0.34); }
+  .tk-pick { color: #9aa4a2; font-size: 11px; }
+  .tk-res { font-size: 10px; padding: 1px 5px; font-weight: 700; border-radius: 3px; }
+  .tk-res.W { background: rgba(70,224,138,0.16); color: #46e08a; }
+  .tk-res.L { background: rgba(239,68,68,0.16); color: #ef4444; }
+  .tk-res.P { background: rgba(244,207,90,0.16); color: #f4cf5a; }
 
-  /* Ticker week dropdown — keep options legible when the native panel opens
+  /* Ticker week dropdown - keep options legible when the native panel opens
      (browsers default to white panel + inherited primary-fixed text, which
      is unreadable). */
   #ticker-week-select option {
-    background: #0c0e0f;
-    color: #e2e2e3;
+    background: #0a0c0d;
+    color: #e6e8e8;
     font-family: 'JetBrains Mono', monospace;
   }
 
-  /* Heat strip cells (Standings overview) — Stitch w-3 h-5 */
-  .heat-cell { width: 0.75rem; height: 1.25rem; background: #333536; transition: transform 0.1s; }
-  .heat-cell.W { background: #61ff97; }
-  .heat-cell.L { background: #FF3B3B; }
-  .heat-cell.P { background: #ffe16d; }
+  /* Heat strip cells (Standings overview) */
+  .heat-cell { width: 0.75rem; height: 1.25rem; border-radius: 2px; background: #272b2e; transition: transform 0.1s; }
+  .heat-cell.W { background: #46e08a; }
+  .heat-cell.L { background: #ef4444; }
+  .heat-cell.P { background: #f4cf5a; }
   .heat-cell:hover { transform: scaleY(1.3); }
 
-  /* Compact heat dots — shown under the member name below lg, where the
-     full heat column is hidden */
-  .heat-dot { width: 5px; height: 10px; background: #333536; border-radius: 1px; flex-shrink: 0; }
-  .heat-dot.W { background: #61ff97; }
-  .heat-dot.L { background: #FF3B3B; }
-  .heat-dot.P { background: #ffe16d; }
+  /* Compact heat dots (shown under member name below lg) */
+  .heat-dot { width: 5px; height: 10px; background: #272b2e; border-radius: 2px; flex-shrink: 0; }
+  .heat-dot.W { background: #46e08a; }
+  .heat-dot.L { background: #ef4444; }
+  .heat-dot.P { background: #f4cf5a; }
 
-  /* Respect reduced-motion preferences */
-  @media (prefers-reduced-motion: reduce) {
-    .marquee-track { animation: none; }
-    .live-pulse { animation: none; }
-    *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
-  }
 
   /* Week cell (member detail grid) */
   .week-cell {
-    width: 26px; height: 26px;
-    background: #1a1c1d;
-    border: 1px solid #2a2c2d;
+    width: 26px; height: 26px; border-radius: 4px;
+    background: #141618;
+    border: 1px solid #262a2d;
     display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer;
     font-size: 10px;
     font-family: 'JetBrains Mono', monospace;
-    color: #6b7468;
+    color: #6f7877;
     transition: transform 0.1s, border-color 0.1s;
   }
-  .week-cell.W { background: rgba(97, 255, 151, 0.16); color: #61ff97; border-color: rgba(97, 255, 151, 0.35); }
-  .week-cell.L { background: rgba(255, 59, 59, 0.16); color: #FF3B3B; border-color: rgba(255, 59, 59, 0.35); }
-  .week-cell.P { background: rgba(255, 225, 109, 0.14); color: #ffe16d; border-color: rgba(255, 225, 109, 0.35); }
+  .week-cell.W { background: rgba(70, 224, 138, 0.16); color: #46e08a; border-color: rgba(70, 224, 138, 0.35); }
+  .week-cell.L { background: rgba(239, 68, 68, 0.16); color: #ef4444; border-color: rgba(239, 68, 68, 0.35); }
+  .week-cell.P { background: rgba(244, 207, 90, 0.14); color: #f4cf5a; border-color: rgba(244, 207, 90, 0.35); }
   .week-cell:hover { transform: scale(1.18); z-index: 5; position: relative; }
 
   /* Tooltip */
   .tooltip {
     position: fixed;
-    background: #0c0e0f;
-    border: 1px solid #3b4b3d;
+    background: #0a0c0d;
+    border: 1px solid #2c332f;
+    border-radius: 8px;
     padding: 10px 14px;
     font-size: 12px;
     pointer-events: none;
@@ -152,188 +197,212 @@
     opacity: 0;
     transition: opacity 0.15s;
     max-width: 280px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.6);
   }
   .tooltip.show { opacity: 1; }
-  .tooltip .tt-meta { color: #b9cbb9; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
-  .tooltip .tt-pick { color: #e2e2e3; font-weight: 600; margin-bottom: 6px; }
-  .tooltip .tt-result { display: inline-block; padding: 2px 8px; font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: 0.1em; }
-  .tooltip .tt-result.W { background: rgba(97, 255, 151, 0.2); color: #61ff97; }
-  .tooltip .tt-result.L { background: rgba(255, 59, 59, 0.2); color: #FF3B3B; }
-  .tooltip .tt-result.P { background: rgba(255, 225, 109, 0.18); color: #ffe16d; }
+  .tooltip .tt-meta { color: #9aa4a2; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .tooltip .tt-pick { color: #e6e8e8; font-weight: 600; margin-bottom: 6px; }
+  .tooltip .tt-result { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: 0.1em; }
+  .tooltip .tt-result.W { background: rgba(70, 224, 138, 0.2); color: #46e08a; }
+  .tooltip .tt-result.L { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+  .tooltip .tt-result.P { background: rgba(244, 207, 90, 0.18); color: #f4cf5a; }
 
   /* Toast */
   .toast {
     position: fixed;
-    bottom: 88px;
-    right: 24px;
-    background: #0c0e0f;
-    border-left: 3px solid #61ff97;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    right: 20px;
+    background: #0a0c0d;
+    border: 1px solid #262a2d;
+    border-left: 3px solid #46e08a;
+    border-radius: 8px;
     padding: 14px 20px;
     font-size: 12px;
     font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     z-index: 200;
     opacity: 0;
     transform: translateY(8px);
     transition: opacity 0.2s, transform 0.2s;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    box-shadow: 0 12px 36px rgba(0,0,0,0.6);
   }
   .toast.show { opacity: 1; transform: translateY(0); }
-  .toast.err { border-left-color: #FF3B3B; color: #FF3B3B; }
-  .toast.warn { border-left-color: #ffe16d; color: #ffe16d; }
+  .toast.err { border-left-color: #ef4444; color: #ef4444; }
+  .toast.warn { border-left-color: #f4cf5a; color: #f4cf5a; }
   @media (min-width: 768px) { .toast { bottom: 24px; } }
 
   /* Modal */
   .modal-backdrop {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.72);
+    background: rgba(0,0,0,0.68);
     backdrop-filter: blur(8px);
     z-index: 100;
     display: none;
     align-items: center;
     justify-content: center;
+    padding: 16px;
   }
   .modal-backdrop.show { display: flex; }
   .modal {
-    background: #1a1c1d;
-    border: 1px solid #3b4b3d;
+    background: #16191b;
+    border: 1px solid #29302f;
+    border-radius: 14px;
     padding: 32px;
     width: 380px;
     max-width: 92vw;
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.8);
   }
 
-  /* Pick button (clickable book cell) */
+  /* Pick button (clickable book cell), tinted per bet type */
   .pick-btn {
+    --accent: #46e08a;
+    --accent-soft: rgba(70, 224, 138, 0.12);
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 3px;
-    padding: 10px 6px;
-    background: rgba(25, 28, 30, 0.6);
-    border: 1px solid #3b4b3d;
+    padding: 9px 6px;
+    min-height: 54px;
+    background: #14171a;
+    border: 1px solid #262a2d;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.12s;
+    transition: border-color 0.12s, background 0.12s, transform 0.08s;
     min-width: 0;
   }
-  .pick-btn:hover { border-color: #61ff97; background: rgba(97, 255, 151, 0.06); transform: translateY(-1px); }
-  .pick-btn.picked { background: rgba(97, 255, 151, 0.18); border-color: #61ff97; box-shadow: 0 0 14px rgba(97, 255, 151, 0.22); }
+  .pick-btn.bt-dog   { --accent: #38bdf8; --accent-soft: rgba(56, 189, 248, 0.12); }
+  .pick-btn.bt-over  { --accent: #f5a24a; --accent-soft: rgba(245, 162, 74, 0.12); }
+  .pick-btn.bt-under { --accent: #22d3cf; --accent-soft: rgba(34, 211, 207, 0.12); }
+  .pick-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .pick-btn:active { transform: scale(0.97); }
+  .pick-btn.picked { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .pick-btn.saving { opacity: 0.5; pointer-events: none; }
   .pick-btn.locked { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
-  .pick-btn .pb-label { font-size: 9px; letter-spacing: 0.14em; color: #b9cbb9; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 700; }
-  .pick-btn .pb-value { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #61ff97; font-weight: 600; }
-  .pick-btn .pb-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A9296; }
+  .pick-btn .pb-label { font-size: 9px; letter-spacing: 0.13em; color: #9aa4a2; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 700; }
+  .pick-btn .pb-value { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); font-weight: 600; line-height: 1.1; }
+  .pick-btn.picked .pb-value { font-weight: 700; }
+  .pick-btn .pb-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6f7877; }
 
   /* Pick input (My Picks) */
   .pick-input {
     width: 100%;
-    background: rgba(25, 28, 30, 0.6);
-    border: 1px solid #3b4b3d;
-    color: #e2e2e3;
+    background: #101315;
+    border: 1px solid #29302f;
+    border-radius: 8px;
+    color: #e6e8e8;
     padding: 12px 14px;
     font-family: 'Inter', sans-serif;
     font-size: 14px;
-    transition: border-color 0.12s;
+    transition: border-color 0.12s, box-shadow 0.12s;
   }
-  .pick-input:focus { outline: none; border-color: #61ff97; }
-  .pick-input::placeholder { color: #6b7468; }
+  .pick-input:focus { outline: none; border-color: #46e08a; box-shadow: 0 0 0 3px rgba(70,224,138,0.14); }
+  .pick-input::placeholder { color: #616a69; }
 
   /* Super Lock manual mark button */
   .sl-mark-btn {
     padding: 10px 18px;
+    border-radius: 8px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    background: rgba(25, 28, 30, 0.6);
-    border: 1px solid #3b4b3d;
-    color: #b9cbb9;
+    background: #14171a;
+    border: 1px solid #29302f;
+    color: #9aa4a2;
     cursor: pointer;
     transition: all 0.12s;
     font-weight: 700;
   }
-  .sl-mark-btn.W:hover, .sl-mark-btn.W.current { background: rgba(97, 255, 151, 0.18); color: #61ff97; border-color: #61ff97; }
-  .sl-mark-btn.L:hover, .sl-mark-btn.L.current { background: rgba(255, 59, 59, 0.18); color: #FF3B3B; border-color: #FF3B3B; }
-  .sl-mark-btn.P:hover, .sl-mark-btn.P.current { background: rgba(255, 225, 109, 0.16); color: #ffe16d; border-color: #ffe16d; }
+  .sl-mark-btn:active { transform: scale(0.97); }
+  .sl-mark-btn.W:hover, .sl-mark-btn.W.current { background: rgba(70, 224, 138, 0.16); color: #46e08a; border-color: #46e08a; }
+  .sl-mark-btn.L:hover, .sl-mark-btn.L.current { background: rgba(239, 68, 68, 0.16); color: #ef4444; border-color: #ef4444; }
+  .sl-mark-btn.P:hover, .sl-mark-btn.P.current { background: rgba(244, 207, 90, 0.16); color: #f4cf5a; border-color: #f4cf5a; }
 
   /* Modal form fields */
-  .modal label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #b9cbb9; margin-bottom: 6px; }
+  .modal label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #9aa4a2; margin-bottom: 6px; }
   .modal select, .modal input {
     width: 100%;
-    background: #0c0e0f;
-    border: 1px solid #3b4b3d;
-    color: #e2e2e3;
-    padding: 10px 12px;
+    background: #0a0c0d;
+    border: 1px solid #29302f;
+    border-radius: 8px;
+    color: #e6e8e8;
+    padding: 11px 12px;
     font-family: 'Inter', sans-serif;
     font-size: 14px;
     margin-bottom: 16px;
+    transition: border-color 0.12s, box-shadow 0.12s;
   }
-  .modal select:focus, .modal input:focus { outline: none; border-color: #61ff97; }
+  .modal select:focus, .modal input:focus { outline: none; border-color: #46e08a; box-shadow: 0 0 0 3px rgba(70,224,138,0.14); }
   .modal .btn {
     flex: 1;
-    background: #00ff85;
-    color: #003919;
+    background: #1fd97b;
+    color: #04220f;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     padding: 12px;
-    border: 1px solid #00ff85;
+    border: 1px solid #1fd97b;
+    border-radius: 8px;
     cursor: pointer;
     font-weight: 700;
-    transition: all 0.12s;
+    transition: filter 0.12s, transform 0.08s, border-color 0.12s, color 0.12s;
   }
-  .modal .btn:hover { filter: brightness(1.1); }
+  .modal .btn:hover { filter: brightness(1.06); }
   .modal .btn:active { transform: scale(0.97); }
   .modal .btn.ghost {
     background: transparent;
-    color: #b9cbb9;
-    border-color: #3b4b3d;
+    color: #9aa4a2;
+    border-color: #29302f;
   }
-  .modal .btn.ghost:hover { color: #e2e2e3; border-color: #b9cbb9; }
-  .modal-err { color: #FF3B3B; font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 12px; min-height: 14px; }
+  .modal .btn.ghost:hover { color: #e6e8e8; border-color: #46504f; filter: none; }
+  .modal-err { color: #ef4444; font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-top: 12px; min-height: 14px; }
 
   /* Primary CTA */
   .btn-primary {
-    background: #00ff85;
-    color: #003919;
+    background: #1fd97b;
+    color: #04220f;
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     padding: 12px 22px;
-    border: 1px solid #00ff85;
+    border: 1px solid #1fd97b;
+    border-radius: 8px;
     cursor: pointer;
     font-weight: 700;
-    transition: all 0.12s;
+    transition: filter 0.12s, transform 0.08s;
   }
-  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-primary:hover { filter: brightness(1.06); }
   .btn-primary:active { transform: scale(0.97); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
 
   /* Sidebar nav link */
   .side-nav-link {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 16px;
-    margin: 0 8px;
-    color: #b9cbb9;
+    padding: 11px 14px;
+    margin: 0 10px;
+    color: #9aa4a2;
     font-family: 'Inter', sans-serif;
-    font-weight: 700;
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    transition: all 0.15s;
+    font-weight: 600;
+    font-size: 12.5px;
+    letter-spacing: 0.06em;
+    transition: color 0.15s, background 0.15s, box-shadow 0.15s;
     cursor: pointer;
     background: transparent;
-    border-radius: 0.25rem;
-    width: calc(100% - 16px);
+    border-radius: 8px;
+    width: calc(100% - 20px);
     text-align: left;
   }
-  .side-nav-link:hover { color: #e2e2e3; background: #282a2b; }
-  .side-nav-link.active { background: #00ff85; color: #003919; }
+  .side-nav-link:hover { color: #e6e8e8; background: #191c1e; }
+  .side-nav-link.active { background: rgba(31, 217, 123, 0.12); color: #46e08a; box-shadow: inset 3px 0 0 #1fd97b; }
   .side-nav-link.active .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
-  .side-nav-link .material-symbols-outlined { color: #61ff97; font-size: 22px; }
-  .side-nav-link.active .material-symbols-outlined { color: #003919; }
+  .side-nav-link .material-symbols-outlined { color: #6f7877; font-size: 22px; transition: color 0.15s; }
+  .side-nav-link:hover .material-symbols-outlined { color: #9aa4a2; }
+  .side-nav-link.active .material-symbols-outlined { color: #46e08a; }
 
   /* Bottom mobile nav */
   .bottom-nav-link {
@@ -347,24 +416,25 @@
     border: none;
     transition: color 0.15s;
   }
-  .bottom-nav-link:hover { color: #e2e2e3; }
-  .bottom-nav-link.active { color: #61ff97; font-weight: 700; }
+  .bottom-nav-link:hover { color: #e6e8e8; }
+  .bottom-nav-link.active { color: #46e08a; font-weight: 700; }
   .bottom-nav-link.active .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
 
   /* Year tab */
   .year-tab {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    letter-spacing: 0.12em;
-    color: #b9cbb9;
+    letter-spacing: 0.1em;
+    color: #9aa4a2;
     padding: 6px 12px;
-    border: 1px solid #1F2427;
+    border: 1px solid #262a2d;
+    border-radius: 7px;
     cursor: pointer;
-    transition: all 0.12s;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
     background: transparent;
   }
-  .year-tab:hover { color: #e2e2e3; border-color: #3b4b3d; }
-  .year-tab.active { color: #61ff97; border-color: #61ff97; background: rgba(97, 255, 151, 0.06); }
+  .year-tab:hover { color: #e6e8e8; border-color: #46504f; }
+  .year-tab.active { color: #46e08a; border-color: rgba(70,224,138,0.55); background: rgba(70, 224, 138, 0.08); }
 
   /* User chip */
   .user-chip {
@@ -373,16 +443,17 @@
     gap: 8px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    letter-spacing: 0.08em;
-    color: #61ff97;
+    letter-spacing: 0.06em;
+    color: #46e08a;
     cursor: pointer;
-    padding: 6px 12px;
-    border: 1px solid #3b4b3d;
-    transition: all 0.12s;
+    padding: 7px 13px;
+    border: 1px solid #29302f;
+    border-radius: 8px;
+    transition: border-color 0.12s, background 0.12s;
     background: transparent;
   }
-  .user-chip:hover { border-color: #61ff97; }
-  .user-chip .dot { width: 6px; height: 6px; background: #61ff97; border-radius: 50%; box-shadow: 0 0 8px rgba(97,255,151,0.6); }
+  .user-chip:hover { border-color: rgba(70,224,138,0.5); background: rgba(70,224,138,0.05); }
+  .user-chip .dot { width: 6px; height: 6px; background: #46e08a; border-radius: 50%; box-shadow: 0 0 7px rgba(70,224,138,0.55); }
 
   /* Hide scrollbar utility */
   .hide-scrollbar::-webkit-scrollbar { display: none; }
@@ -392,63 +463,69 @@
   .avatar {
     width: 32px; height: 32px;
     border-radius: 9999px;
-    background: #282a2b;
-    border: 1px solid #3b4b3d;
+    background: #202426;
+    border: 1px solid #2c332f;
     display: inline-flex;
     align-items: center; justify-content: center;
     font-family: 'Oswald', sans-serif;
     font-weight: 700;
     font-size: 12px;
     letter-spacing: 0.04em;
-    color: #e2e2e3;
+    color: #e6e8e8;
     flex-shrink: 0;
   }
   .avatar.lg { width: 48px; height: 48px; font-size: 16px; }
   .avatar.xl { width: 64px; height: 64px; font-size: 22px; }
 
-  /* Cinematic hero gradient bg (placeholder for stadium image) */
+  /* Hero gradient bg (field-light wash, no dot grid) */
   .hero-bg {
     background:
-      radial-gradient(ellipse at 30% 100%, rgba(97,255,151,0.18) 0%, transparent 55%),
-      radial-gradient(ellipse at 80% 0%, rgba(0,218,248,0.10) 0%, transparent 45%),
-      radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.5) 30%, rgba(0,0,0,0.9) 100%),
-      linear-gradient(180deg, #1a1c1d 0%, #0c0e0f 100%);
+      radial-gradient(120% 130% at 18% 0%, rgba(34,227,127,0.16) 0%, transparent 52%),
+      radial-gradient(120% 120% at 92% 12%, rgba(56,189,248,0.07) 0%, transparent 46%),
+      linear-gradient(180deg, #171b1c 0%, #0d0f10 100%);
   }
-  .hero-bg::before {
-    content: "";
-    position: absolute; inset: 0;
-    background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.04) 1px, transparent 0);
-    background-size: 24px 24px;
-    pointer-events: none;
-  }
-  .champion-glow { box-shadow: 0 0 60px -10px rgba(233, 196, 0, 0.25); }
+  .champion-glow { box-shadow: inset 0 0 0 1px rgba(244,207,90,0.16), 0 24px 70px -34px rgba(244,207,90,0.32); }
+
+  /* My Card / bet-slip slot */
+  .slot { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:9px; background:#14171a; border:1px solid #232827; transition: border-color 0.14s, background 0.14s; }
+  .slot.filled { background:#151b18; border-color:#26372c; }
+  .slot .slot-key { width:9px; height:9px; border-radius:2px; flex-shrink:0; }
+  .slot .slot-name { font-family:'Inter',sans-serif; font-weight:700; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#9aa4a2; }
+  .slot .slot-val { font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#e6e8e8; }
+  .slot .slot-empty { font-family:'JetBrains Mono',monospace; font-size:11px; color:#616a69; letter-spacing:0.04em; }
+  .k-fav{background:#46e08a} .k-dog{background:#38bdf8} .k-over{background:#f5a24a} .k-under{background:#22d3cf} .k-super{background:#f4cf5a}
+
+  /* Segmented book toggle */
+  .seg { display:inline-flex; padding:2px; background:#101315; border:1px solid #262a2d; border-radius:8px; }
+  .seg button { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#9aa4a2; padding:4px 10px; border-radius:6px; background:transparent; border:none; cursor:pointer; font-weight:700; transition: color 0.12s, background 0.12s; }
+  .seg button.on { background:#242a2c; color:#e6e8e8; }
 
   /* Submit picks CTA (sidebar) */
   .submit-picks-cta {
     width: 100%;
-    background: #00ff85;
-    color: #003919;
-    padding: 14px;
+    background: #1fd97b;
+    color: #04220f;
+    padding: 13px;
     font-family: 'Inter', sans-serif;
     font-weight: 700;
     font-size: 12px;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    border: 1px solid #00ff85;
+    border: 1px solid #1fd97b;
     cursor: pointer;
-    transition: all 0.12s;
-    border-radius: 0.25rem;
+    transition: filter 0.12s, transform 0.08s;
+    border-radius: 8px;
   }
-  .submit-picks-cta:hover { filter: brightness(1.1); }
+  .submit-picks-cta:hover { filter: brightness(1.06); }
   .submit-picks-cta:active { transform: scale(0.97); }
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
 
-<!-- Live Ticker -->
+<!-- League Tape (scrolling picks + results) -->
 <div id="ticker" class="w-full bg-surface-container-lowest border-b border-outline-variant h-10 flex items-center overflow-hidden sticky top-0 z-[60]">
-  <div class="flex items-center gap-2 px-3 md:px-4 bg-live-red text-white h-full shrink-0 font-label-caps text-[10px] tracking-widest">
-    <span class="live-pulse w-1.5 h-1.5 bg-white rounded-full"></span> LIVE LINES
+  <div class="flex items-center gap-2 px-3 md:px-4 border-r border-outline-variant text-primary-fixed h-full shrink-0 font-label-caps text-[10px] tracking-[0.18em]">
+    <span class="w-1.5 h-1.5 bg-primary-fixed rounded-full" style="box-shadow:0 0 7px rgba(70,224,138,0.7)"></span> THE TAPE
   </div>
   <div class="flex-1 overflow-hidden h-full flex items-center min-w-0">
     <div id="ticker-track" class="marquee-track"></div>
@@ -461,18 +538,21 @@
 
 <!-- Mobile Top App Bar -->
 <header class="md:hidden bg-surface-glass backdrop-blur-md sticky top-10 z-50 border-b border-outline-variant h-14 flex items-center justify-between px-4">
-  <div class="flex items-center gap-2">
-    <div class="text-primary-fixed">
-      <svg width="22" height="22" viewBox="2 6 36 32" xmlns="http://www.w3.org/2000/svg" aria-label="Lock League">
-        <path d="M14 20 V11 H26 V20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="square"/>
-        <rect x="6" y="20" width="28" height="16" fill="currentColor"/>
-        <rect x="10" y="23" width="3" height="10" fill="#121415"/>
-        <rect x="10" y="30" width="8" height="3" fill="#121415"/>
-        <rect x="22" y="23" width="3" height="10" fill="#121415"/>
-        <rect x="22" y="30" width="8" height="3" fill="#121415"/>
+  <div class="flex items-center gap-2.5">
+    <span class="text-primary-fixed">
+      <svg width="26" height="26" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-label="Lock League">
+        <path d="M13 18 v-4 a7 7 0 0 1 14 0 v4" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+        <rect x="9" y="17.5" width="22" height="16.5" rx="3.4" fill="currentColor"/>
+        <path d="M20 21.6 c3 1.4 3 6.2 0 7.6 c-3 -1.4 -3 -6.2 0 -7.6 Z" fill="#0e1011"/>
+        <g stroke="currentColor" stroke-width="0.9" stroke-linecap="round">
+          <line x1="20" y1="22.7" x2="20" y2="28.4"/>
+          <line x1="18.7" y1="24.1" x2="21.3" y2="24.1"/>
+          <line x1="18.7" y1="25.5" x2="21.3" y2="25.5"/>
+          <line x1="18.7" y1="26.9" x2="21.3" y2="26.9"/>
+        </g>
       </svg>
-    </div>
-    <span class="font-display-lg text-headline-lg-mobile italic tracking-tighter text-primary-fixed">LOCK LEAGUE</span>
+    </span>
+    <span class="font-display-lg text-headline-lg-mobile tracking-tight text-on-surface">LOCK<span class="text-primary-fixed">LEAGUE</span></span>
   </div>
   <div id="user-area-mobile" class="flex items-center gap-3"></div>
 </header>
@@ -481,19 +561,22 @@
 <aside class="bg-surface-container-low w-64 fixed left-0 top-10 bottom-0 hidden md:flex flex-col border-r border-outline-variant z-40">
   <div class="px-6 py-6 border-b border-outline-variant">
     <div class="flex items-center gap-3">
-      <div class="text-primary-fixed">
-        <svg width="32" height="32" viewBox="2 6 36 32" xmlns="http://www.w3.org/2000/svg" aria-label="Lock League">
-          <path d="M14 20 V11 H26 V20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="square"/>
-          <rect x="6" y="20" width="28" height="16" fill="currentColor"/>
-          <rect x="10" y="23" width="3" height="10" fill="#1a1c1d"/>
-          <rect x="10" y="30" width="8" height="3" fill="#1a1c1d"/>
-          <rect x="22" y="23" width="3" height="10" fill="#1a1c1d"/>
-          <rect x="22" y="30" width="8" height="3" fill="#1a1c1d"/>
+      <span class="text-primary-fixed">
+        <svg width="34" height="34" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-label="Lock League">
+          <path d="M13 18 v-4 a7 7 0 0 1 14 0 v4" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+          <rect x="9" y="17.5" width="22" height="16.5" rx="3.4" fill="currentColor"/>
+          <path d="M20 21.6 c3 1.4 3 6.2 0 7.6 c-3 -1.4 -3 -6.2 0 -7.6 Z" fill="#0e1011"/>
+          <g stroke="currentColor" stroke-width="0.9" stroke-linecap="round">
+            <line x1="20" y1="22.7" x2="20" y2="28.4"/>
+            <line x1="18.7" y1="24.1" x2="21.3" y2="24.1"/>
+            <line x1="18.7" y1="25.5" x2="21.3" y2="25.5"/>
+            <line x1="18.7" y1="26.9" x2="21.3" y2="26.9"/>
+          </g>
         </svg>
-      </div>
+      </span>
       <div>
-        <div class="font-display-lg text-2xl text-primary-fixed leading-none tracking-tight uppercase font-bold">LOCK LEAGUE</div>
-        <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mt-1">EST · 2023</div>
+        <div class="font-display-lg text-2xl text-on-surface leading-none tracking-tight uppercase font-bold">LOCK<span class="text-primary-fixed">LEAGUE</span></div>
+        <div class="font-data-tabular text-[10px] tracking-[0.2em] text-on-surface-variant mt-1">EST. 2023</div>
       </div>
     </div>
   </div>
@@ -563,8 +646,8 @@
 <main id="root" class="md:ml-64 px-margin-mobile md:px-gutter pt-6 md:pt-stack-lg pb-32"></main>
 
 <!-- Mobile Bottom Nav -->
-<nav class="md:hidden bg-surface-glass backdrop-blur-xl border-t border-outline-variant fixed bottom-0 inset-x-0 z-50 shadow-lg" style="background: rgba(40, 42, 43, 0.85);">
-  <div class="flex items-center w-full pt-1 pb-safe">
+<nav class="md:hidden backdrop-blur-xl border-t border-outline-variant fixed bottom-0 inset-x-0 z-50" style="background: rgba(14, 16, 17, 0.88); padding-bottom: env(safe-area-inset-bottom, 0px);">
+  <div class="flex items-center w-full pt-1">
     <button class="bottom-nav-link nav-link" data-view="standings">
       <span class="material-symbols-outlined">dashboard</span>
       <span class="font-label-caps text-[10px]">Home</span>
@@ -592,7 +675,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// Plain URL — the host serves an ETag, so repeat visits get a 304 instead of
+// Plain URL - the host serves an ETag, so repeat visits get a 304 instead of
 // re-downloading ~270KB of history every load.
 const DATA_URL = "data/seasons.json";
 const SEASONS_ORDER = ["2023", "2024", "2025", "2026"];
@@ -602,7 +685,15 @@ function seasonsVisible() {
   return SEASONS_ORDER.filter(y => y !== "2026" || now >= SEASON_2026_KICKOFF_MS);
 }
 const BET_TYPES_ORDER = ["Favorite", "Dog", "Over", "Under", "Super Lock"];
+const BET_META = {
+  "Favorite":   { short: "FAV",   key: "fav",   color: "#46e08a", cls: "bt-fav" },
+  "Dog":        { short: "DOG",   key: "dog",   color: "#38bdf8", cls: "bt-dog" },
+  "Over":       { short: "OVER",  key: "over",  color: "#f5a24a", cls: "bt-over" },
+  "Under":      { short: "UNDER", key: "under", color: "#22d3cf", cls: "bt-under" },
+  "Super Lock": { short: "SUPER", key: "super", color: "#f4cf5a", cls: "bt-super" },
+};
 const WEEK_COUNT = 18;
+let currentMyPicks = {}; // member's picks for the active This Week board (for My Card + highlight)
 
 let DATA = null;
 let state = {
@@ -618,7 +709,7 @@ let state = {
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
-// Per-member accent colors — used on avatars, standings, ticker, hero.
+// Per-member accent colors - used on avatars, standings, ticker, hero.
 const MEMBER_COLORS = {
   Brayden: "#fb923c", Chase: "#22d3ee", Chris: "#a78bfa", Jack: "#34d399",
   Jacob: "#60a5fa", Jared: "#f472b6", Mason: "#facc15", Tyler: "#fb7185",
@@ -671,7 +762,7 @@ function mergeLiveSeason(rows) {
   const names = Object.keys(byMember).length ? Object.keys(byMember).sort() : MEMBERS_ALL.slice();
 
   // Provisional weekly winners: unique best W (fewest L breaks ties) among
-  // graded picks. Ties stay open — no winner shown for that week.
+  // graded picks. Ties stay open - no winner shown for that week.
   const weeklyWinners = {};
   for (let wk = 1; wk <= WEEK_COUNT; wk++) {
     let best = null, tied = false;
@@ -713,7 +804,7 @@ function mergeLiveSeason(rows) {
 }
 
 function initials(name) {
-  if (!name) return "—";
+  if (!name) return "-";
   const parts = String(name).trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -726,7 +817,7 @@ function parseRecord(rec) {
 }
 function pct(rec) {
   const tot = rec.w + rec.l;
-  return tot ? ((rec.w / tot) * 100).toFixed(1) : "—";
+  return tot ? ((rec.w / tot) * 100).toFixed(1) : "-";
 }
 function recordHtml(rec) {
   return `<span class="rec-W">${rec.w}</span>-<span class="rec-L">${rec.l}</span>${rec.t ? '-<span class="rec-T">' + rec.t + '</span>' : ''}`;
@@ -774,7 +865,7 @@ function buildTickerItems(season, weekFilter) {
       for (const bt of BET_TYPES_ORDER) {
         const pick = md.byType?.[bt]?.picks?.[String(wk)] || md.byType?.[bt]?.picks?.[wk];
         if (!pick || (!pick.text && !pick.result)) continue;
-        items.push({ wk, name, bt, text: pick.text || "—", result: pick.result || "" });
+        items.push({ wk, name, bt, text: pick.text || "-", result: pick.result || "" });
       }
     }
   }
@@ -782,7 +873,7 @@ function buildTickerItems(season, weekFilter) {
 }
 
 function btShort(bt) {
-  return ({ "Favorite": "FAV", "Dog": "DOG", "Over": "OVR", "Under": "UND", "Super Lock": "SUPER 🔒" })[bt] || bt;
+  return ({ "Favorite": "FAV", "Dog": "DOG", "Over": "OVR", "Under": "UND", "Super Lock": "SUPER" })[bt] || bt;
 }
 function btClass(bt) {
   return ({ "Favorite": "fav", "Dog": "dog", "Over": "over", "Under": "under", "Super Lock": "super" })[bt] || "";
@@ -929,7 +1020,7 @@ function renderStandings() {
   const champ = rows[0];
   const isLive = !!seasonInfo?.live;
 
-  const champPct = champ && (champ.seasonRec.w + champ.seasonRec.l) ? pct(champ.seasonRec) + "%" : "—";
+  const champPct = champ && (champ.seasonRec.w + champ.seasonRec.l) ? pct(champ.seasonRec) + "%" : "-";
   const champSuper = champ ? parseRecord(champ.md?.byType?.["Super Lock"]?.record) : { w: 0, l: 0, t: 0 };
   let bestBt = null, bestPct = -1, bestRec = { w: 0, l: 0, t: 0 };
   if (champ) {
@@ -941,7 +1032,7 @@ function renderStandings() {
       if (p > bestPct) { bestPct = p; bestBt = bt; bestRec = r; }
     }
   }
-  const bestBtLabel = bestBt === "Super Lock" ? "SUPER 🔒" : (bestBt ? bestBt.toUpperCase() : "—");
+  const bestBtLabel = bestBt === "Super Lock" ? "SUPER" : (bestBt ? bestBt.toUpperCase() : "-");
 
   // Year filter pills
   const yearPills = `
@@ -962,11 +1053,11 @@ function renderStandings() {
             <span class="material-symbols-outlined text-xs mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
             ${season} ${isLive ? "Leader" : "Champion"}
           </div>
-          <h2 class="font-display-lg text-3xl md:text-5xl leading-none uppercase mb-3 break-words" style="color:${champ ? memberColor(champ.name) : "#61ff97"}">${escapeHtml(champ ? champ.name : "—")}</h2>
+          <h2 class="font-display-lg text-3xl md:text-5xl leading-none uppercase mb-3 break-words" style="color:${champ ? memberColor(champ.name) : "#46e08a"}">${escapeHtml(champ ? champ.name : "-")}</h2>
           <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div class="flex items-baseline gap-2">
               <span class="text-on-surface-variant font-label-caps text-[10px]">RECORD</span>
-              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champ ? recordHtml(champ.seasonRec) : "—"}</span>
+              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champ ? recordHtml(champ.seasonRec) : "-"}</span>
             </div>
             <span class="w-px h-4 bg-outline-variant"></span>
             <div class="flex items-baseline gap-2">
@@ -1009,7 +1100,7 @@ function renderStandings() {
               <th class="px-4 md:px-6 py-4">Member</th>
               <th class="px-4 md:px-6 py-4">Record (W-L)</th>
               <th class="px-4 md:px-6 py-4">Win %</th>
-              <th class="px-4 md:px-6 py-4 hidden lg:table-cell">Weekly Heat (1–18)</th>
+              <th class="px-4 md:px-6 py-4 hidden lg:table-cell">Weekly Heat (1-18)</th>
               <th class="px-4 md:px-6 py-4 text-right">Weeks Won</th>
             </tr>
           </thead>
@@ -1129,7 +1220,7 @@ function renderMemberDetail(r) {
     const isSuper = bt === "Super Lock";
     return `
       <div class="flex items-center gap-4 py-1.5">
-        <div class="w-24 font-label-caps text-[11px] uppercase ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${isSuper ? "Super 🔒" : bt}</div>
+        <div class="w-24 font-label-caps text-[11px] uppercase ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${isSuper ? "Super Lock" : bt}</div>
         <div class="w-20 font-data-tabular text-[11px]">${recordHtmlFromString(info.record)}</div>
         <div class="flex gap-1">${cells}</div>
       </div>
@@ -1146,8 +1237,8 @@ function renderMemberDetail(r) {
         </div>
         ${rows}
         <div class="flex flex-wrap gap-6 mt-4 pt-3 border-t border-outline-variant font-data-tabular text-[11px]">
-          <div><span class="text-on-surface-variant tracking-widest mr-2">SEASON</span><strong class="text-on-surface">${escapeHtml(md?.seasonRecord || "—")}</strong></div>
-          <div><span class="text-on-surface-variant tracking-widest mr-2">LIFETIME</span><strong class="text-on-surface">${escapeHtml(md?.lifetimeRecord || "—")}</strong></div>
+          <div><span class="text-on-surface-variant tracking-widest mr-2">SEASON</span><strong class="text-on-surface">${escapeHtml(md?.seasonRecord || "-")}</strong></div>
+          <div><span class="text-on-surface-variant tracking-widest mr-2">LIFETIME</span><strong class="text-on-surface">${escapeHtml(md?.lifetimeRecord || "-")}</strong></div>
         </div>
       </div>
     </div>
@@ -1173,7 +1264,7 @@ function renderLifetime() {
       seasonsPlayed++;
       const winners = DATA.seasons[season]?.weeklyWinners || {};
       for (const wk of Object.keys(winners)) if (winners[wk] === name) weeksWon++;
-      // A live season has no champion yet — only count finished seasons.
+      // A live season has no champion yet - only count finished seasons.
       if (!DATA.seasons[season]?.live && standingsBySeason[season][0]?.name === name) seasonsAsChamp++;
       for (const bt of BET_TYPES_ORDER) {
         const picks = md.byType?.[bt]?.picks || {};
@@ -1334,7 +1425,7 @@ function renderLifetime() {
           <tbody class="divide-y divide-outline-variant">
             ${agg.map((m, i) => {
               const tot = m.totals.W + m.totals.L;
-              const pctV = tot ? (m.totals.W / tot * 100).toFixed(1) : "—";
+              const pctV = tot ? (m.totals.W / tot * 100).toFixed(1) : "-";
               const isTop = i === 0;
               const isUnder = tot && (m.totals.W / tot) < 0.5;
               const barColor = isUnder ? "bg-live-red" : "bg-primary-fixed";
@@ -1597,7 +1688,7 @@ function renderUserArea() {
     elMobile.innerHTML = `
       <button id="account-btn-mobile" class="user-chip" style="color:${c}"><span class="dot" style="background:${c};box-shadow:0 0 8px ${c}99"></span>${escapeHtml(state.user.name)}</button>
     `;
-    // Opens the account modal (passphrase + sign out) — tapping your name
+    // Opens the account modal (passphrase + sign out) - tapping your name
     // should never instantly log you out.
     elMobile.querySelector("#account-btn-mobile").onclick = openAccount;
   } else {
@@ -1609,7 +1700,7 @@ function renderUserArea() {
 }
 
 // =================== This Week ===================
-// Live scores (ESPN via /api/scores) — real LIVE pills and in-game scores.
+// Live scores (ESPN via /api/scores) - real LIVE pills and in-game scores.
 const SCORES_TTL_MS = 60 * 1000;
 async function loadScores(force = false) {
   if (!force && state.liveScores && Date.now() - (state.liveScoresAt || 0) < SCORES_TTL_MS) {
@@ -1631,7 +1722,7 @@ function scoreFor(g) {
 
 const ODDS_CLIENT_TTL_MS = 5 * 60 * 1000;
 async function loadOdds(force = false) {
-  // Serve from memory for 5 minutes; never cache a failure — the next visit
+  // Serve from memory for 5 minutes; never cache a failure - the next visit
   // to the view retries instead of showing a stale error until reload.
   const fresh = state.thisWeekData && state.thisWeekData.source !== "error" &&
     Date.now() - (state.thisWeekFetchedAt || 0) < ODDS_CLIENT_TTL_MS;
@@ -1680,101 +1771,132 @@ function nextKickoffCountdown(games) {
 function gameStatusPill(g) {
   const sc = scoreFor(g);
   if (sc && sc.state === "in") {
-    return `<span class="font-data-tabular text-[11px] text-on-surface font-bold">${teamShort(g.away)} ${sc.away_score ?? 0} — ${teamShort(g.home)} ${sc.home_score ?? 0} <span class="text-live-red ml-1">${escapeHtml(sc.detail || "LIVE")}</span></span>`;
+    return `<span class="font-data-tabular text-[11px] text-on-surface font-bold">${teamShort(g.away)} ${sc.away_score ?? 0} - ${teamShort(g.home)} ${sc.home_score ?? 0} <span class="text-live-red ml-1">${escapeHtml(sc.detail || "LIVE")}</span></span>`;
   }
   if (sc && sc.state === "post") {
-    return `<span class="font-data-tabular text-[11px] text-on-surface font-bold">${teamShort(g.away)} ${sc.away_score ?? "—"} — ${teamShort(g.home)} ${sc.home_score ?? "—"} <span class="text-on-surface-variant ml-1 uppercase">Final</span></span>`;
+    return `<span class="font-data-tabular text-[11px] text-on-surface font-bold">${teamShort(g.away)} ${sc.away_score ?? "-"} - ${teamShort(g.home)} ${sc.home_score ?? "-"} <span class="text-on-surface-variant ml-1 uppercase">Final</span></span>`;
   }
   const kickoff = new Date(g.kickoff).getTime();
   if (kickoff > Date.now()) {
     return `<span class="font-data-tabular text-[10px] text-on-surface-variant font-medium uppercase">${fmtKickoffDay(g.kickoff)} · ${fmtKickoffTime(g.kickoff)}</span>`;
   }
-  // Past kickoff but no scoreboard match — show "POST" without a live badge
+  // Past kickoff but no scoreboard match - show "POST" without a live badge
   return `<span class="font-data-tabular text-[10px] text-text-dim font-bold uppercase tracking-widest">POST KICKOFF</span>`;
+}
+
+function skeletonThisWeek() {
+  const card = `<div class="skeleton" style="height:196px"></div>`;
+  return `
+    <div class="skeleton mb-4" style="height:34px;width:220px;border-radius:8px"></div>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-8 grid grid-cols-1 xl:grid-cols-2 gap-4">${card.repeat(6)}</div>
+      <div class="lg:col-span-4"><div class="skeleton" style="height:340px"></div></div>
+    </div>`;
+}
+
+function renderMyCardBody() {
+  return BET_TYPES_ORDER.map(bt => {
+    const meta = BET_META[bt];
+    const p = currentMyPicks[bt];
+    const txt = p && (p.pick_text || p.text) ? escapeHtml(p.pick_text || p.text) : "";
+    const filled = !!txt;
+    return `<div class="slot ${filled ? "filled" : ""}">
+      <span class="slot-key k-${meta.key}"></span>
+      <div class="min-w-0 flex-1">
+        <div class="slot-name" style="${filled ? `color:${meta.color}` : ""}">${bt}</div>
+        ${filled
+          ? `<div class="slot-val truncate">${txt}</div>`
+          : `<div class="slot-empty">${bt === "Super Lock" ? "Set in My Picks" : "Tap a line below"}</div>`}
+      </div>
+      ${filled ? `<span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};font-variation-settings:'FILL' 1">check_circle</span>` : ""}
+    </div>`;
+  }).join("");
+}
+
+function myCardProgress() {
+  const n = BET_TYPES_ORDER.filter(bt => { const p = currentMyPicks[bt]; return p && (p.pick_text || p.text); }).length;
+  return `${n} / 5 locked`;
+}
+
+function renderMyCardPanel() {
+  if (!state.user) {
+    return `<div class="glass-card p-6" id="my-card">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="material-symbols-outlined text-primary-fixed">receipt_long</span>
+        <h3 class="font-headline-lg text-lg uppercase leading-none">My Card</h3>
+      </div>
+      <p class="text-on-surface-variant text-sm mb-5 leading-relaxed">Sign in to lock your five picks for the week: Favorite, Dog, Over, Under, and your Super Lock.</p>
+      <button class="btn-primary w-full" id="mycard-signin">Sign In To Pick</button>
+    </div>`;
+  }
+  return `<div class="glass-card p-5 md:p-6" id="my-card">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-fixed" style="font-variation-settings:'FILL' 1">receipt_long</span>
+        <h3 class="font-headline-lg text-lg uppercase leading-none">My Card</h3>
+      </div>
+      <span class="font-data-tabular text-[11px] text-on-surface-variant" id="mycard-progress">${myCardProgress()}</span>
+    </div>
+    <div id="my-card-body" class="space-y-2.5">${renderMyCardBody()}</div>
+    <div class="mt-5 pt-4 border-t border-outline-variant flex items-center justify-between gap-3">
+      <div class="font-data-tabular text-[10px] tracking-wide text-on-surface-variant uppercase">Locks Sun 12:00 AM CT</div>
+      <button class="font-data-tabular text-[10px] tracking-wide text-primary-fixed uppercase jump-mypicks">Edit / Super Lock &rarr;</button>
+    </div>
+  </div>`;
 }
 
 function renderThisWeek() {
   const data = state.thisWeekData;
-  if (!data) {
-    return `<div class="py-20 text-center font-data-tabular text-on-surface-variant tracking-widest uppercase text-sm">Loading live lines…</div>`;
-  }
-  const games = data.games || [];
-  const cd = nextKickoffCountdown(games);
+  if (!data) return skeletonThisWeek();
 
-  // Featured matchup: first upcoming game by kickoff
-  const upcoming = games.filter(g => new Date(g.kickoff).getTime() > Date.now())
-                       .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
-  const featured = upcoming[0] || games[0];
+  const games = (data.games || []).slice().sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+  const cd = nextKickoffCountdown(games);
+  const isErr = data.source === "error";
+
+  const box = (v, l, id) => `
+    <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[58px]">
+      <span class="font-data-tabular text-xl text-primary-fixed leading-none" id="${id}">${String(v).padStart(2, "0")}</span>
+      <span class="text-[8px] font-label-caps text-on-surface-variant uppercase mt-1">${l}</span>
+    </div>`;
 
   return `
-    <!-- Weekly Overview Header -->
-    <section class="mb-stack-lg flex flex-col md:flex-row justify-between items-start md:items-end gap-stack-md">
+    <section class="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
       <div>
-        <span class="font-label-caps text-label-caps text-primary-fixed uppercase">Live · NFL · Board</span>
-        <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight uppercase text-primary-fixed">This Week</h1>
+        <div class="flex items-center gap-3">
+          <span class="w-2 h-8 bg-primary-fixed inline-block rounded-sm"></span>
+          <h1 class="font-display-lg text-3xl md:text-4xl uppercase text-on-surface leading-none">This Week</h1>
+        </div>
+        <p class="text-on-surface-variant text-sm mt-2.5">${games.length ? `${games.length} games this week. Lines from FanDuel and DraftKings.` : (isErr ? "Lines are unavailable right now." : "No games posted yet.")}</p>
       </div>
       ${cd ? `
         <div class="flex flex-col items-start md:items-end">
-          <span class="font-label-caps text-label-caps text-on-surface-variant mb-1 uppercase">Kickoff In</span>
-          <div class="flex gap-2">
-            <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
-              <span class="font-data-tabular text-xl text-primary-fixed" id="cd-days">${String(cd.days).padStart(2,"0")}</span>
-              <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Days</span>
-            </div>
-            <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
-              <span class="font-data-tabular text-xl text-primary-fixed" id="cd-hrs">${String(cd.hrs).padStart(2,"0")}</span>
-              <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Hrs</span>
-            </div>
-            <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[60px]">
-              <span class="font-data-tabular text-xl text-primary-fixed" id="cd-min">${String(cd.mins).padStart(2,"0")}</span>
-              <span class="text-[8px] font-label-caps text-on-surface-variant uppercase">Min</span>
-            </div>
-          </div>
-        </div>
-      ` : ""}
+          <span class="font-label-caps text-[10px] text-on-surface-variant mb-1.5 uppercase tracking-widest">Kickoff in</span>
+          <div class="flex gap-2">${box(cd.days, "Days", "cd-days")}${box(cd.hrs, "Hrs", "cd-hrs")}${box(cd.mins, "Min", "cd-min")}</div>
+        </div>` : ""}
     </section>
 
-    <!-- Source meta -->
-    <div class="glass-panel p-3 md:p-4 mb-stack-lg flex flex-col md:flex-row gap-3 md:items-center md:justify-between font-data-tabular text-[11px] uppercase tracking-widest text-on-surface-variant">
-      <div class="flex flex-wrap gap-4">
-        <span>Source · <strong class="text-on-surface">${escapeHtml((data.source || "—").toUpperCase())}</strong></span>
-        ${data.remaining ? `<span>Api · <strong class="text-on-surface">${data.remaining}</strong> left</span>` : ""}
-      </div>
-      <div class="flex items-center gap-3">
-        <span>Updated · <strong class="text-on-surface">${data.fetched_at ? new Date(data.fetched_at).toLocaleTimeString() : "—"}</strong></span>
-        <button id="odds-refresh" class="flex items-center gap-1 text-primary-fixed hover:text-primary-container transition-colors uppercase tracking-widest" title="Refresh lines">
-          <span class="material-symbols-outlined text-sm">refresh</span> Refresh
-        </button>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <aside class="lg:col-span-4 lg:order-2 lg:sticky lg:top-16 self-start space-y-4">
+        ${renderMyCardPanel()}
+        ${renderWhosInWidget()}
+      </aside>
+      <div class="lg:col-span-8 lg:order-1">
+        <div class="flex items-center justify-between border-b border-outline-variant pb-2.5 mb-4">
+          <h3 class="font-headline-lg text-lg uppercase leading-none">The Board</h3>
+          <div class="flex items-center gap-3 font-data-tabular text-[10px] text-on-surface-variant uppercase tracking-widest">
+            <span>${data.fetched_at ? "Updated " + new Date(data.fetched_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : escapeHtml(String(data.source || ""))}</span>
+            <button id="odds-refresh" class="flex items-center gap-1 text-primary-fixed hover:text-primary-fixed-dim transition-colors" title="Refresh lines"><span class="material-symbols-outlined text-sm">refresh</span></button>
+          </div>
+        </div>
+        ${games.length === 0 ? `
+          <div class="glass-panel p-10 text-center">
+            <span class="material-symbols-outlined text-4xl text-outline mb-3">sports_football</span>
+            <p class="text-on-surface font-headline-lg text-lg uppercase mb-1">${isErr ? "Lines unavailable" : "No games yet"}</p>
+            <p class="text-on-surface-variant text-sm">${isErr ? escapeHtml(data.error || "Try again shortly.") : "The board fills in once the week's lines post."}</p>
+          </div>`
+          : `<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${games.map(renderGameCard).join("")}</div>`}
       </div>
     </div>
-
-    ${games.length === 0 ? `
-      <div class="glass-panel p-8 text-center text-on-surface-variant font-data-tabular text-sm">No games available. ${escapeHtml(data.error || "")}</div>
-    ` : `
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
-        <!-- Main content -->
-        <div class="lg:col-span-8 space-y-stack-lg">
-          ${featured ? renderFeaturedMatchup(featured) : ""}
-          <section>
-            <div class="flex items-center justify-between border-b border-outline-variant pb-2 mb-4">
-              <h3 class="font-headline-lg text-xl uppercase italic">Full Schedule</h3>
-              <span class="font-label-caps text-[10px] text-on-surface-variant uppercase">${games.length} Games · FD · DK</span>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${games.filter(g => g !== featured).map(renderGameCard).join("")}
-            </div>
-          </section>
-        </div>
-
-        <!-- Sidebar widgets -->
-        <aside class="lg:col-span-4 space-y-gutter">
-          ${renderWhosInWidget()}
-          ${renderMostPickedWidget(games)}
-          ${renderLeagueConsensusWidget(featured)}
-          ${renderRecentPicksWidget()}
-        </aside>
-      </div>
-    `}
   `;
 }
 
@@ -1813,7 +1935,7 @@ function renderFeaturedMatchup(g) {
               const sc = scoreFor(g);
               if (sc && sc.state !== "pre") {
                 return `
-                  <span class="font-display-lg text-3xl md:text-4xl text-on-surface">${sc.away_score ?? 0} — ${sc.home_score ?? 0}</span>
+                  <span class="font-display-lg text-3xl md:text-4xl text-on-surface">${sc.away_score ?? 0} - ${sc.home_score ?? 0}</span>
                   <span class="font-data-tabular text-[11px] ${sc.state === "in" ? "text-live-red" : "text-on-surface-variant"} uppercase">${escapeHtml(sc.detail || (sc.state === "in" ? "LIVE" : "FINAL"))}</span>
                 `;
               }
@@ -1848,48 +1970,78 @@ function renderFeaturedMatchup(g) {
   `;
 }
 
+function switchBook(gameKey, book) {
+  const games = (state.thisWeekData && state.thisWeekData.games) || [];
+  const g = games.find(x => `${x.away}@${x.home}` === gameKey);
+  if (!g) return;
+  const wrap = document.querySelector(`.book-btns[data-game-key="${CSS.escape(gameKey)}"]`);
+  if (!wrap) return;
+  wrap.innerHTML = renderBookButtons(book, g.books?.[book] || {}, g);
+  wrap.querySelectorAll(".pick-btn[data-bet]").forEach(b => b.addEventListener("click", () => clickPickButton(b)));
+  const card = wrap.closest(".game-card");
+  if (card) card.querySelectorAll(".book-toggle").forEach(t => t.classList.toggle("on", t.dataset.book === book));
+  markPickedButtons(currentMyPicks);
+}
+
+function refreshMyCard() {
+  const body = document.getElementById("my-card-body");
+  if (body) body.innerHTML = renderMyCardBody();
+  const prog = document.getElementById("mycard-progress");
+  if (prog) prog.textContent = myCardProgress();
+}
+
 function renderGameCard(g) {
-  const fd = g.books?.fanduel || {};
-  const dk = g.books?.draftkings || {};
-  const s = fd.spread || dk.spread;
+  const gameKey = `${g.away}@${g.home}`;
+  const fd = g.books?.fanduel;
+  const dk = g.books?.draftkings;
+  const primaryBook = fd ? "fanduel" : (dk ? "draftkings" : null);
+  const book = primaryBook ? g.books[primaryBook] : {};
+  const s = book.spread;
+  const t = book.total;
   const favTeam = s?.fav;
-  const kickoff = new Date(g.kickoff).getTime();
   const sc = scoreFor(g);
-  // Real state when the scoreboard knows the game; kickoff-window guess otherwise.
-  const isLive = sc ? sc.state === "in"
-    : (kickoff <= Date.now() && Date.now() - kickoff < 4 * 3600 * 1000);
-  const isFinal = sc?.state === "post";
-  const accentClass = isLive ? "bg-live-red" : isFinal ? "bg-surface-container-highest" : "bg-secondary-container";
+  const kickoff = new Date(g.kickoff).getTime();
+  const isLive = sc ? sc.state === "in" : (kickoff <= Date.now() && Date.now() - kickoff < 4 * 3600 * 1000);
+
+  const teamRow = (name) => {
+    const isFav = favTeam === name;
+    const spreadTxt = s ? (isFav ? `${s.line}` : `+${Math.abs(s.line)}`) : "";
+    return `
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 shrink-0 flex items-center justify-center">
+          ${teamLogoMark(name, 'w-full h-full', 'font-display-lg text-sm text-on-surface')}
+        </div>
+        <div class="min-w-0">
+          <div class="font-headline-lg text-[15px] leading-none text-on-surface uppercase">${teamShort(name)}</div>
+          <div class="text-[10px] text-on-surface-variant truncate leading-tight mt-0.5">${escapeHtml(name)}</div>
+        </div>
+        ${s ? `<span class="font-data-tabular text-[13px] ml-auto pl-2 ${isFav ? "text-on-surface" : "text-on-surface-variant"}">${spreadTxt}</span>` : ""}
+      </div>`;
+  };
+
+  const bookToggle = (fd && dk) ? `
+    <div class="seg">
+      <button class="book-toggle on" data-book="fanduel" data-game-key="${escapeHtml(gameKey)}">FD</button>
+      <button class="book-toggle" data-book="draftkings" data-game-key="${escapeHtml(gameKey)}">DK</button>
+    </div>`
+    : `<span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">${primaryBook === "draftkings" ? "DraftKings" : "FanDuel"}</span>`;
 
   return `
-    <div class="glass-panel p-5 rounded hover:border-primary-fixed/40 transition-colors group relative overflow-hidden">
-      <div class="absolute top-0 left-0 w-1 h-full ${accentClass}"></div>
-      <div class="flex justify-between items-start mb-4">
+    <div class="glass-card card-hover game-card p-4" data-game-key="${escapeHtml(gameKey)}">
+      <div class="flex items-center justify-between gap-2 mb-3">
         ${gameStatusPill(g)}
-        ${isLive ? `<div class="flex items-center gap-1 text-live-red"><span class="w-1.5 h-1.5 bg-live-red rounded-full live-pulse"></span><span class="font-label-caps text-[10px] uppercase">Live</span></div>` : ""}
+        ${t ? `<span class="font-data-tabular text-[10px] text-on-surface-variant uppercase shrink-0">O/U ${t.point}</span>` : ""}
       </div>
-      <div class="flex justify-between items-center mb-4">
-        <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <div class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center overflow-hidden p-1.5">
-            ${teamLogoMark(g.away, 'w-full h-full', 'font-display-lg font-bold text-sm text-on-surface')}
-          </div>
-          <span class="font-label-caps text-[10px] text-on-surface uppercase truncate max-w-full">${escapeHtml(g.away)}</span>
-          ${favTeam === g.away ? `<span class="font-data-tabular text-xs text-primary-fixed">${s.line > 0 ? "+" : ""}${s.line}</span>` : (s ? `<span class="font-data-tabular text-xs text-on-surface-variant">${-s.line > 0 ? "+" : ""}${-s.line}</span>` : "")}
-        </div>
-        <div class="text-on-surface-variant font-display-lg text-lg opacity-30 italic">VS</div>
-        <div class="flex flex-col items-center gap-1 flex-1 min-w-0">
-          <div class="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center overflow-hidden p-1.5">
-            ${teamLogoMark(g.home, 'w-full h-full', 'font-display-lg font-bold text-sm text-on-surface')}
-          </div>
-          <span class="font-label-caps text-[10px] text-on-surface uppercase truncate max-w-full">${escapeHtml(g.home)}</span>
-          ${favTeam === g.home ? `<span class="font-data-tabular text-xs text-primary-fixed">${s.line > 0 ? "+" : ""}${s.line}</span>` : (s ? `<span class="font-data-tabular text-xs text-on-surface-variant">${-s.line > 0 ? "+" : ""}${-s.line}</span>` : "")}
-        </div>
+      <div class="space-y-2 mb-3.5">
+        ${teamRow(g.away)}
+        ${teamRow(g.home)}
       </div>
-      <div class="pt-3 border-t border-outline-variant space-y-2">
-        <div class="font-label-caps text-[9px] tracking-widest text-on-surface-variant uppercase">FD · FANDUEL</div>
-        <div class="grid grid-cols-4 gap-1.5">${renderBookButtons("fanduel", fd, g)}</div>
-        <div class="font-label-caps text-[9px] tracking-widest text-on-surface-variant uppercase pt-1">DK · DRAFTKINGS</div>
-        <div class="grid grid-cols-4 gap-1.5">${renderBookButtons("draftkings", dk, g)}</div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">Pick a line</span>
+        ${bookToggle}
+      </div>
+      <div class="grid grid-cols-4 gap-1.5 book-btns" data-game-key="${escapeHtml(gameKey)}">
+        ${renderBookButtons(primaryBook || "fanduel", book, g)}
       </div>
     </div>
   `;
@@ -1905,13 +2057,13 @@ function renderBookButtons(bookKey, book, game) {
   const started = game.kickoff && new Date(game.kickoff).getTime() <= Date.now();
 
   const btn = (bet, side, lbl, value, price, text) => started ? `
-    <div class="pick-btn locked" title="Game started — pick locked">
+    <div class="pick-btn locked ${BET_META[bet].cls}" title="Game started, pick locked">
       <span class="pb-label">${lbl}</span>
       <span class="pb-value">${value}</span>
       <span class="pb-price">${price != null ? americanOdds(price) : ''}</span>
     </div>
   ` : `
-    <div class="pick-btn" data-bet="${bet}" data-game="${escapeHtml(gameKey)}"
+    <div class="pick-btn ${BET_META[bet].cls}" data-bet="${bet}" data-game="${escapeHtml(gameKey)}"
          data-side="${side}" data-line="${s && (bet === 'Favorite' || bet === 'Dog') ? s.line : (t?.point ?? '')}"
          data-book="${bookKey}" data-price="${price ?? ''}" data-text="${escapeHtml(text)}">
       <span class="pb-label">${lbl}</span>
@@ -1919,18 +2071,18 @@ function renderBookButtons(bookKey, book, game) {
       <span class="pb-price">${price != null ? americanOdds(price) : ''}</span>
     </div>
   `;
-  const empty = (lbl) => `<div class="pick-btn opacity-30 cursor-not-allowed"><span class="pb-label">${lbl}</span><span class="pb-value">—</span><span class="pb-price"></span></div>`;
+  const empty = (lbl) => `<div class="pick-btn opacity-30 cursor-not-allowed"><span class="pb-label">${lbl}</span><span class="pb-value">-</span><span class="pb-price"></span></div>`;
 
   return `
     ${s ? btn('Favorite', 'fav', 'Fav', `${s.line}`, s.favPrice, `${s.fav} ${s.line}`) : empty('Fav')}
     ${s ? btn('Dog', 'dog', 'Dog', `+${dogLine}`, s.dogPrice, `${dogTeam} +${dogLine}`) : empty('Dog')}
-    ${t ? btn('Over', 'over', 'Over', `O${t.point}`, t.overPrice, `${game.away} / ${game.home} O${t.point}`) : empty('Over')}
-    ${t ? btn('Under', 'under', 'Under', `U${t.point}`, t.underPrice, `${game.away} / ${game.home} U${t.point}`) : empty('Under')}
+    ${t ? btn('Over', 'over', 'Over', `${t.point}`, t.overPrice, `${game.away} / ${game.home} O${t.point}`) : empty('Over')}
+    ${t ? btn('Under', 'under', 'Under', `${t.point}`, t.underPrice, `${game.away} / ${game.home} U${t.point}`) : empty('Under')}
   `;
 }
 
 function renderMostPickedWidget(games) {
-  // Without picks DB queryable here, show a "favorite of the week" — biggest favorite by spread
+  // Without picks DB queryable here, show a "favorite of the week" - biggest favorite by spread
   if (!games || !games.length) return "";
   let biggest = null;
   for (const g of games) {
@@ -1969,7 +2121,7 @@ function renderLeagueConsensusWidget(featured) {
         <div>
           <div class="flex justify-between text-[10px] font-data-tabular mb-1">
             <span>OVER ${t.point}</span>
-            <span class="text-primary-fixed">${t.overPrice != null ? americanOdds(t.overPrice) : "—"}</span>
+            <span class="text-primary-fixed">${t.overPrice != null ? americanOdds(t.overPrice) : "-"}</span>
           </div>
           <div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
             <div class="h-full bg-primary-fixed" style="width: 50%"></div>
@@ -1978,7 +2130,7 @@ function renderLeagueConsensusWidget(featured) {
         <div>
           <div class="flex justify-between text-[10px] font-data-tabular mb-1">
             <span>UNDER ${t.point}</span>
-            <span class="text-on-surface-variant">${t.underPrice != null ? americanOdds(t.underPrice) : "—"}</span>
+            <span class="text-on-surface-variant">${t.underPrice != null ? americanOdds(t.underPrice) : "-"}</span>
           </div>
           <div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
             <div class="h-full bg-outline" style="width: 50%"></div>
@@ -2059,13 +2211,15 @@ async function clickPickButton(btn) {
     });
     const j = await r.json();
     if (!r.ok) {
-      showToast(j.error === "locked" ? "LOCKED · CUTOFF PASSED"
-        : j.error === "game-started" ? "GAME STARTED · PICK LOCKED"
-        : "ERROR · " + (j.error || "unknown"), "err");
+      showToast(j.error === "locked" ? "PICKS LOCKED FOR THIS WEEK"
+        : j.error === "game-started" ? "GAME STARTED, PICK LOCKED"
+        : "ERROR: " + (j.error || "unknown"), "err");
     } else {
       document.querySelectorAll(`.pick-btn[data-bet="${bet_type}"]`).forEach(b => b.classList.remove("picked"));
       btn.classList.add("picked");
-      showToast(`✓ ${bet_type.toUpperCase()} · ${pick_text}`);
+      currentMyPicks[bet_type] = { pick_text, game_key, side, book, line, price };
+      refreshMyCard();
+      showToast(`LOCKED ${BET_META[bet_type].short}: ${pick_text}`);
     }
   } catch (e) {
     showToast("NETWORK ERROR", "err");
@@ -2076,7 +2230,7 @@ async function clickPickButton(btn) {
 
 // =================== My Picks ===================
 function currentNflWeekClient() {
-  // Week 1 starts Tue Sept 8 2026, 08:00 UTC — mirrors lib/nfl.js so client
+  // Week 1 starts Tue Sept 8 2026, 08:00 UTC - mirrors lib/nfl.js so client
   // and server agree on week boundaries (MNF stays in its own week).
   const week1Start = Date.UTC(2026, 8, 8, 8);
   const now = Date.now();
@@ -2112,7 +2266,7 @@ function whosInBodyHtml() {
     const done = m.picks >= 5;
     const some = m.picks > 0;
     return `<div class="flex items-center gap-2 min-w-0">
-      <span class="w-2 h-2 rounded-full shrink-0" style="background:${done ? "#61ff97" : some ? "#ffe16d" : "#3b4b3d"}"></span>
+      <span class="w-2 h-2 rounded-full shrink-0" style="background:${done ? "#46e08a" : some ? "#f4cf5a" : "#29302f"}"></span>
       <span class="font-data-tabular text-[11px] truncate ${done ? "text-on-surface" : "text-on-surface-variant"}">${escapeHtml(m.name)}</span>
       <span class="ml-auto font-data-tabular text-[10px] text-on-surface-variant shrink-0">${m.picks}/5</span>
     </div>`;
@@ -2162,7 +2316,7 @@ async function renderMyPicks() {
     const isSuper = bt === "Super Lock";
     return `
       <div class="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-3 md:gap-5 md:items-center">
-        <div class="font-label-caps text-[11px] tracking-widest uppercase ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${isSuper ? "🔒 Super Lock" : bt}</div>
+        <div class="font-label-caps text-[11px] tracking-widest uppercase flex items-center gap-1.5 ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${isSuper ? '<span class="material-symbols-outlined text-[14px]" style="font-variation-settings:\'FILL\' 1">lock</span>Super Lock' : bt}</div>
         <input class="pick-input" data-bet="${bt}" value="${escapeHtml(val)}" placeholder="${bt === 'Favorite' ? 'e.g., Chiefs -3 vs Bills' : bt === 'Dog' ? 'e.g., Bills +3 @ Chiefs' : bt === 'Over' ? 'e.g., Chiefs / Bills O48.5' : bt === 'Under' ? 'e.g., Chiefs / Bills U48.5' : 'Player prop / specialty bet'}">
       </div>
     `;
@@ -2174,7 +2328,7 @@ async function renderMyPicks() {
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <div class="font-label-caps text-[10px] tracking-widest text-tertiary-fixed uppercase mb-1">Mark Your Super Lock</div>
-          <div class="font-display-lg text-2xl text-on-surface uppercase">🔒 Week ${week}</div>
+          <div class="font-display-lg text-2xl text-on-surface uppercase">Week ${week}</div>
         </div>
         <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase">Grade Manually</div>
       </div>
@@ -2228,7 +2382,7 @@ async function markSuperLock(result) {
     });
     const j = await r.json();
     if (!r.ok) { state.myPicksSaveMsg = "MARK ERROR · " + (j.error || "unknown"); }
-    else { state.myPicksSaveMsg = `SUPER 🔒 MARKED ${result}`; }
+    else { state.myPicksSaveMsg = `SUPER LOCK MARKED ${result}`; }
   } catch (e) { state.myPicksSaveMsg = "NETWORK ERROR"; }
   render();
 }
@@ -2241,7 +2395,7 @@ async function submitMyPicks() {
     if (text) picks.push({ bet_type: inp.dataset.bet, pick_text: text });
   });
   if (!picks.length) return;
-  // Same fallback as renderMyPicks — otherwise mid-season saves with no week
+  // Same fallback as renderMyPicks - otherwise mid-season saves with no week
   // navigation would silently post to week 1 (already locked).
   const cur = currentNflWeekClient();
   const week = state.myPicksWeek || cur.week || 1;
@@ -2257,7 +2411,7 @@ async function submitMyPicks() {
     if (!r.ok) {
       state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
         : j.error === "game-started" ? "GAME STARTED · PICK LOCKED"
-        : j.error === "super-lock-price" ? "SUPER 🔒 MUST BE -120 OR HARDER"
+        : j.error === "super-lock-price" ? "SUPER LOCK MUST BE -120 OR HARDER"
         : "ERROR · " + j.error;
     } else {
       state.myPicksSaveMsg = `SAVED · ${j.count} PICKS`;
@@ -2278,7 +2432,7 @@ function startScoresPoll() {
   }, 60000);
 }
 
-// Update the "Kickoff In" numbers in place — no full re-render.
+// Update the "Kickoff In" numbers in place - no full re-render.
 let countdownTimer = null;
 function startCountdownTick() {
   clearInterval(countdownTimer);
@@ -2326,12 +2480,17 @@ async function render() {
   } else if (state.view === "rules") {
     root.innerHTML = renderRules();
   } else if (state.view === "thisweek") {
-    root.innerHTML = `<div class="py-20 text-center font-data-tabular text-on-surface-variant tracking-widest uppercase text-sm">Loading live lines…</div>`;
+    root.innerHTML = skeletonThisWeek();
     await Promise.all([loadOdds(), loadScores()]);
     root.innerHTML = renderThisWeek();
     document.querySelectorAll(".pick-btn[data-bet]").forEach(b => {
       b.addEventListener("click", () => clickPickButton(b));
     });
+    document.querySelectorAll(".book-toggle").forEach(t => {
+      t.addEventListener("click", () => switchBook(t.dataset.gameKey, t.dataset.book));
+    });
+    const signinBtn = document.getElementById("mycard-signin");
+    if (signinBtn) signinBtn.addEventListener("click", openLogin);
     const refreshBtn = document.getElementById("odds-refresh");
     if (refreshBtn) refreshBtn.onclick = async () => {
       refreshBtn.disabled = true;
@@ -2342,8 +2501,9 @@ async function render() {
     startScoresPoll();
     const cur = currentNflWeekClient();
     const week = state.myPicksWeek || cur.week || 1;
-    const myPicks = await loadMyPicks(2026, week);
-    markPickedButtons(myPicks);
+    currentMyPicks = await loadMyPicks(2026, week);
+    markPickedButtons(currentMyPicks);
+    refreshMyCard();
     fillWhosIn();
     document.querySelectorAll(".jump-mypicks").forEach(b => {
       b.addEventListener("click", () => { state.view = "mypicks"; render(); });
@@ -2391,7 +2551,7 @@ function attachStandingsHandlers() {
     if (!text && !result) return false;
     tt.innerHTML = `
       <div class="tt-meta">${bet} · WEEK ${String(wk).padStart(2,"0")}</div>
-      <div class="tt-pick">${escapeHtml(text || "—")}</div>
+      <div class="tt-pick">${escapeHtml(text || "-")}</div>
       ${result ? `<span class="tt-result ${result}">${ {W:"WIN",L:"LOSS",P:"PUSH"}[result] }</span>` : ""}
     `;
     return true;
@@ -2465,7 +2625,7 @@ document.getElementById("acct-logout").onclick = () => {
 };
 document.getElementById("acct-next").addEventListener("keydown", e => { if (e.key === "Enter") changePassphrase(); });
 
-// Boot — session check and data load in parallel
+// Boot - session check and data load in parallel
 (async () => {
   const [me, r] = await Promise.all([fetchMe(), fetch(DATA_URL)]);
   state.user = me;
