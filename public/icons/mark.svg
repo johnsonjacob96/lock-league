@@ -1,29 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-    <defs>
-      <linearGradient id="bodyShade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
-        <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
-        <stop offset="1" stop-color="#000000" stop-opacity="0.22"/>
-      </linearGradient>
-    </defs>
-    
-  <g transform="translate(256 262) scale(1) translate(-256 -262)">
-    <!-- shackle -->
-    <path d="M182 250 V196 a74 74 0 0 1 148 0 V250"
-          fill="none" stroke="#22e37f" stroke-width="34" stroke-linecap="round"/>
-    <path d="M182 250 V196 a74 74 0 0 1 148 0 V250"
-          fill="none" stroke="#0f9d55" stroke-width="34" stroke-linecap="round"
-          opacity="0.0"/>
-    <!-- body -->
-    <rect x="150" y="242" width="212" height="178" rx="30" fill="#22e37f"/>
-    <rect x="150" y="242" width="212" height="178" rx="30" fill="url(#bodyShade)"/>
-    <!-- football keyhole (cut-out) -->
-    <path d="M256 300 C 286 314, 286 360, 256 374 C 226 360, 226 314, 256 300 Z" fill="#0c0e0f"/>
-    <!-- laces -->
-    <line x1="256" y1="310" x2="256" y2="364" stroke="#22e37f" stroke-width="5" stroke-linecap="round"/>
-    <line x1="244" y1="320" x2="268" y2="320" stroke="#22e37f" stroke-width="5" stroke-linecap="round"/>
-    <line x1="244" y1="332" x2="268" y2="332" stroke="#22e37f" stroke-width="5" stroke-linecap="round"/>
-    <line x1="244" y1="344" x2="268" y2="344" stroke="#22e37f" stroke-width="5" stroke-linecap="round"/>
-    <line x1="244" y1="356" x2="268" y2="356" stroke="#22e37f" stroke-width="5" stroke-linecap="round"/>
-  </g>
-  </svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" aria-label="Lock League">
+  <path d="M13 18 v-4 a7 7 0 0 1 14 0 v4" fill="none" stroke="#46e08a" stroke-width="3.4" stroke-linecap="round"/>
+  <rect x="9" y="17.5" width="22" height="16.5" rx="3.4" fill="#46e08a"/>
+  <circle cx="20" cy="24" r="2.4" fill="#0e1011"/>
+  <path d="M20 24 L22.1 30.6 H17.9 Z" fill="#0e1011"/>
+</svg>
