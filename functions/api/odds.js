@@ -217,19 +217,24 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
     const key = `${away}@${home}`;
     let g = games.get(key);
     if (!g) { g = { id: row.event_id ?? key, kickoff: null, home, away, books: {} }; games.set(key, g); }
-    if (!g.kickoff) g.kickoff = row.start_time ?? row.commence_time ?? row.kickoff ?? null;
-    const b = g.books[book] || (g.books[book] = { spread: null, total: null, updated: row.updated_at ?? null });
+    if (!g.kickoff) g.kickoff = row.event_start_time ?? row.start_time ?? row.commence_time ?? row.kickoff ?? null;
+    const b = g.books[book] || (g.books[book] = { spread: null, total: null, updated: row.timestamp ?? row.updated_at ?? null });
     const pt = sharpPoint(row);
     if (pt == null) continue;
     const price = Number.isFinite(Number(row.odds_american)) ? Number(row.odds_american) : null;
+    const stype = String(row.selection_type ?? "").toLowerCase();
     const sel = String(row.selection ?? "").toLowerCase();
     if (isTotal) {
       b.total = b.total || { point: pt, overPrice: null, underPrice: null };
       b.total.point = pt;
-      if (sel.startsWith("over") || /\bover\b/.test(sel)) b.total.overPrice = price;
-      else if (sel.startsWith("under") || /\bunder\b/.test(sel)) b.total.underPrice = price;
+      if (stype === "over" || sel.startsWith("over") || /\bover\b/.test(sel)) b.total.overPrice = price;
+      else if (stype === "under" || sel.startsWith("under") || /\bunder\b/.test(sel)) b.total.underPrice = price;
     } else {
-      const team = canonicalNflTeam(String(row.selection ?? "").replace(/\s*[-+]?\d+(?:\.\d+)?\s*$/, "").trim());
+      // team_side (home/away) maps straight to the already-canonical names;
+      // fall back to parsing the selection string if it's ever missing.
+      const side = String(row.team_side ?? stype).toLowerCase();
+      const team = side === "home" ? home : side === "away" ? away
+        : canonicalNflTeam(String(row.selection ?? "").replace(/\s*[-+]?\d+(?:\.\d+)?\s*$/, "").trim());
       const rk = `${key}|${book}`;
       const arr = spreadRows.get(rk) || spreadRows.set(rk, []).get(rk);
       arr.push({ team, point: pt, price });
@@ -259,18 +264,39 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
   return out;
 }
 
-async function fetchSharpRaw(env) {
-  const url = new URL("https://api.sharpapi.io/api/v1/odds");
-  url.searchParams.set("league", "nfl");
-  url.searchParams.set("sportsbook", "fanduel,draftkings");
-  url.searchParams.set("market", "spread,total");
-  const r = await fetch(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } });
-  if (!r.ok) throw new Error(`sharpapi ${r.status}: ${(await r.text()).slice(0, 200)}`);
-  const j = await r.json();
-  return Array.isArray(j) ? j : (j.data ?? j.odds ?? j.results ?? j.events ?? []);
+// SharpAPI is cursor-paginated (~50 rows/page); a full FD+DK spread+total week
+// is ~3 pages. Follow pagination.has_more, capped so a runaway can't loop.
+export async function fetchSharpRaw(env, maxPages = 8) { // exported for tests
+  const base = "https://api.sharpapi.io/api/v1/odds";
+  const q = { league: "nfl", sportsbook: "fanduel,draftkings", market: "spread,total", limit: "500" };
+  const all = [];
+  let cursor = null;
+  for (let page = 0; page < maxPages; page++) {
+    const url = new URL(base);
+    for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const r = await fetch(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } });
+    if (!r.ok) throw new Error(`sharpapi ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const j = await r.json();
+    const rows = Array.isArray(j) ? j : (j.data ?? j.odds ?? j.results ?? j.events ?? []);
+    all.push(...rows);
+    const pg = j && j.pagination;
+    if (!pg || !pg.has_more || !pg.next_cursor) break;
+    cursor = pg.next_cursor;
+  }
+  return all;
 }
 async function fetchSharpApi(env) {
-  const games = normalizeSharp(await fetchSharpRaw(env));
+  const all = normalizeSharp(await fetchSharpRaw(env));
+  // SharpAPI returns the whole season; scope to the current pick week's
+  // kickoff window, exactly like the The-Odds-API path.
+  const win = weekWindow(currentSeasonWeek().week);
+  const from = Date.parse(win.from), to = Date.parse(win.to);
+  const scoped = all.filter(g => {
+    const t = Date.parse(g.kickoff);
+    return Number.isFinite(t) && t >= from && t < to;
+  });
+  const games = scoped.length ? scoped : all; // never blank the board on a window miss
   if (!games.length) throw new Error("sharpapi: no games parsed");
   return { source: "sharpapi", live: true, fetched_at: new Date().toISOString(), games };
 }
