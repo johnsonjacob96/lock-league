@@ -57,6 +57,13 @@ async function createSchema(env) {
     status        TEXT DEFAULT 'scheduled',
     UNIQUE(season, week, away, home)
   )`;
+  // Last-good odds cache: one row (id=1) that /api/odds falls back to when
+  // The Odds API is down or out of credits, so the board never blanks.
+  await s`CREATE TABLE IF NOT EXISTS odds_snapshot (
+    id            INT PRIMARY KEY,
+    payload       JSONB NOT NULL,
+    fetched_at    TIMESTAMPTZ DEFAULT NOW()
+  )`;
   await s`CREATE INDEX IF NOT EXISTS picks_season_week ON picks(season, week)`;
   await s`CREATE INDEX IF NOT EXISTS picks_member ON picks(member_id)`;
   await s`CREATE INDEX IF NOT EXISTS games_season_week ON games(season, week)`;

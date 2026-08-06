@@ -1884,7 +1884,7 @@ function renderThisWeek() {
             <p class="text-on-surface font-headline-lg text-lg uppercase mb-1">${isErr ? "Lines unavailable" : "No games yet"}</p>
             <p class="text-on-surface-variant text-sm">${isErr ? escapeHtml(data.error || "Try again shortly.") : "The board fills in once the week's lines post."}</p>
           </div>`
-          : `<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${games.map(renderGameCard).join("")}</div>`}
+          : `<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${games.map(g => renderGameCard(g)).join("")}</div>`}
       </div>
     </div>
   `;
@@ -1960,16 +1960,24 @@ function renderFeaturedMatchup(g) {
   `;
 }
 
+// Wire a single game card's pick buttons + book toggle. Called on first mount
+// and again whenever a card is re-rendered in place (e.g. after a book switch).
+function bindGameCard(card) {
+  if (!card) return;
+  card.querySelectorAll(".pick-btn[data-bet]").forEach(b => b.addEventListener("click", () => clickPickButton(b)));
+  card.querySelectorAll(".book-toggle").forEach(t => t.addEventListener("click", () => switchBook(t.dataset.gameKey, t.dataset.book)));
+}
+
 function switchBook(gameKey, book) {
   const games = (state.thisWeekData && state.thisWeekData.games) || [];
   const g = games.find(x => `${x.away}@${x.home}` === gameKey);
   if (!g) return;
-  const wrap = document.querySelector(`.book-btns[data-game-key="${CSS.escape(gameKey)}"]`);
-  if (!wrap) return;
-  wrap.innerHTML = renderBookButtons(book, g.books?.[book] || {}, g);
-  wrap.querySelectorAll(".pick-btn[data-bet]").forEach(b => b.addEventListener("click", () => clickPickButton(b)));
-  const card = wrap.closest(".game-card");
-  if (card) card.querySelectorAll(".book-toggle").forEach(t => t.classList.toggle("on", t.dataset.book === book));
+  const card = document.querySelector(`.game-card[data-game-key="${CSS.escape(gameKey)}"]`);
+  if (!card) return;
+  // Re-render the whole card for the chosen book so the team-row spreads and
+  // the O/U total swap in lockstep with the pick buttons, then rebind it.
+  card.outerHTML = renderGameCard(g, book);
+  bindGameCard(document.querySelector(`.game-card[data-game-key="${CSS.escape(gameKey)}"]`));
   markPickedButtons(currentMyPicks);
 }
 
@@ -1980,12 +1988,15 @@ function refreshMyCard() {
   if (prog) prog.textContent = myCardProgress();
 }
 
-function renderGameCard(g) {
+function renderGameCard(g, requestedBook) {
   const gameKey = `${g.away}@${g.home}`;
   const fd = g.books?.fanduel;
   const dk = g.books?.draftkings;
   const primaryBook = fd ? "fanduel" : (dk ? "draftkings" : null);
-  const book = primaryBook ? g.books[primaryBook] : {};
+  // The active book drives the whole card (team spreads, O/U, and the pick
+  // buttons) so toggling FD/DK updates every number at once.
+  const activeBook = (requestedBook && g.books?.[requestedBook]) ? requestedBook : primaryBook;
+  const book = activeBook ? g.books[activeBook] : {};
   const s = book.spread;
   const t = book.total;
   const favTeam = s?.fav;
@@ -2011,8 +2022,8 @@ function renderGameCard(g) {
 
   const bookToggle = (fd && dk) ? `
     <div class="seg">
-      <button class="book-toggle on" data-book="fanduel" data-game-key="${escapeHtml(gameKey)}">FD</button>
-      <button class="book-toggle" data-book="draftkings" data-game-key="${escapeHtml(gameKey)}">DK</button>
+      <button class="book-toggle ${activeBook === "fanduel" ? "on" : ""}" data-book="fanduel" data-game-key="${escapeHtml(gameKey)}">FD</button>
+      <button class="book-toggle ${activeBook === "draftkings" ? "on" : ""}" data-book="draftkings" data-game-key="${escapeHtml(gameKey)}">DK</button>
     </div>`
     : `<span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">${primaryBook === "draftkings" ? "DraftKings" : "FanDuel"}</span>`;
 
@@ -2031,7 +2042,7 @@ function renderGameCard(g) {
         ${bookToggle}
       </div>
       <div class="grid grid-cols-4 gap-1.5 book-btns" data-game-key="${escapeHtml(gameKey)}">
-        ${renderBookButtons(primaryBook || "fanduel", book, g)}
+        ${renderBookButtons(activeBook || "fanduel", book, g)}
       </div>
     </div>
   `;
@@ -2473,12 +2484,7 @@ async function render() {
     root.innerHTML = skeletonThisWeek();
     await Promise.all([loadOdds(), loadScores()]);
     root.innerHTML = renderThisWeek();
-    document.querySelectorAll(".pick-btn[data-bet]").forEach(b => {
-      b.addEventListener("click", () => clickPickButton(b));
-    });
-    document.querySelectorAll(".book-toggle").forEach(t => {
-      t.addEventListener("click", () => switchBook(t.dataset.gameKey, t.dataset.book));
-    });
+    document.querySelectorAll(".game-card").forEach(bindGameCard);
     const signinBtn = document.getElementById("mycard-signin");
     if (signinBtn) signinBtn.addEventListener("click", openLogin);
     const refreshBtn = document.getElementById("odds-refresh");
