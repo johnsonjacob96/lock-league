@@ -629,8 +629,8 @@
     <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mb-6 uppercase">Lock League Members</div>
     <label>Member</label>
     <select id="login-name"></select>
-    <label>Passphrase</label>
-    <input id="login-pass" type="password" autocomplete="current-password" placeholder="Your passphrase">
+    <label>Password</label>
+    <input id="login-pass" type="password" autocomplete="current-password" placeholder="Your password">
     <div class="flex gap-3 mt-2">
       <button class="btn" id="login-submit">Sign In</button>
       <button class="btn ghost" id="login-cancel">Cancel</button>
@@ -639,15 +639,15 @@
   </div>
 </div>
 
-<!-- Account modal (passphrase change + sign out) -->
+<!-- Account modal (password change + sign out) -->
 <div class="modal-backdrop" id="account-modal">
   <div class="modal">
     <h3 class="font-display-lg text-2xl text-primary-fixed mb-1 uppercase">Account</h3>
     <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mb-6 uppercase" id="account-name"></div>
-    <label>Current passphrase</label>
-    <input id="acct-current" type="password" autocomplete="current-password" placeholder="Current passphrase">
-    <label>New passphrase (min 8 characters)</label>
-    <input id="acct-next" type="password" autocomplete="new-password" placeholder="New passphrase">
+    <label>Current password</label>
+    <input id="acct-current" type="password" autocomplete="current-password" placeholder="Current password">
+    <label>New password (min 8 characters)</label>
+    <input id="acct-next" type="password" autocomplete="new-password" placeholder="New password">
     <div class="flex gap-3 mt-2">
       <button class="btn" id="acct-save">Update</button>
       <button class="btn ghost" id="acct-cancel">Close</button>
@@ -1616,7 +1616,7 @@ async function loginSubmit() {
       body: JSON.stringify({ name, passphrase: pass }),
     });
     const j = await r.json();
-    if (!r.ok) { err.textContent = j.error === "bad-passphrase" ? "Wrong passphrase." : "Login failed."; return; }
+    if (!r.ok) { err.textContent = j.error === "bad-passphrase" ? "Wrong password." : "Login failed."; return; }
     state.user = j.member;
     live2026Promise = null; // pick visibility depends on who's signed in
     document.getElementById("login-modal").classList.remove("show");
@@ -1652,7 +1652,7 @@ async function changePassphrase() {
   const err = document.getElementById("acct-err");
   err.textContent = "";
   if (!current || !next) { err.textContent = "Both fields are required."; return; }
-  if (next.length < 8) { err.textContent = "New passphrase must be at least 8 characters."; return; }
+  if (next.length < 8) { err.textContent = "New password must be at least 8 characters."; return; }
   try {
     const r = await fetch("/api/auth?action=change-pass", {
       method: "POST",
@@ -1662,13 +1662,13 @@ async function changePassphrase() {
     });
     const j = await r.json();
     if (!r.ok) {
-      err.textContent = j.error === "bad-passphrase" ? "Current passphrase is wrong."
-        : j.error === "too-short" ? "New passphrase must be at least 8 characters."
+      err.textContent = j.error === "bad-passphrase" ? "Current password is wrong."
+        : j.error === "too-short" ? "New password must be at least 8 characters."
         : "Update failed.";
       return;
     }
     document.getElementById("account-modal").classList.remove("show");
-    showToast("PASSPHRASE UPDATED");
+    showToast("PASSWORD UPDATED");
   } catch (e) { err.textContent = "Network error: " + e.message; }
 }
 
@@ -1702,7 +1702,7 @@ function renderUserArea() {
     elMobile.innerHTML = `
       <button id="account-btn-mobile" class="user-chip" style="color:${c}"><span class="dot" style="background:${c};box-shadow:0 0 8px ${c}99"></span>${escapeHtml(state.user.name)}</button>
     `;
-    // Opens the account modal (passphrase + sign out) - tapping your name
+    // Opens the account modal (password + sign out) - tapping your name
     // should never instantly log you out.
     elMobile.querySelector("#account-btn-mobile").onclick = openAccount;
   } else {
