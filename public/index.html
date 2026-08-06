@@ -106,6 +106,26 @@
   }
   .live-pulse { animation: pulse-red 2.4s infinite; }
 
+  /* Live lines: pulsing dot + a brief flash when a number moves */
+  .live-dot { width:7px; height:7px; border-radius:9999px; background:#46e08a; display:inline-block; box-shadow:0 0 0 0 rgba(70,224,138,.6); animation: pulse-green 2.2s infinite; }
+  .idle-dot { width:7px; height:7px; border-radius:9999px; background:#46504f; display:inline-block; }
+  @keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(70,224,138,0.55); }
+    70% { box-shadow: 0 0 0 6px rgba(70,224,138,0); }
+    100% { box-shadow: 0 0 0 0 rgba(70,224,138,0); }
+  }
+  @keyframes lineFlash {
+    0% { background: rgba(70,224,138,0.30); }
+    100% { background: transparent; }
+  }
+  .line-flash { animation: lineFlash 1.8s ease-out; border-radius: 4px; }
+  .move-caret { font-size: 8px; margin-left: 3px; vertical-align: middle; color: #46e08a; animation: caretFade 3s ease-out forwards; }
+  .move-caret.down { color: #f5a24a; }
+  @keyframes caretFade { 0%,70% { opacity: 1; } 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot, .line-flash, .move-caret { animation: none; }
+  }
+
   /* Skeleton loader (taste: skeletal loaders matching layout, not spinners) */
   @keyframes shimmer { 100% { transform: translateX(100%); } }
   .skeleton { position: relative; overflow: hidden; background: #16191b; border: 1px solid #212725; border-radius: 0.625rem; }
@@ -1710,15 +1730,17 @@ function scoreFor(g) {
   return (state.liveScores || []).find(e => sameTeamName(e.away, g.away) && sameTeamName(e.home, g.home)) || null;
 }
 
-const ODDS_CLIENT_TTL_MS = 5 * 60 * 1000;
+const ODDS_CLIENT_TTL_MS = 40 * 1000; // re-fetch on view revisit after this
+const ODDS_POLL_MS = 60 * 1000;       // live line refresh while the board is open
 async function loadOdds(force = false) {
-  // Serve from memory for 5 minutes; never cache a failure - the next visit
-  // to the view retries instead of showing a stale error until reload.
+  // Serve from memory briefly; never cache a failure - the next visit to the
+  // view retries instead of showing a stale error until reload. A forced load
+  // (manual refresh) asks the server to bypass every cache and hit upstream.
   const fresh = state.thisWeekData && state.thisWeekData.source !== "error" &&
     Date.now() - (state.thisWeekFetchedAt || 0) < ODDS_CLIENT_TTL_MS;
   if (fresh && !force) return state.thisWeekData;
   try {
-    const r = await fetch("/api/odds", { credentials: "include" });
+    const r = await fetch("/api/odds" + (force ? "?fresh=1" : ""), { credentials: "include" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     state.thisWeekData = await r.json();
     state.thisWeekFetchedAt = Date.now();
@@ -1873,9 +1895,8 @@ function renderThisWeek() {
       <div class="lg:col-span-8 lg:order-1">
         <div class="flex items-center justify-between border-b border-outline-variant pb-2.5 mb-4">
           <h3 class="font-headline-lg text-lg uppercase leading-none">The Board</h3>
-          <div class="flex items-center gap-3 font-data-tabular text-[10px] text-on-surface-variant uppercase tracking-widest">
-            <span>${data.fetched_at ? "Updated " + new Date(data.fetched_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : escapeHtml(String(data.source || ""))}</span>
-            <button id="odds-refresh" class="flex items-center gap-1 text-primary-fixed hover:text-primary-fixed-dim transition-colors" title="Refresh lines"><span class="material-symbols-outlined text-sm">refresh</span></button>
+          <div id="board-status" class="flex items-center gap-2 font-data-tabular text-[10px] text-on-surface-variant uppercase tracking-widest">
+            ${boardStatusInner(data)}
           </div>
         </div>
         ${games.length === 0 ? `
@@ -1988,11 +2009,17 @@ function refreshMyCard() {
   if (prog) prog.textContent = myCardProgress();
 }
 
+function bookLabel(k) {
+  return ({ fanduel: "FanDuel", draftkings: "DraftKings", espn: "ESPN" })[k] || (k ? String(k).toUpperCase() : "");
+}
+
 function renderGameCard(g, requestedBook) {
   const gameKey = `${g.away}@${g.home}`;
   const fd = g.books?.fanduel;
   const dk = g.books?.draftkings;
-  const primaryBook = fd ? "fanduel" : (dk ? "draftkings" : null);
+  // Prefer FD, then DK, then any other book present (e.g. ESPN consensus when
+  // The Odds API is unavailable) so the board never renders empty.
+  const primaryBook = fd ? "fanduel" : (dk ? "draftkings" : (Object.keys(g.books || {})[0] || null));
   // The active book drives the whole card (team spreads, O/U, and the pick
   // buttons) so toggling FD/DK updates every number at once.
   const activeBook = (requestedBook && g.books?.[requestedBook]) ? requestedBook : primaryBook;
@@ -2016,7 +2043,7 @@ function renderGameCard(g, requestedBook) {
           <div class="font-headline-lg text-[15px] leading-none text-on-surface uppercase">${teamShort(name)}</div>
           <div class="text-[10px] text-on-surface-variant truncate leading-tight mt-0.5">${escapeHtml(name)}</div>
         </div>
-        ${s ? `<span class="font-data-tabular text-[13px] ml-auto pl-2 ${isFav ? "text-on-surface" : "text-on-surface-variant"}">${spreadTxt}</span>` : ""}
+        ${s ? `<span data-role="spread" data-val="${spreadTxt}" class="font-data-tabular text-[13px] ml-auto pl-2 ${isFav ? "text-on-surface" : "text-on-surface-variant"}">${spreadTxt}</span>` : ""}
       </div>`;
   };
 
@@ -2025,13 +2052,13 @@ function renderGameCard(g, requestedBook) {
       <button class="book-toggle ${activeBook === "fanduel" ? "on" : ""}" data-book="fanduel" data-game-key="${escapeHtml(gameKey)}">FD</button>
       <button class="book-toggle ${activeBook === "draftkings" ? "on" : ""}" data-book="draftkings" data-game-key="${escapeHtml(gameKey)}">DK</button>
     </div>`
-    : `<span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">${primaryBook === "draftkings" ? "DraftKings" : "FanDuel"}</span>`;
+    : `<span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">${bookLabel(activeBook)}</span>`;
 
   return `
-    <div class="glass-card card-hover game-card p-4" data-game-key="${escapeHtml(gameKey)}">
+    <div class="glass-card card-hover game-card p-4" data-game-key="${escapeHtml(gameKey)}" data-book="${escapeHtml(activeBook || "")}">
       <div class="flex items-center justify-between gap-2 mb-3">
         ${gameStatusPill(g)}
-        ${t ? `<span class="font-data-tabular text-[10px] text-on-surface-variant uppercase shrink-0">O/U ${t.point}</span>` : ""}
+        ${t ? `<span data-role="ou" data-val="${t.point}" class="font-data-tabular text-[10px] text-on-surface-variant uppercase shrink-0">O/U ${t.point}</span>` : ""}
       </div>
       <div class="space-y-2 mb-3.5">
         ${teamRow(g.away)}
@@ -2448,6 +2475,126 @@ function startCountdownTick() {
   }, 30000);
 }
 
+// Poll live lines while the board is open. Only cards whose *shown* book moved
+// get re-rendered, with a brief flash + direction caret on the number that
+// changed, so early-week and Sunday pickers always see the current line.
+let oddsTimer = null;
+function startOddsPoll() {
+  clearInterval(oddsTimer);
+  oddsTimer = setInterval(async () => {
+    if (state.view !== "thisweek") { clearInterval(oddsTimer); oddsTimer = null; return; }
+    const prev = state.thisWeekData;
+    let next;
+    try {
+      const r = await fetch("/api/odds", { credentials: "include" });
+      if (!r.ok) return;
+      next = await r.json();
+    } catch { return; }
+    if (state.view !== "thisweek" || !next || next.source === "error") return;
+    applyLiveOdds(prev, next);
+  }, ODDS_POLL_MS);
+}
+
+const gameKeyOf = g => `${g.away}@${g.home}`;
+function shownBookFor(gameKey, g) {
+  const card = document.querySelector(`.game-card[data-game-key="${CSS.escape(gameKey)}"]`);
+  const active = card?.dataset.book;
+  if (active && g.books?.[active]) return active;
+  return g.books?.fanduel ? "fanduel" : (g.books?.draftkings ? "draftkings" : (Object.keys(g.books || {})[0] || null));
+}
+
+function applyLiveOdds(prev, next) {
+  state.thisWeekData = next;
+  state.thisWeekFetchedAt = Date.now();
+  updateBoardStatus(next);
+
+  const oldByKey = new Map((prev?.games || []).map(g => [gameKeyOf(g), g]));
+  const newGames = next.games || [];
+  // If the slate itself changed (games added/removed), rebuild the board section.
+  const sameSlate = newGames.length === oldByKey.size && newGames.every(g => oldByKey.has(gameKeyOf(g)));
+  if (!sameSlate) { render(); return; }
+
+  let touched = false;
+  for (const g of newGames) {
+    const key = gameKeyOf(g);
+    const prevG = oldByKey.get(key);
+    const bk = shownBookFor(key, g);
+    if (!bk) continue;
+    const nb = g.books?.[bk], pb = prevG?.books?.[bk];
+    if (!nb || !pb) continue;
+
+    const spreadMoved = nb.spread && pb.spread && nb.spread.line !== pb.spread.line;
+    const totalMoved = nb.total && pb.total && nb.total.point !== pb.total.point;
+    const priceMoved =
+      (nb.spread && pb.spread && (nb.spread.favPrice !== pb.spread.favPrice || nb.spread.dogPrice !== pb.spread.dogPrice)) ||
+      (nb.total && pb.total && (nb.total.overPrice !== pb.total.overPrice || nb.total.underPrice !== pb.total.underPrice));
+    if (!spreadMoved && !totalMoved && !priceMoved) continue;
+
+    const card = document.querySelector(`.game-card[data-game-key="${CSS.escape(key)}"]`);
+    // Don't yank a card out from under someone actively using it; catch it next cycle.
+    if (!card || card.matches(":hover") || card.contains(document.activeElement)) continue;
+
+    const spreadDir = spreadMoved ? Math.sign(Math.abs(nb.spread.line) - Math.abs(pb.spread.line)) : 0;
+    const totalDir = totalMoved ? Math.sign(nb.total.point - pb.total.point) : 0;
+
+    card.outerHTML = renderGameCard(g, bk);
+    const fresh = document.querySelector(`.game-card[data-game-key="${CSS.escape(key)}"]`);
+    bindGameCard(fresh);
+    flashMoves(fresh, { spreadMoved, spreadDir, totalMoved, totalDir, priceMoved });
+    touched = true;
+  }
+  if (touched) markPickedButtons(currentMyPicks);
+}
+
+function flashMoves(card, { spreadMoved, spreadDir, totalMoved, totalDir, priceMoved }) {
+  if (!card) return;
+  const caret = dir => (dir > 0 ? '<span class="move-caret up">▲</span>' : dir < 0 ? '<span class="move-caret down">▼</span>' : "");
+  if (spreadMoved) card.querySelectorAll('[data-role="spread"]').forEach(el => {
+    el.classList.add("line-flash");
+    el.insertAdjacentHTML("beforeend", caret(spreadDir));
+  });
+  if (totalMoved) card.querySelectorAll('[data-role="ou"]').forEach(el => {
+    el.classList.add("line-flash");
+    el.insertAdjacentHTML("beforeend", caret(totalDir));
+  });
+  if (priceMoved && !spreadMoved && !totalMoved) {
+    card.querySelectorAll(".pick-btn[data-bet]").forEach(el => el.classList.add("line-flash"));
+  }
+}
+
+// Refresh just the board's status line (source + updated time + live dot).
+function updateBoardStatus(data) {
+  const el = document.getElementById("board-status");
+  if (!el) return;
+  el.innerHTML = boardStatusInner(data);
+  bindOddsRefresh();
+}
+function bindOddsRefresh() {
+  const btn = document.getElementById("odds-refresh");
+  if (!btn) return;
+  btn.onclick = async () => {
+    btn.disabled = true;
+    await loadOdds(true);
+    render();
+  };
+}
+function boardStatusInner(data) {
+  const live = data && data.live && !data.stale;
+  const src = data?.source === "the-odds-api" ? "FanDuel + DraftKings"
+    : data?.source === "espn" ? "ESPN consensus"
+    : data?.stale ? "Last known lines"
+    : data?.source === "mock" ? "Sample lines" : "";
+  const when = data?.fetched_at ? new Date(data.fetched_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : (data?.snapshot_at ? new Date(data.snapshot_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
+  const dot = live
+    ? `<span class="live-dot" title="Lines updating live"></span>`
+    : `<span class="idle-dot" title="Not live"></span>`;
+  return `
+    ${dot}
+    <span>${escapeHtml(src)}${when ? " · " + escapeHtml(when) : ""}</span>
+    <button id="odds-refresh" class="flex items-center gap-1 text-primary-fixed hover:text-primary-fixed-dim transition-colors" title="Refresh lines"><span class="material-symbols-outlined text-sm">refresh</span></button>`;
+}
+
 async function render() {
   syncNavActive();
   const root = document.getElementById("root");
@@ -2487,14 +2634,10 @@ async function render() {
     document.querySelectorAll(".game-card").forEach(bindGameCard);
     const signinBtn = document.getElementById("mycard-signin");
     if (signinBtn) signinBtn.addEventListener("click", openLogin);
-    const refreshBtn = document.getElementById("odds-refresh");
-    if (refreshBtn) refreshBtn.onclick = async () => {
-      refreshBtn.disabled = true;
-      await loadOdds(true);
-      render();
-    };
+    bindOddsRefresh();
     startCountdownTick();
     startScoresPoll();
+    startOddsPoll();
     const cur = currentNflWeekClient();
     const week = state.myPicksWeek || cur.week || 1;
     currentMyPicks = await loadMyPicks(2026, week);
