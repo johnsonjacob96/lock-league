@@ -61,6 +61,28 @@ export async function onRequest({ request, env }) {
     return json({ ok: true, id: rows[0].id, result });
   }
 
+  // Remove a single pick (unpick from the board). Allowed until the weekly
+  // cutoff, same as adding — a started-game pick can't reach here because its
+  // board button renders locked (no data-bet to click).
+  if (request.method === "POST" && action === "remove") {
+    const memberId = await verifyCookie(env, request.headers.get("cookie"));
+    if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
+    const body = await request.json().catch(() => ({}));
+    const { season, week, bet_type } = body;
+    if (!season || !week || !BET_TYPES.includes(bet_type)) {
+      return json({ error: "bad-body", expected: "{season, week, bet_type}" }, { status: 400 });
+    }
+    const cutoff = pickCutoff(season, week);
+    if (Date.now() > cutoff.getTime()) {
+      return json({ error: "locked", cutoff: cutoff.toISOString() }, { status: 423 });
+    }
+    const rows = await sql(env)`
+      DELETE FROM picks
+      WHERE member_id = ${memberId} AND season = ${season} AND week = ${week} AND bet_type = ${bet_type}
+      RETURNING id`;
+    return json({ ok: true, removed: rows.length });
+  }
+
   if (request.method === "GET") {
     const season = Number(url.searchParams.get("season"));
     const week = url.searchParams.get("week") ? Number(url.searchParams.get("week")) : null;

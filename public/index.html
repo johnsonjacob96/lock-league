@@ -513,6 +513,10 @@
   .slot .slot-name { font-family:'Inter',sans-serif; font-weight:700; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#9aa4a2; }
   .slot .slot-val { font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#e6e8e8; }
   .slot .slot-empty { font-family:'JetBrains Mono',monospace; font-size:11px; color:#616a69; letter-spacing:0.04em; }
+  .slot .slot-move { display:flex; align-items:center; gap:4px; margin-top:3px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.02em; line-height:1.2; }
+  .slot .slot-move .mv-caret { font-size:9px; }
+  .slot .slot-move.better { color:#46e08a; }
+  .slot .slot-move.worse { color:#f5a24a; }
   .k-fav{background:#46e08a} .k-dog{background:#38bdf8} .k-over{background:#f5a24a} .k-under{background:#22d3cf} .k-super{background:#f4cf5a}
 
   /* Segmented book toggle */
@@ -1806,18 +1810,64 @@ function skeletonThisWeek() {
     </div>`;
 }
 
+// Format a spread/total number the way the picker sees it for their side.
+function fmtLineForSide(side, line) {
+  const n = Number(line);
+  if (!Number.isFinite(n)) return "";
+  if (side === "dog") return `+${Math.abs(n)}`; // dog gets points
+  return `${n}`;                                // fav line (neg) or total
+}
+
+// The current live line for a locked pick, from this week's odds (same book if
+// still offered, else the board's primary book).
+function currentLineFor(pick) {
+  const games = state.thisWeekData?.games || [];
+  const g = games.find(x => `${x.away}@${x.home}` === pick.game_key);
+  if (!g) return null;
+  const book = g.books?.[pick.book] || g.books?.fanduel || g.books?.draftkings || Object.values(g.books || {})[0];
+  if (!book) return null;
+  if (pick.side === "fav" || pick.side === "dog") return book.spread?.line ?? null;
+  if (pick.side === "over" || pick.side === "under") return book.total?.point ?? null;
+  return null;
+}
+
+// Compare a locked pick's line to the current line. "better" = the locked line
+// is more favorable to the picker than what's on the board now.
+function lineMove(pick) {
+  if (!pick || pick.line == null || !pick.side) return null;
+  const cur = currentLineFor(pick);
+  const locked = Number(pick.line);
+  if (cur == null || !Number.isFinite(locked) || Number(cur) === locked) return null;
+  const c = Number(cur);
+  let better;
+  switch (pick.side) {
+    case "fav":   better = Math.abs(locked) < Math.abs(c); break; // fewer points to give
+    case "dog":   better = Math.abs(locked) > Math.abs(c); break; // more points to get
+    case "over":  better = locked < c; break;                     // lower bar to clear
+    case "under": better = locked > c; break;                     // higher bar to hold
+    default: return null;
+  }
+  return { better, lockedFmt: fmtLineForSide(pick.side, locked), curFmt: fmtLineForSide(pick.side, c) };
+}
+
 function renderMyCardBody() {
   return BET_TYPES_ORDER.map(bt => {
     const meta = BET_META[bt];
     const p = currentMyPicks[bt];
     const txt = p && (p.pick_text || p.text) ? escapeHtml(p.pick_text || p.text) : "";
     const filled = !!txt;
+    const mv = filled ? lineMove(p) : null;
+    const moveHtml = mv ? `
+      <div class="slot-move ${mv.better ? "better" : "worse"}" title="${mv.better ? "Your locked line beats the current line" : "The line has moved against your pick"}">
+        <span class="mv-caret">${mv.better ? "▲" : "▼"}</span>
+        <span>${mv.better ? "You beat the line" : "Line moved"} · locked ${mv.lockedFmt}, now ${mv.curFmt}</span>
+      </div>` : "";
     return `<div class="slot ${filled ? "filled" : ""}">
       <span class="slot-key k-${meta.key}"></span>
       <div class="min-w-0 flex-1">
         <div class="slot-name" style="${filled ? `color:${meta.color}` : ""}">${bt}</div>
         ${filled
-          ? `<div class="slot-val truncate">${txt}</div>`
+          ? `<div class="slot-val truncate">${txt}</div>${moveHtml}`
           : `<div class="slot-empty">${bt === "Super Lock" ? "Set in My Picks" : "Tap a line below"}</div>`}
       </div>
       ${filled ? `<span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};font-variation-settings:'FILL' 1">check_circle</span>` : ""}
@@ -2229,6 +2279,9 @@ async function clickPickButton(btn) {
   const season = 2026;
   const week = state.myPicksWeek || cur.week || 1;
 
+  // Clicking the pick you already have selected removes it from your card.
+  if (btn.classList.contains("picked")) return unpick(btn, bet_type, season, week);
+
   btn.classList.add("saving");
   try {
     const r = await fetch("/api/picks", {
@@ -2248,6 +2301,31 @@ async function clickPickButton(btn) {
       currentMyPicks[bet_type] = { pick_text, game_key, side, book, line, price };
       refreshMyCard();
       showToast(`LOCKED ${BET_META[bet_type].short}: ${pick_text}`);
+    }
+  } catch (e) {
+    showToast("NETWORK ERROR", "err");
+  } finally {
+    btn.classList.remove("saving");
+  }
+}
+
+async function unpick(btn, bet_type, season, week) {
+  btn.classList.add("saving");
+  try {
+    const r = await fetch("/api/picks?action=remove", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season, week, bet_type }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showToast(j.error === "locked" ? "PICKS LOCKED FOR THIS WEEK" : "ERROR: " + (j.error || "unknown"), "err");
+    } else {
+      btn.classList.remove("picked");
+      delete currentMyPicks[bet_type];
+      refreshMyCard();
+      showToast(`REMOVED ${BET_META[bet_type].short}`, "warn");
     }
   } catch (e) {
     showToast("NETWORK ERROR", "err");
@@ -2543,7 +2621,10 @@ function applyLiveOdds(prev, next) {
     flashMoves(fresh, { spreadMoved, spreadDir, totalMoved, totalDir, priceMoved });
     touched = true;
   }
-  if (touched) markPickedButtons(currentMyPicks);
+  if (touched) {
+    markPickedButtons(currentMyPicks);
+    refreshMyCard(); // keep My Card's line-moved indicators current
+  }
 }
 
 function flashMoves(card, { spreadMoved, spreadDir, totalMoved, totalDir, priceMoved }) {
