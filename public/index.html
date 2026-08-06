@@ -2661,7 +2661,7 @@ function bindOddsRefresh() {
 }
 function boardStatusInner(data) {
   const live = data && data.live && !data.stale;
-  const src = data?.source === "the-odds-api" ? "FanDuel + DraftKings"
+  const src = (data?.source === "the-odds-api" || data?.source === "sharpapi") ? "FanDuel + DraftKings"
     : data?.source === "espn" ? "ESPN consensus"
     : data?.stale ? "Last known lines"
     : data?.source === "mock" ? "Sample lines" : "";

@@ -147,6 +147,145 @@ async function fetchEspn(env) {
   return { source: "espn", live: true, fetched_at: new Date().toISOString(), games };
 }
 
+// ── Source: SharpAPI (free tier = FanDuel + DraftKings, 60s pregame) ─────────
+// SharpAPI returns a flat, one-row-per-selection schema; the exact field that
+// holds the spread/total number is not documented (it appears inside the
+// `selection` string, e.g. "Over 44.5"), so parsing is deliberately defensive
+// and team names are canonicalized to match the ESPN / Odds-API convention.
+// Hit /api/odds?debug=sharp (with SHARPAPI_KEY set) to inspect a raw sample.
+const NFL_TEAMS = [
+  ["ARI", "Arizona Cardinals"], ["ATL", "Atlanta Falcons"], ["BAL", "Baltimore Ravens"],
+  ["BUF", "Buffalo Bills"], ["CAR", "Carolina Panthers"], ["CHI", "Chicago Bears"],
+  ["CIN", "Cincinnati Bengals"], ["CLE", "Cleveland Browns"], ["DAL", "Dallas Cowboys"],
+  ["DEN", "Denver Broncos"], ["DET", "Detroit Lions"], ["GB", "Green Bay Packers"],
+  ["HOU", "Houston Texans"], ["IND", "Indianapolis Colts"], ["JAX", "Jacksonville Jaguars"],
+  ["KC", "Kansas City Chiefs"], ["LV", "Las Vegas Raiders"], ["LAC", "Los Angeles Chargers"],
+  ["LAR", "Los Angeles Rams"], ["MIA", "Miami Dolphins"], ["MIN", "Minnesota Vikings"],
+  ["NE", "New England Patriots"], ["NO", "New Orleans Saints"], ["NYG", "New York Giants"],
+  ["NYJ", "New York Jets"], ["PHI", "Philadelphia Eagles"], ["PIT", "Pittsburgh Steelers"],
+  ["SF", "San Francisco 49ers"], ["SEA", "Seattle Seahawks"], ["TB", "Tampa Bay Buccaneers"],
+  ["TEN", "Tennessee Titans"], ["WAS", "Washington Commanders"],
+];
+const _normName = (s) => String(s || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+function canonicalNflTeam(input) {
+  const n = _normName(input);
+  if (!n) return null;
+  // Exact match first (abbr / full / nickname) so short abbreviations can't be
+  // swallowed by a loose substring hit (e.g. "PHI" ⊂ "miamidolphins").
+  for (const [abbr, full] of NFL_TEAMS) {
+    if (n === _normName(abbr) || n === _normName(full) || n === _normName(full.split(" ").pop())) return full;
+  }
+  // Loose containment only for longer strings, to avoid 2-3 char collisions.
+  if (n.length >= 5) {
+    for (const [, full] of NFL_TEAMS) {
+      const fn = _normName(full), nick = _normName(full.split(" ").pop());
+      if (fn.includes(n) || n.includes(fn) || n.includes(nick)) return full;
+    }
+  }
+  return String(input); // unknown -> pass through unchanged
+}
+// Extract the line/point from whatever field or string carries it.
+function sharpPoint(row) {
+  for (const k of ["point", "line", "handicap", "value", "spread", "total", "number", "points"]) {
+    if (row[k] != null && Number.isFinite(Number(row[k]))) return Number(row[k]);
+  }
+  const m = String(row.selection ?? "").match(/(-?\d+(?:\.\d+)?)\s*$/);
+  if (m) return Number(m[1]);
+  const mi = String(row.id ?? "").match(/(-?\d+(?:\.\d+)?)\s*$/);
+  return mi ? Number(mi[1]) : null;
+}
+const sharpBookKey = (sb) => {
+  const s = String(sb || "").toLowerCase();
+  if (s.includes("fanduel") || s === "fd") return "fanduel";
+  if (s.includes("draftking") || s === "dk") return "draftkings";
+  return null;
+};
+
+export function normalizeSharp(rows) { // exported for tests; CF ignores non-handler exports
+  const games = new Map();
+  const spreadRows = new Map(); // `${key}|${book}` -> [{team, point, price}]
+  for (const row of rows || []) {
+    const mt = String(row.market_type ?? row.market ?? "").toLowerCase();
+    const isSpread = mt.includes("spread") || mt.includes("handicap");
+    const isTotal = mt.includes("total") || mt.includes("over") || mt.includes("under");
+    if (!isSpread && !isTotal) continue;
+    const book = sharpBookKey(row.sportsbook);
+    if (!book) continue;
+    const home = canonicalNflTeam(row.home_team ?? row.home);
+    const away = canonicalNflTeam(row.away_team ?? row.away);
+    if (!home || !away) continue;
+    const key = `${away}@${home}`;
+    let g = games.get(key);
+    if (!g) { g = { id: row.event_id ?? key, kickoff: null, home, away, books: {} }; games.set(key, g); }
+    if (!g.kickoff) g.kickoff = row.start_time ?? row.commence_time ?? row.kickoff ?? null;
+    const b = g.books[book] || (g.books[book] = { spread: null, total: null, updated: row.updated_at ?? null });
+    const pt = sharpPoint(row);
+    if (pt == null) continue;
+    const price = Number.isFinite(Number(row.odds_american)) ? Number(row.odds_american) : null;
+    const sel = String(row.selection ?? "").toLowerCase();
+    if (isTotal) {
+      b.total = b.total || { point: pt, overPrice: null, underPrice: null };
+      b.total.point = pt;
+      if (sel.startsWith("over") || /\bover\b/.test(sel)) b.total.overPrice = price;
+      else if (sel.startsWith("under") || /\bunder\b/.test(sel)) b.total.underPrice = price;
+    } else {
+      const team = canonicalNflTeam(String(row.selection ?? "").replace(/\s*[-+]?\d+(?:\.\d+)?\s*$/, "").trim());
+      const rk = `${key}|${book}`;
+      const arr = spreadRows.get(rk) || spreadRows.set(rk, []).get(rk);
+      arr.push({ team, point: pt, price });
+    }
+  }
+  // Resolve each book's spread from its two collected sides (fav = negative point).
+  for (const [rk, arr] of spreadRows) {
+    const [key, book] = rk.split("|");
+    const g = games.get(key);
+    if (!g || !g.books[book]) continue;
+    const favRow = arr.find(r => r.point < 0) || arr.slice().sort((a, c) => a.point - c.point)[0];
+    if (!favRow) continue;
+    const dogRow = arr.find(r => r !== favRow);
+    g.books[book].spread = {
+      fav: favRow.team, line: -Math.abs(favRow.point),
+      favPrice: favRow.price, dogPrice: dogRow ? dogRow.price : null,
+    };
+  }
+  const out = [];
+  for (const g of games.values()) {
+    for (const bk of Object.keys(g.books)) {
+      const b = g.books[bk];
+      if (!b.spread && !b.total) delete g.books[bk];
+    }
+    if (Object.keys(g.books).length) out.push(g);
+  }
+  return out;
+}
+
+async function fetchSharpRaw(env) {
+  const url = new URL("https://api.sharpapi.io/api/v1/odds");
+  url.searchParams.set("league", "nfl");
+  url.searchParams.set("sportsbook", "fanduel,draftkings");
+  url.searchParams.set("market", "spread,total");
+  const r = await fetch(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } });
+  if (!r.ok) throw new Error(`sharpapi ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const j = await r.json();
+  return Array.isArray(j) ? j : (j.data ?? j.odds ?? j.results ?? j.events ?? []);
+}
+async function fetchSharpApi(env) {
+  const games = normalizeSharp(await fetchSharpRaw(env));
+  if (!games.length) throw new Error("sharpapi: no games parsed");
+  return { source: "sharpapi", live: true, fetched_at: new Date().toISOString(), games };
+}
+
+// Which provider drives the primary FD/DK feed. Explicit flag; default keeps
+// the existing The-Odds-API behavior so adding a key changes nothing on its own.
+function primaryProvider(env) {
+  const p = (env.ODDS_PROVIDER || "theoddsapi").toLowerCase();
+  if (p === "sharpapi") return env.SHARPAPI_KEY ? "sharpapi" : null;
+  return (env.ODDS_API_KEY && env.ODDS_LIVE === "1") ? "theoddsapi" : null;
+}
+async function fetchPrimary(env, provider) {
+  return provider === "sharpapi" ? fetchSharpApi(env) : fetchOddsApi(env);
+}
+
 // ── Source 3: Neon last-good snapshot (FD/DK only) ──────────────────────────
 let snapshotReady = false;
 async function saveSnapshot(env, payload) {
@@ -210,9 +349,20 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const force = url.searchParams.get("fresh") === "1";
   const wantMock = url.searchParams.get("mock") === "1";
-  const oddsApiEnabled = !!env.ODDS_API_KEY && env.ODDS_LIVE === "1";
+  const primary = primaryProvider(env);
   const ttlS = ttlSeconds(env);
   const ttlMs = ttlS * 1000;
+
+  // Debug: inspect a raw SharpAPI sample to finalize the field mapping.
+  if (url.searchParams.get("debug") === "sharp") {
+    if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    try {
+      const raw = await fetchSharpRaw(env);
+      return json({ count: raw.length, sample: raw.slice(0, 8), parsedGames: normalizeSharp(raw).slice(0, 2) }, { headers: { "Cache-Control": "no-store" } });
+    } catch (e) {
+      return json({ error: String(e && e.message || e) }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    }
+  }
 
   // L1 — warm-isolate memory.
   if (!force && cache.data && Date.now() - cache.ts < ttlMs) return json(cache.data, hdr("HIT-MEM"));
@@ -236,14 +386,15 @@ export async function onRequestGet(context) {
     } catch { /* fall through */ }
   }
 
-  // Source 1 — The Odds API (FD/DK). Snapshotted so it can be served stale later.
-  if (oddsApiEnabled) {
+  // Source 1 — primary FD/DK feed (The Odds API or SharpAPI, per ODDS_PROVIDER).
+  // Snapshotted so it can be served stale later.
+  if (primary) {
     try {
-      const payload = await fetchOddsApi(env);
+      const payload = await fetchPrimary(env, primary);
       cache = { ts: Date.now(), data: payload };
       waitUntil(putEdge(edge, payload, ttlS));
       waitUntil(saveSnapshot(env, payload));
-      return json(payload, hdr("MISS", { "X-Odds-Remaining": payload.remaining || "" }));
+      return json(payload, hdr("MISS-" + primary.toUpperCase(), payload.remaining ? { "X-Odds-Remaining": payload.remaining } : {}));
     } catch { /* fall through to ESPN */ }
   }
 
@@ -252,7 +403,7 @@ export async function onRequestGet(context) {
     const payload = await fetchEspn(env);
     cache = { ts: Date.now(), data: payload };
     waitUntil(putEdge(edge, payload, ttlS));
-    return json(payload, hdr(oddsApiEnabled ? "MISS-ESPN-FALLBACK" : "MISS-ESPN"));
+    return json(payload, hdr(primary ? "MISS-ESPN-FALLBACK" : "MISS-ESPN"));
   } catch { /* fall through */ }
 
   // Source 3 — last-good snapshot, then mock (no-key path), then error.
@@ -261,7 +412,7 @@ export async function onRequestGet(context) {
     cache = { ts: Date.now(), data: snap };
     return json(snap, hdr("STALE"));
   }
-  if (!oddsApiEnabled) {
+  if (!primary) {
     const payload = mockPayload();
     return json(payload, hdr("MISS-MOCK"));
   }
