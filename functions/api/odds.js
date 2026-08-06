@@ -201,10 +201,49 @@ const sharpBookKey = (sb) => {
   return null;
 };
 
+// SharpAPI mixes the main line with alternate lines (e.g. -3.5 main, -7 alt),
+// and its is_main_line flag is only reliably set on one side. So we bucket by
+// line magnitude and pick the MAIN line: prefer a magnitude that has any
+// main-flagged row, breaking ties by whichever prices sit closest to -110
+// (the standard main-line juice; alternates carry skewed prices).
+const _juiceDist = (...prices) => prices.reduce((s, p) => s + (p == null ? 200 : Math.abs(p + 110)), 0);
+function resolveSpread(rows, g) {
+  if (!rows.length) return null;
+  const byMag = new Map();
+  for (const r of rows) {
+    const mag = Math.abs(r.point);
+    const e = byMag.get(mag) || byMag.set(mag, { mag, fav: null, dog: null, main: false }).get(mag);
+    if (r.point < 0) e.fav = r; else if (r.point > 0) e.dog = r; else { e.fav = e.fav || r; e.dog = e.dog || r; }
+    if (r.isMain) e.main = true;
+  }
+  const cands = [...byMag.values()];
+  const pool = cands.some(c => c.main) ? cands.filter(c => c.main) : cands;
+  pool.sort((a, c) => _juiceDist(a.fav?.price, a.dog?.price) - _juiceDist(c.fav?.price, c.dog?.price));
+  const pick = pool[0];
+  let favTeam = pick.fav?.team || (pick.dog?.team ? (pick.dog.team === g.home ? g.away : g.home) : null);
+  if (!favTeam) return null;
+  return { fav: favTeam, line: -Math.abs(pick.mag), favPrice: pick.fav?.price ?? null, dogPrice: pick.dog?.price ?? null };
+}
+function resolveTotal(rows) {
+  if (!rows.length) return null;
+  const byPoint = new Map();
+  for (const r of rows) {
+    const e = byPoint.get(r.point) || byPoint.set(r.point, { point: r.point, over: null, under: null, main: false }).get(r.point);
+    if (r.ou === "over") e.over = r; else if (r.ou === "under") e.under = r;
+    if (r.isMain) e.main = true;
+  }
+  const cands = [...byPoint.values()];
+  const pool = cands.some(c => c.main) ? cands.filter(c => c.main) : cands;
+  pool.sort((a, c) => _juiceDist(a.over?.price, a.under?.price) - _juiceDist(c.over?.price, c.under?.price));
+  const pick = pool[0];
+  return { point: pick.point, overPrice: pick.over?.price ?? null, underPrice: pick.under?.price ?? null };
+}
+
 export function normalizeSharp(rows) { // exported for tests; CF ignores non-handler exports
+  // First pass: bucket every spread/total selection (main + alternate) per game+book.
   const games = new Map();
-  const spreadRows = new Map(); // `${key}|${book}` -> [{team, point, price}]
   for (const row of rows || []) {
+    if (row.is_player_prop === true) continue;
     const mt = String(row.market_type ?? row.market ?? "").toLowerCase();
     const isSpread = mt.includes("spread") || mt.includes("handicap");
     const isTotal = mt.includes("total") || mt.includes("over") || mt.includes("under");
@@ -218,48 +257,33 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
     let g = games.get(key);
     if (!g) { g = { id: row.event_id ?? key, kickoff: null, home, away, books: {} }; games.set(key, g); }
     if (!g.kickoff) g.kickoff = row.event_start_time ?? row.start_time ?? row.commence_time ?? row.kickoff ?? null;
-    const b = g.books[book] || (g.books[book] = { spread: null, total: null, updated: row.timestamp ?? row.updated_at ?? null });
+    const b = g.books[book] || (g.books[book] = { _spread: [], _total: [] });
     const pt = sharpPoint(row);
     if (pt == null) continue;
     const price = Number.isFinite(Number(row.odds_american)) ? Number(row.odds_american) : null;
+    const isMain = row.is_main_line === true;
     const stype = String(row.selection_type ?? "").toLowerCase();
     const sel = String(row.selection ?? "").toLowerCase();
     if (isTotal) {
-      b.total = b.total || { point: pt, overPrice: null, underPrice: null };
-      b.total.point = pt;
-      if (stype === "over" || sel.startsWith("over") || /\bover\b/.test(sel)) b.total.overPrice = price;
-      else if (stype === "under" || sel.startsWith("under") || /\bunder\b/.test(sel)) b.total.underPrice = price;
+      const ou = stype === "over" || (!stype && sel.includes("over")) ? "over" : "under";
+      b._total.push({ point: pt, ou, price, isMain });
     } else {
-      // team_side (home/away) maps straight to the already-canonical names;
-      // fall back to parsing the selection string if it's ever missing.
       const side = String(row.team_side ?? stype).toLowerCase();
       const team = side === "home" ? home : side === "away" ? away
         : canonicalNflTeam(String(row.selection ?? "").replace(/\s*[-+]?\d+(?:\.\d+)?\s*$/, "").trim());
-      const rk = `${key}|${book}`;
-      const arr = spreadRows.get(rk) || spreadRows.set(rk, []).get(rk);
-      arr.push({ team, point: pt, price });
+      b._spread.push({ point: pt, team, price, isMain });
     }
   }
-  // Resolve each book's spread from its two collected sides (fav = negative point).
-  for (const [rk, arr] of spreadRows) {
-    const [key, book] = rk.split("|");
-    const g = games.get(key);
-    if (!g || !g.books[book]) continue;
-    const favRow = arr.find(r => r.point < 0) || arr.slice().sort((a, c) => a.point - c.point)[0];
-    if (!favRow) continue;
-    const dogRow = arr.find(r => r !== favRow);
-    g.books[book].spread = {
-      fav: favRow.team, line: -Math.abs(favRow.point),
-      favPrice: favRow.price, dogPrice: dogRow ? dogRow.price : null,
-    };
-  }
+  // Second pass: resolve each book's main spread + total, drop empties.
   const out = [];
   for (const g of games.values()) {
-    for (const bk of Object.keys(g.books)) {
-      const b = g.books[bk];
-      if (!b.spread && !b.total) delete g.books[bk];
+    const books = {};
+    for (const [bk, b] of Object.entries(g.books)) {
+      const spread = resolveSpread(b._spread, g);
+      const total = resolveTotal(b._total);
+      if (spread || total) books[bk] = { spread, total, updated: null };
     }
-    if (Object.keys(g.books).length) out.push(g);
+    if (Object.keys(books).length) { g.books = books; out.push(g); }
   }
   return out;
 }
