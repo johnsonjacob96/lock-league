@@ -138,6 +138,31 @@ export async function gradeCurrentWeeks(env, now = new Date()) {
   return { ran: weeks.length, results, notified, pushed };
 }
 
+// Opportunistic grading: called best-effort (and throttled) from read paths so
+// picks grade within ~a minute of a game finishing, instead of waiting for the
+// sparse cron. Safe to call often — grading only touches ungraded picks, and the
+// winner push is guarded to once per week. Returns quickly when there's nothing
+// to do so it can run inside waitUntil() without slowing responses.
+let lastOpportunisticGrade = 0;
+export async function maybeGrade(env, now = Date.now()) {
+  if (now - lastOpportunisticGrade < 60000) return { skipped: "throttled" };
+  lastOpportunisticGrade = now;
+  const cur = currentNflWeek(new Date(now), env);
+  if (!cur.week) return { skipped: "no-week" };
+  try {
+    // Only fetch scores + grade if some game-linked pick this week is still open.
+    const pending = await sql(env)`
+      SELECT 1 FROM picks
+      WHERE season = ${cur.season} AND week = ${cur.week}
+        AND result IS NULL AND game_key IS NOT NULL
+      LIMIT 1`;
+    if (!pending.length) return { skipped: "nothing-ungraded" };
+    return await gradeCurrentWeeks(env, new Date(now));
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 // A week is "complete" once the season has moved past it (the Tuesday grade run
 // after MNF), so the winner push fires once, not mid-week.
 function isWeekComplete(season, week, now) {

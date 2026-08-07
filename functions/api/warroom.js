@@ -4,7 +4,7 @@
 // the weekly lock (noon CT Sunday), same as everywhere else.
 import { verifyCookie, json } from "../_shared/auth.js";
 import { currentNflWeek, pickCutoff, seasonTypeFor } from "../_shared/nfl.js";
-import { fetchScoreboard, resolveSpreadResult, gradeTotal, sameTeam } from "../_shared/grader.js";
+import { fetchScoreboard, resolveSpreadResult, gradeTotal, sameTeam, maybeGrade } from "../_shared/grader.js";
 import { sql } from "../_shared/db.js";
 
 const TTL_MS = 40 * 1000;
@@ -31,9 +31,11 @@ function livePickStatus(p, ev) {
   return { status: result ? map[result] : "pending", state: st, final: st === "post", detail: ev.detail };
 }
 
-export async function onRequest({ request, env }) {
+export async function onRequest({ request, env, waitUntil }) {
   const memberId = await verifyCookie(env, request.headers.get("cookie"));
   if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
+  // Grade newly-final games in the background as the War Room is polled.
+  if (waitUntil) waitUntil(maybeGrade(env).catch(() => {}));
 
   const cur = currentNflWeek(new Date(), env);
   if (!cur.week) return json({ season: cur.season, week: null, status: cur.status, revealed: false, members: [] });
