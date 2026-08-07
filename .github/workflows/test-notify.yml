@@ -1,0 +1,35 @@
+name: Test Notify (manual)
+
+# Manual trigger for the preseason end-to-end test (and any ad-hoc re-fire).
+# Keeps CRON_SECRET in GitHub so a scheduled agent can fire pushes via
+# `gh workflow run test-notify.yml` without ever seeing the secret.
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: "reminder | results"
+        default: "results"
+        required: true
+      reset:
+        description: "1 = clear the once-per-week guard before firing results"
+        default: "0"
+        required: false
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire /api/notify
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          TYPE: ${{ inputs.type }}
+          RESET: ${{ inputs.reset }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "SITE_URL and CRON_SECRET secrets must be set"; exit 1
+          fi
+          curl -fsS -X POST \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            "$SITE_URL/api/notify?type=${TYPE}&reset=${RESET}" | tee resp.json
+          echo
