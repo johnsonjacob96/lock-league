@@ -1,7 +1,7 @@
 // Shared grading logic for /api/grade (manual + GitHub Actions cron).
 // Mirrors lib/grader.js (kept in sync for Cloudflare Pages Functions runtime).
 import { sql } from "./db.js";
-import { weeksToGrade, currentNflWeek } from "./nfl.js";
+import { weeksToGrade, currentNflWeek, seasonTypeFor, testConfig } from "./nfl.js";
 import { pushPersonalized, alreadySent, markSent } from "./push-notify.js";
 
 const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
@@ -15,10 +15,10 @@ export function sameTeam(a, b) {
   return na === nb || na.includes(nb) || nb.includes(na);
 }
 
-export async function fetchScoreboard(season, week) {
+export async function fetchScoreboard(season, week, seasontype = 2) {
   const url = new URL(ESPN_SCOREBOARD);
   url.searchParams.set("year", String(season));
-  url.searchParams.set("seasontype", "2");
+  url.searchParams.set("seasontype", String(seasontype));
   url.searchParams.set("week", String(week));
   const r = await fetch(url);
   if (!r.ok) throw new Error(`espn ${r.status}`);
@@ -77,7 +77,7 @@ export function resolveSpreadResult(p, ev) {
 
 export async function gradeWeek(env, season, week) {
   const s = sql(env);
-  const events = await fetchScoreboard(season, week);
+  const events = await fetchScoreboard(season, week, seasonTypeFor(env));
   let updated = 0, graded = 0;
   for (const ev of events) {
     if (!ev.home || !ev.away) continue;
@@ -111,14 +111,15 @@ export async function gradeWeek(env, season, week) {
       graded++;
     }
   }
-  return { season, week, events: updated, graded };
+  const allFinal = events.length > 0 && events.every((e) => e.state === "post");
+  return { season, week, events: updated, graded, allFinal };
 }
 
 // Grade every week a scheduled run should cover (current + previous),
 // then push a summary to the group chat if webhooks are configured, plus a
 // per-member Web Push once each week is complete.
 export async function gradeCurrentWeeks(env, now = new Date()) {
-  const weeks = weeksToGrade(now);
+  const weeks = weeksToGrade(now, env);
   const results = [];
   for (const week of weeks) {
     results.push(await gradeWeek(env, 2026, week));
@@ -126,7 +127,10 @@ export async function gradeCurrentWeeks(env, now = new Date()) {
   const notified = await notifyGradeResults(results, env).catch(() => false);
   const pushed = [];
   for (const r of results) {
-    if (isWeekComplete(2026, r.week, now)) {
+    // Regular season: a week is done once the season has moved past it. Under
+    // preseason test mode there is no "next week", so gate on all games final.
+    const complete = testConfig(env) ? r.allFinal : isWeekComplete(2026, r.week, now);
+    if (complete) {
       const pr = await pushWeekResults(env, 2026, r.week).catch((e) => ({ error: e.message }));
       pushed.push({ week: r.week, ...pr });
     }

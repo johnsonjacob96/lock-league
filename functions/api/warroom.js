@@ -3,7 +3,7 @@
 // same grading math as the auto-grader. Login required; picks stay hidden until
 // the weekly lock (noon CT Sunday), same as everywhere else.
 import { verifyCookie, json } from "../_shared/auth.js";
-import { currentNflWeek, pickCutoff } from "../_shared/nfl.js";
+import { currentNflWeek, pickCutoff, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, resolveSpreadResult, gradeTotal, sameTeam } from "../_shared/grader.js";
 import { sql } from "../_shared/db.js";
 
@@ -35,10 +35,10 @@ export async function onRequest({ request, env }) {
   const memberId = await verifyCookie(env, request.headers.get("cookie"));
   if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
 
-  const cur = currentNflWeek();
+  const cur = currentNflWeek(new Date(), env);
   if (!cur.week) return json({ season: cur.season, week: null, status: cur.status, revealed: false, members: [] });
 
-  const cutoff = pickCutoff(cur.season, cur.week);
+  const cutoff = pickCutoff(cur.season, cur.week, env);
   const revealed = Date.now() >= cutoff.getTime();
   if (!revealed) {
     return json({ season: cur.season, week: cur.week, revealed: false, cutoff: cutoff.toISOString() });
@@ -55,7 +55,7 @@ export async function onRequest({ request, env }) {
       FROM picks p JOIN members m ON m.id = p.member_id
       WHERE p.season = ${cur.season} AND p.week = ${cur.week}
       ORDER BY m.name`,
-    fetchScoreboard(cur.season, cur.week).catch(() => []),
+    fetchScoreboard(cur.season, cur.week, seasonTypeFor(env)).catch(() => []),
   ]);
 
   const findEv = (gameKey) => {

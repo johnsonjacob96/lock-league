@@ -12,7 +12,7 @@
 // client polls on top of this while the board is open.
 import { json } from "../_shared/auth.js";
 import { sql } from "../_shared/db.js";
-import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS } from "../_shared/nfl.js";
+import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS, seasonTypeFor, testConfig } from "../_shared/nfl.js";
 
 const API_BASE = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds";
 const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
@@ -27,8 +27,8 @@ function ttlSeconds(env) {
 
 // The week being picked: current week in season, week 1 before kickoff, the
 // final week once the season ends.
-function currentSeasonWeek() {
-  const cur = currentNflWeek();
+function currentSeasonWeek(env) {
+  const cur = currentNflWeek(new Date(), env);
   const week = cur.status === "postseason" ? REGULAR_SEASON_WEEKS : (cur.week || 1);
   return { season: cur.season || 2026, week };
 }
@@ -75,7 +75,7 @@ async function fetchOddsApi(env) {
   apiUrl.searchParams.set("oddsFormat", "american");
   apiUrl.searchParams.set("bookmakers", "fanduel,draftkings");
   apiUrl.searchParams.set("dateFormat", "iso");
-  const win = weekWindow(currentSeasonWeek().week);
+  const win = weekWindow(currentSeasonWeek(env).week, env);
   apiUrl.searchParams.set("commenceTimeFrom", win.from);
   apiUrl.searchParams.set("commenceTimeTo", win.to);
 
@@ -96,10 +96,10 @@ async function fetchOddsApi(env) {
 const numOrNull = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
 async function fetchEspn(env) {
-  const { season, week } = currentSeasonWeek();
+  const { season, week } = currentSeasonWeek(env);
   const url = new URL(ESPN_SCOREBOARD);
   url.searchParams.set("year", String(season));
-  url.searchParams.set("seasontype", "2");
+  url.searchParams.set("seasontype", String(seasonTypeFor(env)));
   url.searchParams.set("week", String(week));
   const r = await fetch(url);
   if (!r.ok) throw new Error(`espn ${r.status}`);
@@ -140,6 +140,16 @@ async function fetchEspn(env) {
         ? { point: Number(o.overUnder), overPrice: numOrNull(o.overOdds), underPrice: numOrNull(o.underOdds) }
         : null;
       if (spread || total) books.espn = { spread, total, updated: null, provider: o.provider?.name || "ESPN" };
+    }
+    // Preseason test insurance: ESPN rarely carries a preseason line, so seed a
+    // nominal FD line (home a small favorite) to keep the board pickable if the
+    // real FD/DK feed had no coverage. Marked so it's obviously a test line.
+    if (testConfig(env) && !Object.keys(books).length) {
+      books.fanduel = {
+        spread: { fav: home, line: -2.5, favPrice: -110, dogPrice: -110 },
+        total: { point: 38.5, overPrice: -110, underPrice: -110 },
+        updated: null, provider: "Preseason test line",
+      };
     }
     games.push({ id: ev.id, kickoff: ev.date, home, away, books });
   }
@@ -314,13 +324,15 @@ async function fetchSharpApi(env) {
   const all = normalizeSharp(await fetchSharpRaw(env));
   // SharpAPI returns the whole season; scope to the current pick week's
   // kickoff window, exactly like the The-Odds-API path.
-  const win = weekWindow(currentSeasonWeek().week);
+  const win = weekWindow(currentSeasonWeek(env).week, env);
   const from = Date.parse(win.from), to = Date.parse(win.to);
   const scoped = all.filter(g => {
     const t = Date.parse(g.kickoff);
     return Number.isFinite(t) && t >= from && t < to;
   });
-  const games = scoped.length ? scoped : all; // never blank the board on a window miss
+  // Normally never blank the board on a window miss; under preseason test mode
+  // do NOT fall back to the full season, or regular-season games would leak in.
+  const games = scoped.length ? scoped : (testConfig(env) ? [] : all);
   if (!games.length) throw new Error("sharpapi: no games parsed");
   return { source: "sharpapi", live: true, fetched_at: new Date().toISOString(), games };
 }
@@ -441,10 +453,14 @@ export async function onRequestGet(context) {
   if (primary) {
     try {
       const payload = await fetchPrimary(env, primary);
-      cache = { ts: Date.now(), data: payload };
-      waitUntil(putEdge(edge, payload, ttlS));
-      waitUntil(saveSnapshot(env, payload));
-      return json(payload, hdr("MISS-" + primary.toUpperCase(), payload.remaining ? { "X-Odds-Remaining": payload.remaining } : {}));
+      // In preseason test mode, an empty FD/DK board means no preseason coverage
+      // yet — fall through to the ESPN nominal board instead of returning blank.
+      if (!(testConfig(env) && (!payload.games || !payload.games.length))) {
+        cache = { ts: Date.now(), data: payload };
+        waitUntil(putEdge(edge, payload, ttlS));
+        waitUntil(saveSnapshot(env, payload));
+        return json(payload, hdr("MISS-" + primary.toUpperCase(), payload.remaining ? { "X-Odds-Remaining": payload.remaining } : {}));
+      }
     } catch { /* fall through to ESPN */ }
   }
 

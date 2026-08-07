@@ -1,19 +1,19 @@
 // /api/picks  GET (read) / POST (submit) / POST ?action=mark-super-lock
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
-import { pickCutoff, BET_TYPES } from "../_shared/nfl.js";
+import { pickCutoff, BET_TYPES, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, sameTeam } from "../_shared/grader.js";
 
 // ESPN scoreboard, cached briefly per warm isolate — used to reject picks on
 // games that have already kicked off.
 const SB_TTL_MS = 60 * 1000;
-const sbCache = new Map(); // "season:week" -> { ts, events }
-async function scoreboardFor(season, week) {
-  const key = `${season}:${week}`;
+const sbCache = new Map(); // "season:week:seasontype" -> { ts, events }
+async function scoreboardFor(season, week, seasontype = 2) {
+  const key = `${season}:${week}:${seasontype}`;
   const hit = sbCache.get(key);
   if (hit && Date.now() - hit.ts < SB_TTL_MS) return hit.events;
   try {
-    const events = await fetchScoreboard(season, week);
+    const events = await fetchScoreboard(season, week, seasontype);
     sbCache.set(key, { ts: Date.now(), events });
     return events;
   } catch {
@@ -22,10 +22,10 @@ async function scoreboardFor(season, week) {
 }
 
 // Returns the offending pick if any submitted game has already started.
-async function findStartedGame(picks, season, week) {
+async function findStartedGame(picks, season, week, seasontype = 2) {
   const keyed = picks.filter(p => p.game_key);
   if (!keyed.length) return null;
-  const events = await scoreboardFor(season, week);
+  const events = await scoreboardFor(season, week, seasontype);
   const now = Date.now();
   for (const p of keyed) {
     const [away, home] = String(p.game_key).split("@");
@@ -72,7 +72,7 @@ export async function onRequest({ request, env }) {
     if (!season || !week || !BET_TYPES.includes(bet_type)) {
       return json({ error: "bad-body", expected: "{season, week, bet_type}" }, { status: 400 });
     }
-    const cutoff = pickCutoff(season, week);
+    const cutoff = pickCutoff(season, week, env);
     if (Date.now() > cutoff.getTime()) {
       return json({ error: "locked", cutoff: cutoff.toISOString() }, { status: 423 });
     }
@@ -103,7 +103,7 @@ export async function onRequest({ request, env }) {
     if (season >= 2026) {
       const viewer = await verifyCookie(env, request.headers.get("cookie"));
       const now = Date.now();
-      rows = rows.filter(p => p.member_id === viewer || now >= pickCutoff(season, p.week).getTime());
+      rows = rows.filter(p => p.member_id === viewer || now >= pickCutoff(season, p.week, env).getTime());
     }
     // Week view also reports who has submitted (count only, never contents),
     // so the group can see who still owes picks before the cutoff.
@@ -126,7 +126,7 @@ export async function onRequest({ request, env }) {
     const { season, week, picks } = body;
     if (!season || !week || !Array.isArray(picks)) return json({ error: "bad-body" }, { status: 400 });
 
-    const cutoff = pickCutoff(season, week);
+    const cutoff = pickCutoff(season, week, env);
     if (Date.now() > cutoff.getTime()) {
       return json({ error: "locked", cutoff: cutoff.toISOString() }, { status: 423 });
     }
@@ -141,7 +141,7 @@ export async function onRequest({ request, env }) {
     }
     // A game that has kicked off can no longer be picked (TNF after kickoff,
     // international games that start before the Sunday noon cutoff, ...).
-    const started = await findStartedGame(picks, season, week);
+    const started = await findStartedGame(picks, season, week, seasonTypeFor(env));
     if (started) {
       return json({ error: "game-started", ...started }, { status: 423 });
     }

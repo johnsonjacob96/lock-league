@@ -596,6 +596,10 @@
   .rc-note { font-family: 'Inter', sans-serif; font-size: 13px; color: #9aa4a2; margin-top: 6px; }
   .rc-share { margin-top: 13px; background: #1fd97b; color: #04220f; border: none; border-radius: 8px; padding: 9px 16px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: filter 0.12s; }
   .rc-share:hover { filter: brightness(1.06); }
+  /* Preseason test banner */
+  .preseason-banner { margin: 12px 16px 0; background: rgba(244, 207, 90, 0.1); border: 1px solid rgba(244, 207, 90, 0.32); color: #f4cf5a; border-radius: 10px; padding: 9px 13px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.03em; line-height: 1.4; display: flex; align-items: center; gap: 8px; }
+  .preseason-banner .pb-dot { width: 7px; height: 7px; border-radius: 50%; background: #f4cf5a; flex-shrink: 0; box-shadow: 0 0 0 0 rgba(244, 207, 90, 0.5); animation: pulse-amber 1.8s infinite; }
+  @keyframes pulse-amber { 0% { box-shadow: 0 0 0 0 rgba(244, 207, 90, 0.5); } 70% { box-shadow: 0 0 0 6px rgba(244, 207, 90, 0); } 100% { box-shadow: 0 0 0 0 rgba(244, 207, 90, 0); } }
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -711,6 +715,7 @@
   </div>
 </div>
 
+<div id="preseason-banner" class="preseason-banner md:ml-64" style="display:none"></div>
 <main id="root" class="md:ml-64 px-margin-mobile md:px-gutter pt-6 md:pt-stack-lg pb-32"></main>
 
 <!-- Mobile Bottom Nav -->
@@ -779,6 +784,7 @@ let state = {
   myPicksWeek: null,
   myPicksSaveMsg: "",
   warRoom: null,
+  serverConfig: null,
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
@@ -2521,6 +2527,10 @@ async function unpick(btn, bet_type, season, week) {
 
 // =================== My Picks ===================
 function currentNflWeekClient() {
+  // Prefer the server's answer (it knows about preseason test mode; the client's
+  // calendar math alone would say "offseason").
+  const sc = state.serverConfig;
+  if (sc && sc.week) return { season: sc.season, week: sc.week };
   // Week 1 starts Tue Sept 8 2026, 08:00 UTC - mirrors lib/nfl.js so client
   // and server agree on week boundaries (MNF stays in its own week).
   const week1Start = Date.UTC(2026, 8, 8, 8);
@@ -3002,8 +3012,21 @@ function renderWarRoom() {
   return head(actions) + renderRecapCard(wr) + `<div class="wr-grid">${rows}</div></div>`;
 }
 
+function updatePreseasonBanner() {
+  const el = document.getElementById("preseason-banner");
+  if (!el) return;
+  const sc = state.serverConfig;
+  if (sc && sc.preseasonTest) {
+    el.innerHTML = `<span class="pb-dot"></span> Preseason test mode — dry run on preseason Week ${sc.week}, not the real season. Lines may be nominal.`;
+    el.style.display = "";
+  } else {
+    el.style.display = "none";
+  }
+}
+
 async function render() {
   syncNavActive();
+  updatePreseasonBanner();
   const root = document.getElementById("root");
   // Live season data comes from the DB; load it before views that show it.
   if ((state.view === "standings" && state.season === "2026") || state.view === "lifetime") {
@@ -3183,8 +3206,13 @@ document.getElementById("notif-test").onclick = sendTestNotification;
 // Boot - session check and data load in parallel
 registerServiceWorker(); // fire-and-forget; needed for push subscriptions
 (async () => {
-  const [me, r] = await Promise.all([fetchMe(), fetch(DATA_URL)]);
+  const [me, r, cfg] = await Promise.all([
+    fetchMe(),
+    fetch(DATA_URL),
+    fetch("/api/config").then(x => x.ok ? x.json() : null).catch(() => null),
+  ]);
   state.user = me;
+  state.serverConfig = cfg;
   DATA = await r.json();
   // Once the live season has kicked off, land on it by default.
   if (seasonsVisible().includes("2026")) state.season = "2026";

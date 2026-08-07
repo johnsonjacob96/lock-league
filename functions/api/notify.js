@@ -4,7 +4,8 @@
 // Auth: X-Cron-Secret header must match env.CRON_SECRET.
 import { sql } from "../_shared/db.js";
 import { currentNflWeek, pickCutoff } from "../_shared/nfl.js";
-import { pushPersonalized } from "../_shared/push-notify.js";
+import { pushPersonalized, ensurePushTables } from "../_shared/push-notify.js";
+import { pushWeekResults } from "../_shared/grader.js";
 
 function json(body, init = {}) {
   return new Response(JSON.stringify(body), {
@@ -20,7 +21,7 @@ export async function onRequest({ request, env }) {
   }
   const url = new URL(request.url);
   const type = url.searchParams.get("type") || "reminder";
-  const cur = currentNflWeek();
+  const cur = currentNflWeek(new Date(), env);
   if (!cur.week) return json({ ok: true, note: cur.status });
 
   if (type === "reminder") {
@@ -32,7 +33,7 @@ export async function onRequest({ request, env }) {
     const behind = rows.filter((r) => r.picks < 5);
     if (!behind.length) return json({ ok: true, note: "everyone submitted" });
 
-    const cutoff = pickCutoff(cur.season, cur.week);
+    const cutoff = pickCutoff(cur.season, cur.week, env);
     const timeStr = cutoff.toLocaleTimeString("en-US", {
       hour: "numeric", minute: "2-digit", timeZone: "America/Chicago",
     });
@@ -50,6 +51,19 @@ export async function onRequest({ request, env }) {
     }
     const res = await pushPersonalized(env, byMemberId);
     return json({ ok: true, week: cur.week, reminded: behind.map((b) => b.name), ...res });
+  }
+
+  if (type === "results") {
+    // On-demand winner/results push. Grading fires this automatically once every
+    // game is final; this lets a test (or a re-run) trigger it directly.
+    // ?reset=1 clears the once-per-week guard so it can be re-fired.
+    if (url.searchParams.get("reset") === "1") {
+      await ensurePushTables(env);
+      await sql(env)`DELETE FROM week_notifications
+        WHERE season = ${cur.season} AND week = ${cur.week} AND kind = 'winner'`;
+    }
+    const res = await pushWeekResults(env, cur.season, cur.week);
+    return json({ ok: true, week: cur.week, ...res });
   }
 
   return json({ error: "unknown-type" }, { status: 400 });
