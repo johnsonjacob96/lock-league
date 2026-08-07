@@ -542,6 +542,19 @@
   }
   .submit-picks-cta:hover { filter: brightness(1.06); }
   .submit-picks-cta:active { transform: scale(0.97); }
+
+  /* Notifications toggle (account modal) */
+  .notif-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 18px; }
+  .notif-label { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #e6e8e8; }
+  .notif-status { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9aa4a2; margin-top: 3px; line-height: 1.35; max-width: 15rem; }
+  .notif-switch { position: relative; width: 46px; height: 26px; border-radius: 999px; background: #29302f; border: 1px solid #46504f; cursor: pointer; flex-shrink: 0; transition: background 0.15s, border-color 0.15s; padding: 0; }
+  .notif-switch .knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #9aa4a2; transition: transform 0.16s, background 0.16s; }
+  .notif-switch[aria-checked="true"] { background: rgba(70, 224, 138, 0.22); border-color: #46e08a; }
+  .notif-switch[aria-checked="true"] .knob { transform: translateX(20px); background: #46e08a; }
+  .notif-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+  .notif-test { display: none; margin-top: 2px; background: none; border: none; padding: 0; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #46e08a; }
+  .notif-test:hover { opacity: 0.8; }
+  .notif-test.show { display: inline-block; }
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -632,6 +645,14 @@
   <div class="modal">
     <h3 class="font-display-lg text-2xl text-primary-fixed mb-1 uppercase">Account</h3>
     <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mb-6 uppercase" id="account-name"></div>
+    <div class="notif-row">
+      <div>
+        <div class="notif-label">Notifications</div>
+        <div class="notif-status" id="notif-status">Checking...</div>
+      </div>
+      <button id="notif-toggle" class="notif-switch" role="switch" aria-checked="false" aria-label="Toggle notifications" disabled><span class="knob"></span></button>
+    </div>
+    <button id="notif-test" class="notif-test">Send test notification</button>
     <label>Current password</label>
     <input id="acct-current" type="password" autocomplete="current-password" placeholder="Current password">
     <label>New password (min 8 characters)</label>
@@ -1633,6 +1654,7 @@ function openAccount() {
   document.getElementById("acct-next").value = "";
   document.getElementById("acct-err").textContent = "";
   document.getElementById("account-modal").classList.add("show");
+  refreshNotifUI();
 }
 async function changePassphrase() {
   const current = document.getElementById("acct-current").value;
@@ -1658,6 +1680,131 @@ async function changePassphrase() {
     document.getElementById("account-modal").classList.remove("show");
     showToast("PASSWORD UPDATED");
   } catch (e) { err.textContent = "Network error: " + e.message; }
+}
+
+// ---- Web Push notifications ----
+const pushState = { supported: false, subscribed: false, vapidPublic: null, busy: false };
+
+function pushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return null;
+  try { return await navigator.serviceWorker.register("/sw.js"); } catch { return null; }
+}
+async function getSwRegistration() {
+  if (!("serviceWorker" in navigator)) return null;
+  return (await navigator.serviceWorker.getRegistration()) || registerServiceWorker();
+}
+async function loadPushConfig() {
+  try {
+    const r = await fetch("/api/push", { credentials: "include" });
+    if (!r.ok) return null;
+    return await r.json(); // { vapidPublic, subscribed }
+  } catch { return null; }
+}
+async function refreshNotifUI() {
+  const statusEl = document.getElementById("notif-status");
+  const toggle = document.getElementById("notif-toggle");
+  const testBtn = document.getElementById("notif-test");
+  if (!statusEl || !toggle || !testBtn) return;
+
+  pushState.supported = pushSupported();
+  if (!pushState.supported) {
+    statusEl.textContent = isStandalone()
+      ? "Not supported on this device."
+      : "Add to Home Screen first, then turn this on.";
+    toggle.disabled = true; toggle.setAttribute("aria-checked", "false");
+    testBtn.classList.remove("show");
+    return;
+  }
+  if (Notification.permission === "denied") {
+    statusEl.textContent = "Blocked in your browser settings. Allow this site to turn on.";
+    toggle.disabled = true; toggle.setAttribute("aria-checked", "false");
+    testBtn.classList.remove("show");
+    return;
+  }
+  const cfg = await loadPushConfig();
+  if (!cfg || !cfg.vapidPublic) {
+    statusEl.textContent = "Notifications are not available right now.";
+    toggle.disabled = true; toggle.setAttribute("aria-checked", "false");
+    testBtn.classList.remove("show");
+    return;
+  }
+  pushState.vapidPublic = cfg.vapidPublic;
+  const reg = await getSwRegistration();
+  const sub = reg ? await reg.pushManager.getSubscription() : null;
+  const on = !!sub && Notification.permission === "granted";
+  pushState.subscribed = on;
+  toggle.disabled = false;
+  toggle.setAttribute("aria-checked", on ? "true" : "false");
+  statusEl.textContent = on
+    ? "On. Reminders and weekly results."
+    : "Off. Get pick reminders and weekly results.";
+  testBtn.classList.toggle("show", on);
+}
+async function enablePush() {
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") return;
+  const reg = await getSwRegistration();
+  if (!reg) { showToast("COULD NOT REGISTER", "err"); return; }
+  await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(pushState.vapidPublic),
+  });
+  const keys = sub.toJSON().keys;
+  const r = await fetch("/api/push?action=subscribe", {
+    method: "POST", credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint, keys }),
+  });
+  showToast(r.ok ? "NOTIFICATIONS ON" : "COULD NOT SAVE", r.ok ? "ok" : "err");
+}
+async function disablePush() {
+  const reg = await getSwRegistration();
+  const sub = reg ? await reg.pushManager.getSubscription() : null;
+  if (sub) {
+    await fetch("/api/push?action=unsubscribe", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    }).catch(() => {});
+    await sub.unsubscribe().catch(() => {});
+  }
+  showToast("NOTIFICATIONS OFF");
+}
+async function toggleNotifications() {
+  if (pushState.busy) return;
+  const toggle = document.getElementById("notif-toggle");
+  pushState.busy = true; toggle.disabled = true;
+  try {
+    if (pushState.subscribed) await disablePush();
+    else await enablePush();
+  } catch (e) {
+    showToast("SOMETHING WENT WRONG", "err");
+  } finally {
+    pushState.busy = false;
+    await refreshNotifUI();
+  }
+}
+async function sendTestNotification() {
+  try {
+    const r = await fetch("/api/push?action=test", { method: "POST", credentials: "include" });
+    const j = await r.json().catch(() => ({}));
+    showToast(j.sent ? "TEST SENT" : "NO DEVICE FOUND", j.sent ? "ok" : "err");
+  } catch { showToast("TEST FAILED", "err"); }
 }
 
 function renderUserArea() {
@@ -2832,8 +2979,11 @@ document.getElementById("acct-logout").onclick = () => {
   logout();
 };
 document.getElementById("acct-next").addEventListener("keydown", e => { if (e.key === "Enter") changePassphrase(); });
+document.getElementById("notif-toggle").onclick = toggleNotifications;
+document.getElementById("notif-test").onclick = sendTestNotification;
 
 // Boot - session check and data load in parallel
+registerServiceWorker(); // fire-and-forget; needed for push subscriptions
 (async () => {
   const [me, r] = await Promise.all([fetchMe(), fetch(DATA_URL)]);
   state.user = me;
