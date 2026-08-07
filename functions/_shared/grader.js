@@ -1,7 +1,8 @@
 // Shared grading logic for /api/grade (manual + GitHub Actions cron).
 // Mirrors lib/grader.js (kept in sync for Cloudflare Pages Functions runtime).
 import { sql } from "./db.js";
-import { weeksToGrade } from "./nfl.js";
+import { weeksToGrade, currentNflWeek } from "./nfl.js";
+import { pushPersonalized, alreadySent, markSent } from "./push-notify.js";
 
 const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
 function normTeam(s) { return String(s || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
@@ -114,7 +115,8 @@ export async function gradeWeek(env, season, week) {
 }
 
 // Grade every week a scheduled run should cover (current + previous),
-// then push a summary to the group chat if webhooks are configured.
+// then push a summary to the group chat if webhooks are configured, plus a
+// per-member Web Push once each week is complete.
 export async function gradeCurrentWeeks(env, now = new Date()) {
   const weeks = weeksToGrade(now);
   const results = [];
@@ -122,7 +124,63 @@ export async function gradeCurrentWeeks(env, now = new Date()) {
     results.push(await gradeWeek(env, 2026, week));
   }
   const notified = await notifyGradeResults(results, env).catch(() => false);
-  return { ran: weeks.length, results, notified };
+  const pushed = [];
+  for (const r of results) {
+    if (isWeekComplete(2026, r.week, now)) {
+      const pr = await pushWeekResults(env, 2026, r.week).catch((e) => ({ error: e.message }));
+      pushed.push({ week: r.week, ...pr });
+    }
+  }
+  return { ran: weeks.length, results, notified, pushed };
+}
+
+// A week is "complete" once the season has moved past it (the Tuesday grade run
+// after MNF), so the winner push fires once, not mid-week.
+function isWeekComplete(season, week, now) {
+  const c = currentNflWeek(now);
+  if (c.status === "postseason") return true;
+  return c.week != null && week < c.week;
+}
+
+// Web Push: tell each member their week record, and crown the winner. Sent at
+// most once per week (guarded by week_notifications).
+export async function pushWeekResults(env, season, week) {
+  if (await alreadySent(env, season, week, "winner")) return { skipped: "already-sent" };
+  const rows = await sql(env)`
+    SELECT p.member_id, m.name, p.result
+    FROM picks p JOIN members m ON m.id = p.member_id
+    WHERE p.season = ${season} AND p.week = ${week}`;
+  if (!rows.length) return { skipped: "no-picks" };
+
+  const rec = {};
+  for (const r of rows) {
+    const e = rec[r.member_id] || (rec[r.member_id] = { name: r.name, W: 0, L: 0, P: 0 });
+    if (r.result === "W" || r.result === "L" || r.result === "P") e[r.result]++;
+  }
+  const ranked = Object.entries(rec).sort((a, b) => b[1].W - a[1].W || a[1].L - b[1].L);
+  if (!ranked.length) return { skipped: "no-graded" };
+  const [topId, top] = ranked[0];
+  const tie = ranked.filter(([, c]) => c.W === top.W && c.L === top.L).length > 1;
+  const winnerName = !tie && top.W > 0 ? top.name : null;
+  const fmt = (c) => `${c.W}-${c.L}${c.P ? "-" + c.P : ""}`;
+
+  const byMemberId = {};
+  for (const [id, c] of Object.entries(rec)) {
+    const isWinner = winnerName && Number(id) === Number(topId);
+    byMemberId[id] = {
+      title: isWinner ? `You won Week ${week}` : `Week ${week} is in the books`,
+      body: isWinner
+        ? `You took the week at ${fmt(c)}. Nice.`
+        : winnerName
+          ? `You went ${fmt(c)}. ${winnerName} won the week at ${fmt(top)}.`
+          : `You went ${fmt(c)}. The top of the board tied this week.`,
+      url: "/",
+      tag: `ll-week-${season}-${week}`,
+    };
+  }
+  const res = await pushPersonalized(env, byMemberId);
+  await markSent(env, season, week, "winner");
+  return { winner: winnerName, ...res };
 }
 
 // ---- Group-chat notifications (Discord webhook and/or GroupMe bot) ----

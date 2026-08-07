@@ -5,57 +5,12 @@
 //   POST ?action=test        -> sends a test push to this member's devices
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
-import { sendPush } from "../_shared/webpush.js";
-
-let ensured = false;
-async function ensureTable(env) {
-  if (ensured) return;
-  await sql(env)`CREATE TABLE IF NOT EXISTS push_subscriptions (
-    id          SERIAL PRIMARY KEY,
-    member_id   INT NOT NULL REFERENCES members(id),
-    endpoint    TEXT NOT NULL UNIQUE,
-    p256dh      TEXT NOT NULL,
-    auth        TEXT NOT NULL,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  ensured = true;
-}
-
-// Prune subscriptions the push service reports as gone (404/410).
-export async function pruneDead(env, endpoints) {
-  if (!endpoints.length) return;
-  await sql(env)`DELETE FROM push_subscriptions WHERE endpoint = ANY(${endpoints})`;
-}
-
-// Send a payload to every subscription for a set of member ids. Prunes dead ones.
-export async function pushToMembers(env, memberIds, payload) {
-  await ensureTable(env);
-  if (!memberIds?.length) return { sent: 0, failed: 0 };
-  const subs = await sql(env)`
-    SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE member_id = ANY(${memberIds})`;
-  return deliver(env, subs, payload);
-}
-
-async function deliver(env, subs, payload) {
-  const dead = [];
-  let sent = 0, failed = 0;
-  const results = await Promise.allSettled(subs.map((s) => sendPush(s, payload, env)));
-  results.forEach((r, i) => {
-    if (r.status === "fulfilled" && r.value.ok) sent++;
-    else {
-      failed++;
-      const code = r.status === "fulfilled" ? r.value.status : 0;
-      if (code === 404 || code === 410) dead.push(subs[i].endpoint);
-    }
-  });
-  await pruneDead(env, dead).catch(() => {});
-  return { sent, failed, pruned: dead.length };
-}
+import { ensurePushTables, pushToMembers } from "../_shared/push-notify.js";
 
 export async function onRequest({ request, env }) {
   const memberId = await verifyCookie(env, request.headers.get("cookie"));
   if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
-  await ensureTable(env);
+  await ensurePushTables(env);
   const url = new URL(request.url);
 
   if (request.method === "GET") {
@@ -93,7 +48,7 @@ export async function onRequest({ request, env }) {
     if (action === "test") {
       const res = await pushToMembers(env, [memberId], {
         title: "Lock League",
-        body: "Notifications are on. This is a test. 🔒",
+        body: "Notifications are on. This is a test.",
         url: "/",
         tag: "ll-test",
       });
