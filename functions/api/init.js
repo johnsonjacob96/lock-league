@@ -64,6 +64,15 @@ async function createSchema(env) {
     payload       JSONB NOT NULL,
     fetched_at    TIMESTAMPTZ DEFAULT NOW()
   )`;
+  // Web Push subscriptions (one row per device per member).
+  await s`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id          SERIAL PRIMARY KEY,
+    member_id   INT NOT NULL REFERENCES members(id),
+    endpoint    TEXT NOT NULL UNIQUE,
+    p256dh      TEXT NOT NULL,
+    auth        TEXT NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+  )`;
   await s`CREATE INDEX IF NOT EXISTS picks_season_week ON picks(season, week)`;
   await s`CREATE INDEX IF NOT EXISTS picks_member ON picks(member_id)`;
   await s`CREATE INDEX IF NOT EXISTS games_season_week ON games(season, week)`;
