@@ -588,6 +588,14 @@
   .wr-chip.is-live { box-shadow: inset 0 0 0 1px rgba(70, 224, 138, 0.18); }
   .wr-chip.is-live .wr-sub { color: #46e08a; }
   .wr-empty { color: #9aa4a2; font-family: 'Inter', sans-serif; font-size: 14px; padding: 26px 4px; max-width: 40rem; line-height: 1.5; }
+  /* Weekly recap card (War Room, week complete) */
+  .rc-card { background: linear-gradient(180deg, rgba(70, 224, 138, 0.09), rgba(25, 28, 30, 0.35)); border: 1px solid #2b4a3a; border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .rc-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #46e08a; margin-bottom: 6px; }
+  .rc-headline { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 20px; color: #e6e8e8; line-height: 1.2; }
+  .rc-crown { margin-right: 6px; }
+  .rc-note { font-family: 'Inter', sans-serif; font-size: 13px; color: #9aa4a2; margin-top: 6px; }
+  .rc-share { margin-top: 13px; background: #1fd97b; color: #04220f; border: none; border-radius: 8px; padding: 9px 16px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: filter 0.12s; }
+  .rc-share:hover { filter: brightness(1.06); }
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -2883,6 +2891,8 @@ function attachWarRoomHandlers() {
   if (btn) btn.onclick = async () => { btn.disabled = true; await loadWarRoom(); rerenderWarRoom(); };
   const signin = document.getElementById("wr-signin");
   if (signin) signin.onclick = openLogin;
+  const share = document.getElementById("wr-share");
+  if (share) share.onclick = shareRecap;
 }
 const WR_STATUS = {
   win: "st-win", lose: "st-lose", push: "st-push", manual: "st-manual", pending: "st-pending",
@@ -2906,6 +2916,46 @@ function wrChip(p) {
       <span class="wr-pick">${escapeHtml(shortPickText(p.pick_text))}</span>
       <span class="wr-sub">${escapeHtml(scoreTxt)}</span>
     </div>`;
+}
+function renderRecapCard(wr) {
+  const r = wr.recap;
+  if (!r || !r.complete) return "";
+  const winLine = r.winner
+    ? `<span class="rc-crown">🏆</span>${escapeHtml(r.winner.name)} won Week ${wr.week} at ${r.winner.W}-${r.winner.L}`
+    : `Week ${wr.week} ended in a tie at the top`;
+  const perfect = r.perfect && r.perfect.length
+    ? `<div class="rc-note">Perfect card: ${r.perfect.map(escapeHtml).join(", ")}</div>`
+    : "";
+  return `
+    <div class="rc-card">
+      <div class="rc-eyebrow">Week ${wr.week} Recap</div>
+      <div class="rc-headline">${winLine}</div>
+      ${perfect}
+      <button class="rc-share" id="wr-share"><span class="material-symbols-outlined text-sm" style="vertical-align:-3px">ios_share</span> Share to the group</button>
+    </div>`;
+}
+function buildRecapText(wr) {
+  const lines = [`Lock League — Week ${wr.week}`];
+  if (wr.recap && wr.recap.winner) lines.push(`Winner: ${wr.recap.winner.name} (${wr.recap.winner.W}-${wr.recap.winner.L})`);
+  else if (wr.recap) lines.push(`Tie at the top`);
+  lines.push("");
+  (wr.members || []).forEach((m, i) => {
+    lines.push(`${i + 1}. ${m.name} ${m.live.W}-${m.live.L}${m.live.P ? "-" + m.live.P : ""}`);
+  });
+  lines.push("");
+  lines.push("lock-league.pages.dev");
+  return lines.join("\n");
+}
+async function shareRecap() {
+  const wr = state.warRoom;
+  if (!wr) return;
+  const text = buildRecapText(wr);
+  if (navigator.share) {
+    try { await navigator.share({ title: `Lock League Week ${wr.week}`, text }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  try { await navigator.clipboard.writeText(text); showToast("RECAP COPIED"); }
+  catch { showToast("COULD NOT COPY", "err"); }
 }
 function renderWarRoomSkeleton() {
   return `<div class="wr-wrap"><div class="wr-topbar"><div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Live board</div></div></div>
@@ -2949,7 +2999,7 @@ function renderWarRoom() {
         <div class="wr-picks">${m.picks.map(wrChip).join("")}</div>
       </div>`;
   }).join("");
-  return head(actions) + `<div class="wr-grid">${rows}</div></div>`;
+  return head(actions) + renderRecapCard(wr) + `<div class="wr-grid">${rows}</div></div>`;
 }
 
 async function render() {

@@ -101,7 +101,20 @@ export async function onRequest({ request, env }) {
     (a, b) => b.live.W - a.live.W || a.live.L - b.live.L || a.name.localeCompare(b.name));
   const anyLive = events.some((e) => e.state === "in");
 
-  const data = { season: cur.season, week: cur.week, revealed: true, fetched_at: new Date().toISOString(), anyLive, members };
+  // Recap: once every game this week is final, summarize the week.
+  let recap = null;
+  const allFinal = events.length > 0 && events.every((e) => e.state === "post");
+  if (allFinal && members.length) {
+    const top = members[0];
+    const tie = members.filter((m) => m.live.W === top.live.W && m.live.L === top.live.L).length > 1;
+    const winner = !tie && top.live.W > 0 ? { name: top.name, W: top.live.W, L: top.live.L } : null;
+    const perfect = members
+      .filter((m) => m.live.W > 0 && m.live.L === 0 && m.live.pending === 0)
+      .map((m) => m.name);
+    recap = { complete: true, winner, tie, perfect };
+  }
+
+  const data = { season: cur.season, week: cur.week, revealed: true, fetched_at: new Date().toISOString(), anyLive, members, recap };
   cache = { ts: Date.now(), key, data };
   return json(data);
 }
