@@ -555,6 +555,39 @@
   .notif-test { display: none; margin-top: 2px; background: none; border: none; padding: 0; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #46e08a; }
   .notif-test:hover { opacity: 0.8; }
   .notif-test.show { display: inline-block; }
+
+  /* War Room (live leaderboard) */
+  .wr-wrap { max-width: 1120px; }
+  .wr-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .wr-title { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 28px; text-transform: uppercase; letter-spacing: 0.01em; color: #e6e8e8; line-height: 1; }
+  .wr-sub2 { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9aa4a2; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .wr-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .wr-livetag { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; color: #46e08a; text-transform: uppercase; }
+  .wr-livetag.idle { color: #9aa4a2; }
+  .wr-refresh { background: none; border: 1px solid #29302f; border-radius: 8px; color: #9aa4a2; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+  .wr-refresh:hover { color: #46e08a; border-color: #46504f; }
+  .wr-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  @media (min-width: 900px) { .wr-grid { grid-template-columns: 1fr 1fr; } }
+  .wr-card { background: #191c1e; border: 1px solid #29302f; border-radius: 12px; padding: 12px 14px; }
+  .wr-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .wr-rank { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6b7472; width: 22px; }
+  .wr-name { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 18px; text-transform: uppercase; letter-spacing: 0.01em; flex: 1; }
+  .wr-rec { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #e6e8e8; font-weight: 600; }
+  .wr-pend { font-size: 10px; color: #9aa4a2; letter-spacing: 0.08em; text-transform: uppercase; margin-left: 4px; }
+  .wr-picks { display: flex; flex-direction: column; gap: 6px; }
+  .wr-chip { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #0e1011; border: 1px solid #23292a; border-left: 3px solid #6b7472; }
+  .wr-chip .wr-bt { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+  .wr-chip .wr-pick { font-family: 'Inter', sans-serif; font-size: 13px; color: #e6e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wr-chip .wr-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9aa4a2; white-space: nowrap; }
+  .wr-chip.st-win { border-left-color: #46e08a; }
+  .wr-chip.st-win .wr-pick { color: #eafff3; }
+  .wr-chip.st-lose { border-left-color: #ef4444; opacity: 0.8; }
+  .wr-chip.st-push { border-left-color: #f4cf5a; }
+  .wr-chip.st-manual { border-left-color: #c9a0ff; }
+  .wr-chip.st-pending { border-left-color: #3a423f; }
+  .wr-chip.is-live { box-shadow: inset 0 0 0 1px rgba(70, 224, 138, 0.18); }
+  .wr-chip.is-live .wr-sub { color: #46e08a; }
+  .wr-empty { color: #9aa4a2; font-family: 'Inter', sans-serif; font-size: 14px; padding: 26px 4px; max-width: 40rem; line-height: 1.5; }
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -607,6 +640,10 @@
     <button class="side-nav-link nav-link" data-view="thisweek">
       <span class="material-symbols-outlined">timer</span>
       <span>THIS WEEK</span>
+    </button>
+    <button class="side-nav-link nav-link" data-view="warroom">
+      <span class="material-symbols-outlined">swords</span>
+      <span>WAR ROOM</span>
     </button>
     <button class="side-nav-link nav-link" data-view="lifetime">
       <span class="material-symbols-outlined">military_tech</span>
@@ -683,6 +720,10 @@
       <span class="material-symbols-outlined">timer</span>
       <span class="font-label-caps text-[10px]">Week</span>
     </button>
+    <button class="bottom-nav-link nav-link" data-view="warroom">
+      <span class="material-symbols-outlined">swords</span>
+      <span class="font-label-caps text-[10px]">Live</span>
+    </button>
     <button class="bottom-nav-link nav-link" data-view="lifetime">
       <span class="material-symbols-outlined">history</span>
       <span class="font-label-caps text-[10px]">Lifetime</span>
@@ -729,6 +770,7 @@ let state = {
   myPicksDraft: {},
   myPicksWeek: null,
   myPicksSaveMsg: "",
+  warRoom: null,
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
@@ -2811,6 +2853,105 @@ function boardStatusInner(data) {
     <button id="odds-refresh" class="flex items-center gap-1 text-primary-fixed hover:text-primary-fixed-dim transition-colors" title="Refresh lines"><span class="material-symbols-outlined text-sm">refresh</span></button>`;
 }
 
+// ---- Sunday War Room (live leaderboard) ----
+let warRoomTimer = null;
+async function loadWarRoom() {
+  try {
+    const r = await fetch("/api/warroom", { credentials: "include" });
+    if (r.status === 401) { state.warRoom = { needLogin: true }; return; }
+    state.warRoom = await r.json();
+  } catch (e) {
+    state.warRoom = { error: e.message };
+  }
+}
+function rerenderWarRoom() {
+  if (state.view !== "warroom") return;
+  document.getElementById("root").innerHTML = renderWarRoom();
+  attachWarRoomHandlers();
+}
+function startWarRoomPoll() {
+  clearInterval(warRoomTimer);
+  warRoomTimer = setInterval(async () => {
+    if (state.view !== "warroom") { clearInterval(warRoomTimer); warRoomTimer = null; return; }
+    const before = JSON.stringify(state.warRoom || null);
+    await loadWarRoom();
+    if (state.view === "warroom" && JSON.stringify(state.warRoom || null) !== before) rerenderWarRoom();
+  }, 45000);
+}
+function attachWarRoomHandlers() {
+  const btn = document.getElementById("wr-refresh");
+  if (btn) btn.onclick = async () => { btn.disabled = true; await loadWarRoom(); rerenderWarRoom(); };
+  const signin = document.getElementById("wr-signin");
+  if (signin) signin.onclick = openLogin;
+}
+const WR_STATUS = {
+  win: "st-win", lose: "st-lose", push: "st-push", manual: "st-manual", pending: "st-pending",
+};
+function shortPickText(t) {
+  if (!t) return "";
+  const m = t.match(/^(.+?)\s+([-+]\d.*)$/); // team + spread -> last word of team + spread
+  if (m) { const w = m[1].trim().split(/\s+/); return w[w.length - 1] + " " + m[2]; }
+  return t.length > 24 ? t.slice(0, 23) + "…" : t;
+}
+function wrChip(p) {
+  const meta = BET_META[p.bet_type] || {};
+  const cls = WR_STATUS[p.status] || WR_STATUS.pending;
+  const live = p.state === "in" && !p.final;
+  const scoreTxt = p.score
+    ? `${teamAbbr(p.score.away)} ${p.score.away_score}-${p.score.home_score} ${teamAbbr(p.score.home)}`
+    : (p.detail || "");
+  return `
+    <div class="wr-chip ${cls} ${live ? "is-live" : ""} ${p.final ? "is-final" : ""}">
+      <span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(p.bet_type)}</span>
+      <span class="wr-pick">${escapeHtml(shortPickText(p.pick_text))}</span>
+      <span class="wr-sub">${escapeHtml(scoreTxt)}</span>
+    </div>`;
+}
+function renderWarRoomSkeleton() {
+  return `<div class="wr-wrap"><div class="wr-topbar"><div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Live board</div></div></div>
+    <div class="wr-empty">Loading the live board...</div></div>`;
+}
+function renderWarRoom() {
+  const wr = state.warRoom;
+  const cur = currentNflWeekClient();
+  const head = (extra) => `<div class="wr-wrap"><div class="wr-topbar">
+      <div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Week ${wr?.week || cur.week || "-"} · live board</div></div>
+      ${extra || ""}
+    </div>`;
+  if (!wr) return renderWarRoomSkeleton();
+  if (wr.needLogin) {
+    return head(`<button class="submit-picks-cta" style="width:auto;padding:10px 18px" id="wr-signin">SIGN IN</button>`) +
+      `<div class="wr-empty">Sign in to watch everyone's card live.</div></div>`;
+  }
+  if (wr.error) return head("") + `<div class="wr-empty">Could not load the board. It refreshes on its own in a moment.</div></div>`;
+  if (wr.status === "offseason" || (wr.week == null && !wr.revealed)) {
+    return head("") + `<div class="wr-empty">The season has not kicked off yet. The War Room lights up on game day.</div></div>`;
+  }
+  if (!wr.revealed) {
+    return head("") + `<div class="wr-empty">Cards reveal at the Sunday noon-CT lock. Come back when the games start and watch every pick cash or bust in real time.</div></div>`;
+  }
+  const anyPending = (wr.members || []).some((m) => m.live.pending > 0);
+  const liveTag = wr.anyLive
+    ? `<span class="wr-livetag"><span class="live-dot"></span>LIVE</span>`
+    : `<span class="wr-livetag idle"><span class="idle-dot"></span>${anyPending ? "PREGAME" : "FINAL"}</span>`;
+  const actions = `<div class="wr-actions">${liveTag}<button id="wr-refresh" class="wr-refresh" title="Refresh"><span class="material-symbols-outlined text-sm">refresh</span></button></div>`;
+  if (!wr.members || !wr.members.length) return head(actions) + `<div class="wr-empty">No picks are in for this week yet.</div></div>`;
+  const rows = wr.members.map((m, i) => {
+    const rec = `${m.live.W}-${m.live.L}${m.live.P ? "-" + m.live.P : ""}`;
+    const pend = m.live.pending ? `<span class="wr-pend">${m.live.pending} open</span>` : "";
+    return `
+      <div class="wr-card">
+        <div class="wr-head">
+          <span class="wr-rank">${String(i + 1).padStart(2, "0")}</span>
+          <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
+          <span class="wr-rec">${rec}${pend ? " " + pend : ""}</span>
+        </div>
+        <div class="wr-picks">${m.picks.map(wrChip).join("")}</div>
+      </div>`;
+  }).join("");
+  return head(actions) + `<div class="wr-grid">${rows}</div></div>`;
+}
+
 async function render() {
   syncNavActive();
   const root = document.getElementById("root");
@@ -2843,6 +2984,13 @@ async function render() {
     });
   } else if (state.view === "rules") {
     root.innerHTML = renderRules();
+  } else if (state.view === "warroom") {
+    root.innerHTML = renderWarRoomSkeleton();
+    await loadWarRoom();
+    if (state.view !== "warroom") return;
+    root.innerHTML = renderWarRoom();
+    attachWarRoomHandlers();
+    startWarRoomPoll();
   } else if (state.view === "thisweek") {
     root.innerHTML = skeletonThisWeek();
     await Promise.all([loadOdds(), loadScores()]);
