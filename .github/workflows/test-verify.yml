@@ -1,0 +1,29 @@
+name: Test Verify (manual)
+
+# Probes the public endpoints and prints results to the run log, so a scheduled
+# cloud agent (whose sandbox cannot reach lock-league.pages.dev directly) can
+# verify the app by reading this workflow's log via `gh run view --log`.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe public endpoints
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          S="${SITE_URL:-https://lock-league.pages.dev}"
+          echo "SITE=$S"
+          echo "----- CONFIG -----"
+          curl -fsS "$S/api/config" | jq . || echo "config-request-failed"
+          echo "----- ODDS -----"
+          curl -fsS "$S/api/odds" \
+            | jq -r '"source=\(.source) count=\(.games|length)", (.games[:10][] | "\(.kickoff) books=\(.books|keys|join(",")) fdprov=\(.books.fanduel.provider // "none")")' \
+            || echo "odds-request-failed"
+          echo "----- SCORES -----"
+          curl -fsS "$S/api/scores" \
+            | jq -r '"count=\(.games|length) week=\(.week) test=\(.test)", (.games[:16][] | "\(.away) @ \(.home) | \(.state) | \(.detail)")' \
+            || echo "scores-request-failed"
+          echo "----- END -----"
