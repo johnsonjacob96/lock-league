@@ -31,6 +31,9 @@
 <style>
   * { box-sizing: border-box; }
   html, body { background: #0e1011; }
+  /* Keep our own type scale; don't let iOS auto-inflate text (a common cause
+     of the app looking bigger/smaller on different phones). */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body {
     font-family: 'Inter', system-ui, sans-serif;
     color: #e6e8e8;
@@ -553,8 +556,11 @@
   .sp-count-unit { font-size: 11px; letter-spacing: 0.16em; color: #9aa4a2; }
   .sp-count-sub { margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; color: #6f7877; }
   .sp-tag { align-self: center; font-size: 10px; letter-spacing: 0.16em; color: #04220f; background: #1fd97b; padding: 4px 9px; border-radius: 5px; }
-  .sp-ready { align-self: center; display: flex; align-items: center; gap: 7px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #46e08a; }
+  .sp-ready { display: flex; align-items: center; gap: 7px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #46e08a; }
   .sp-ready .material-symbols-outlined { font-size: 20px; }
+  .sp-ready-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; align-self: center; }
+  .sp-alsohere { background: none; border: none; padding: 0; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: #9aa4a2; }
+  .sp-alsohere:hover { color: #e6e8e8; }
   .sp-steps { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
   .sp-step { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 9px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); }
   .sp-step.done { opacity: 0.72; }
@@ -579,6 +585,7 @@
     .sp-step-action { width: 100%; }
     .sp-step-action .sp-btn { width: 100%; }
     .sp-hint { justify-content: flex-start; text-align: left; }
+    .sp-ready-wrap { align-items: flex-start; }
   }
 
   /* "You" identity accents. BLUE, so the signed-in member never reads as the
@@ -1881,7 +1888,9 @@ async function changePassphrase() {
 }
 
 // ---- Web Push notifications ----
-const pushState = { supported: false, subscribed: false, vapidPublic: null, busy: false };
+// `subscribed` = this browser/device has a push subscription; `accountSubscribed`
+// = the member has one on ANY device (from /api/push, which counts per member).
+const pushState = { supported: false, subscribed: false, accountSubscribed: false, vapidPublic: null, busy: false };
 
 function pushSupported() {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -2048,7 +2057,7 @@ function seasonPrepInner() {
   const supported = pushSupported();
   const signedIn = !!state.user;
   const ios = isIOS();
-  const notifsOn = pushState.subscribed;
+  const reachable = pushState.subscribed || pushState.accountSubscribed;
 
   const countdown = `
     <div>
@@ -2059,10 +2068,16 @@ function seasonPrepInner() {
       <div class="sp-count-sub">2026 season · Week 1 lines drop soon</div>
     </div>`;
 
-  // The real goal is alerts reaching each member. Once they're on, we're done.
-  if (notifsOn) {
+  // Readiness is account-level: if alerts reach this member anywhere, we're
+  // done and don't re-nag on other devices. On a device that isn't itself
+  // subscribed we offer a quiet "also alert this device", nothing more.
+  if (reachable) {
+    const canEnableHere = !pushState.subscribed && supported && signedIn && !(ios && !installed);
     return `<div class="sp-head">${countdown}
-      <div class="sp-ready"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">verified</span> You're set for Week 1</div>
+      <div class="sp-ready-wrap">
+        <div class="sp-ready"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">verified</span> You're set for Week 1</div>
+        ${canEnableHere ? `<button class="sp-alsohere" data-sp="notify">Also alert this device</button>` : ""}
+      </div>
     </div>`;
   }
 
@@ -2117,16 +2132,25 @@ async function refreshSeasonPrep() {
   // Load the same schedule the Week tab uses so the kickoff countdown targets
   // the real first game, not the season constant, and the two tabs agree.
   if (!(state.thisWeekData?.games || []).length) await loadOdds().catch(() => {});
-  if (pushSupported() && state.user) {
+  if (state.user) {
+    // Account-level readiness: does the member have alerts on ANY device? This
+    // is the question the nudge cares about, so a second device (e.g. desktop)
+    // doesn't re-nag someone who already turned alerts on from their phone.
     try {
-      if (!pushState.vapidPublic) {
-        const cfg = await loadPushConfig();
-        if (cfg && cfg.vapidPublic) pushState.vapidPublic = cfg.vapidPublic;
+      const cfg = await loadPushConfig();
+      if (cfg) {
+        if (cfg.vapidPublic) pushState.vapidPublic = cfg.vapidPublic;
+        pushState.accountSubscribed = !!cfg.subscribed;
       }
-      const reg = await getSwRegistration();
-      const sub = reg ? await reg.pushManager.getSubscription() : null;
-      pushState.subscribed = !!sub && Notification.permission === "granted";
     } catch { /* leave state as-is */ }
+    // Device-level: is THIS browser subscribed? (drives the "also here" offer)
+    if (pushSupported()) {
+      try {
+        const reg = await getSwRegistration();
+        const sub = reg ? await reg.pushManager.getSubscription() : null;
+        pushState.subscribed = !!sub && Notification.permission === "granted";
+      } catch { /* leave state as-is */ }
+    }
   }
   const c = document.getElementById("season-prep");
   if (!c) return;
@@ -3346,6 +3370,13 @@ async function render() {
   syncNavActive();
   updatePreseasonBanner();
   const root = document.getElementById("root");
+  // On an actual tab switch, start at the top instead of inheriting the
+  // previous tab's scroll position. In-view re-renders (row expand, polling,
+  // season change) keep the view the same, so they don't jump the page.
+  if (render._lastView !== state.view) {
+    render._lastView = state.view;
+    window.scrollTo(0, 0);
+  }
   // Live season data comes from the DB; load it before views that show it.
   if ((state.view === "standings" && state.season === "2026") || state.view === "lifetime") {
     await ensureLive2026();
@@ -3522,6 +3553,25 @@ document.getElementById("acct-logout").onclick = () => {
 document.getElementById("acct-next").addEventListener("keydown", e => { if (e.key === "Enter") changePassphrase(); });
 document.getElementById("notif-toggle").onclick = toggleNotifications;
 document.getElementById("notif-test").onclick = sendTestNotification;
+
+// Phones vary from ~320 to ~430 CSS px wide, and iOS "Display Zoom" shifts it
+// further, so a fixed-pixel design looks a little zoomed in on small phones and
+// out on large ones. Scale the whole app to a 390px reference so it reads the
+// same proportionally on every phone. Mobile only — desktop keeps its native
+// layout — and clamped so extremes never get too tiny or too large. Uses CSS
+// `zoom` (reflows + stays crisp, unlike transform). Measured with scaling
+// cleared first so it can't feed back on itself.
+function applyViewportScale() {
+  const root = document.documentElement;
+  root.style.zoom = "";
+  const w = window.innerWidth;
+  if (w >= 768) return; // tablet/desktop: native responsive layout, no scaling
+  const z = Math.max(0.85, Math.min(1.12, w / 390));
+  root.style.zoom = String(z);
+}
+applyViewportScale();
+window.addEventListener("resize", applyViewportScale);
+window.addEventListener("orientationchange", applyViewportScale);
 
 // Boot - session check and data load in parallel
 registerServiceWorker(); // fire-and-forget; needed for push subscriptions
