@@ -456,14 +456,15 @@
   .bottom-nav-link {
     flex: 1;
     display: flex; flex-direction: column;
-    align-items: center; gap: 2px;
-    padding: 8px 0;
+    align-items: center; gap: 1px;
+    padding: 4px 0;
     color: #b9cbb9;
     cursor: pointer;
     background: transparent;
     border: none;
     transition: color 0.15s;
   }
+  .bottom-nav-link .material-symbols-outlined { font-size: 21px; }
   .bottom-nav-link:hover { color: #e6e8e8; }
   .bottom-nav-link.active { color: #46e08a; font-weight: 700; }
   .bottom-nav-link.active .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
@@ -821,7 +822,7 @@
 
 <!-- Mobile Bottom Nav -->
 <nav id="mobile-nav" class="md:hidden backdrop-blur-xl border-t border-outline-variant fixed bottom-0 inset-x-0 z-50" style="background: rgba(14, 16, 17, 0.88); padding-bottom: env(safe-area-inset-bottom, 0px);">
-  <div class="flex items-center w-full pt-1">
+  <div class="flex items-center w-full">
     <button class="bottom-nav-link nav-link" data-view="standings">
       <span class="material-symbols-outlined">dashboard</span>
       <span class="font-label-caps text-[10px]">Home</span>
