@@ -581,11 +581,36 @@
     .sp-hint { justify-content: flex-start; text-align: left; }
   }
 
-  /* "You" identity accents. Plain CSS (not Tailwind utilities) so they render
-     without a CSS rebuild, since assets/tailwind.css is prebuilt + committed. */
-  .row-you { background: rgba(70,224,138,0.06); }
-  .row-you:hover { background: rgba(70,224,138,0.09) !important; }
-  .you-pill { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #46e08a; border: 1px solid rgba(70,224,138,0.4); border-radius: 4px; padding: 2px 6px; line-height: 1; }
+  /* "You" identity accents. BLUE, so the signed-in member never reads as the
+     GREEN leader. Plain CSS (not Tailwind utilities) so they render without a
+     CSS rebuild, since assets/tailwind.css is prebuilt + committed. */
+  .row-you { background: rgba(56,189,248,0.07); }
+  .row-you:hover { background: rgba(56,189,248,0.11) !important; }
+  .name-you { color: #38bdf8; }
+  .rank-you { color: #38bdf8; }
+  .you-pill { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #38bdf8; border: 1px solid rgba(56,189,248,0.45); border-radius: 4px; padding: 2px 6px; line-height: 1; }
+
+  /* Week-over-week rank movement caret in the standings rank cell */
+  .mv { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.01em; }
+  .mv.up { color: #46e08a; }
+  .mv.down { color: #ef4444; }
+
+  /* League consensus (War Room, post-lock): how the room leaned per game */
+  .cons-wrap { margin-bottom: 18px; }
+  .cons-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .cons-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #e6e8e8; }
+  .cons-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6f7877; letter-spacing: 0.03em; }
+  .cons-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 10px; }
+  .cons-game { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px; }
+  .cons-match { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: #e6e8e8; margin-bottom: 8px; }
+  .cons-at { color: #6f7877; font-weight: 400; }
+  .cons-market { display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 9px; margin-top: 7px; }
+  .cons-lbl { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.06em; color: #9aa4a2; text-transform: uppercase; white-space: nowrap; }
+  .cons-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
+  .cons-fill { display: block; height: 100%; background: rgba(56,189,248,0.55); border-radius: 999px; }
+  .cons-split { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9aa4a2; white-space: nowrap; text-transform: uppercase; }
+  .cons-split .lead { color: #e6e8e8; font-weight: 600; }
+  .cons-dot { color: #46504f; margin: 0 5px; }
 
   /* Notifications toggle (account modal) */
   .notif-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 18px; }
@@ -833,12 +858,13 @@ let state = {
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
 // Member identity reads neutral by default. Only the signed-in member's own
-// name carries the brand accent, so you can spot yourself instantly without a
-// rainbow. Green/red stay reserved for performance (win/loss), never identity.
-const NAME_ACCENT = "#46e08a";
+// name carries an accent so you can spot yourself instantly without a rainbow.
+// That accent is BLUE, deliberately distinct from the GREEN used for the
+// leader and for performance (win/loss) — green = doing well, blue = it's you.
+const YOU_ACCENT = "#38bdf8";
 const NAME_NEUTRAL = "#d4d8d7";
 function isMe(name) { return !!(state.user && state.user.name === name); }
-function memberColor(name) { return isMe(name) ? NAME_ACCENT : NAME_NEUTRAL; }
+function memberColor(name) { return isMe(name) ? YOU_ACCENT : NAME_NEUTRAL; }
 function memberDot() { return ""; } // per-member rainbow dots retired
 
 // Units at -110: win = +1, loss = -1.1, push = 0.
@@ -969,6 +995,75 @@ function buildStandings(season) {
     return b.weeksWon - a.weeksWon;
   });
   return rows;
+}
+
+// --- Week-over-week movement (rank change vs the prior graded week) ---
+function recordThroughWeek(md, W) {
+  let w = 0, l = 0;
+  for (const bt of BET_TYPES_ORDER) {
+    const picks = md?.byType?.[bt]?.picks || {};
+    for (let wk = 1; wk <= W; wk++) {
+      const p = picks[String(wk)] || picks[wk];
+      if (!p) continue;
+      if (p.result === "W") w++;
+      else if (p.result === "L") l++;
+    }
+  }
+  return { w, l };
+}
+// Rank everyone using cumulative results through week W. Same sort key as
+// buildStandings (more wins, then fewer losses, then more weeks won) so the
+// ranks line up with the visible standings.
+function standingsThroughWeek(season, W) {
+  const seasonInfo = DATA.seasons[season];
+  if (!seasonInfo) return [];
+  const rows = seasonInfo.members.map((name) => {
+    const md = DATA.members[name]?.[season];
+    const rec = md ? recordThroughWeek(md, W) : { w: 0, l: 0 };
+    let weeksWon = 0;
+    for (let wk = 1; wk <= W; wk++) if (seasonInfo.weeklyWinners?.[String(wk)] === name) weeksWon++;
+    return { name, w: rec.w, l: rec.l, played: rec.w + rec.l, weeksWon };
+  });
+  rows.sort((a, b) => (b.w - a.w) || (a.l - b.l) || (b.weeksWon - a.weeksWon));
+  return rows;
+}
+function latestGradedWeek(season) {
+  const seasonInfo = DATA.seasons[season];
+  if (!seasonInfo) return 0;
+  let latest = 0;
+  for (const name of seasonInfo.members) {
+    const md = DATA.members[name]?.[season];
+    if (!md) continue;
+    for (const bt of BET_TYPES_ORDER) {
+      const picks = md?.byType?.[bt]?.picks || {};
+      for (const k of Object.keys(picks)) {
+        const wk = parseInt(k, 10);
+        if (picks[k]?.result && wk > latest) latest = wk;
+      }
+    }
+  }
+  return latest;
+}
+// Returns { name: delta } where +N = climbed N spots since the prior week,
+// -N = fell, and 0/absent = no move or not enough history to say.
+function computeMovement(season) {
+  const W = latestGradedWeek(season);
+  if (W < 2) return {};
+  const prev = standingsThroughWeek(season, W - 1);
+  const curr = standingsThroughWeek(season, W);
+  const prevRank = {};
+  prev.forEach((r, i) => { prevRank[r.name] = { rank: i, played: r.played }; });
+  const move = {};
+  curr.forEach((r, i) => {
+    const p = prevRank[r.name];
+    move[r.name] = (p && p.played > 0) ? (p.rank - i) : 0; // no arrow for members with no prior-week record
+  });
+  return move;
+}
+function moveIndicator(delta) {
+  if (!delta) return ""; // 0, null, undefined -> no change, show nothing
+  const up = delta > 0;
+  return `<span class="mv ${up ? "up" : "down"}" title="${up ? "Up" : "Down"} ${Math.abs(delta)} since last week">${up ? "▲" : "▼"}${Math.abs(delta)}</span>`;
 }
 
 // --- Ticker ---
@@ -1228,7 +1323,7 @@ function renderStandings() {
             </tr>
           </thead>
           <tbody class="font-data-tabular">
-            ${rows.map((r, i) => renderMemberRow(r, i, season)).join("")}
+            ${(() => { const movement = computeMovement(season); return rows.map((r, i) => renderMemberRow(r, i, season, movement)).join(""); })()}
           </tbody>
         </table>
       </div>
@@ -1270,10 +1365,11 @@ function renderStandings() {
   `;
 }
 
-function renderMemberRow(r, i, season) {
+function renderMemberRow(r, i, season, movement) {
   const isExp = state.expanded === r.name;
   const isTop = i === 0;
   const mine = isMe(r.name);
+  const move = movement ? moveIndicator(movement[r.name]) : "";
   // Per-week outcome class: green if member won the week, W/L/P majority
   // otherwise, gray when nothing is graded yet.
   const heatCls = Array.from({ length: WEEK_COUNT }, (_, w) => {
@@ -1299,10 +1395,10 @@ function renderMemberRow(r, i, season) {
 
   return `
     <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : mine ? "row-you" : ""}" data-name="${escapeHtml(r.name)}">
-      <td class="px-4 md:px-6 py-5 ${isTop || mine ? "text-primary-fixed font-bold" : "text-on-surface-variant font-bold"}">${i + 1}</td>
+      <td class="px-4 md:px-6 py-5 font-bold ${isTop ? "text-primary-fixed" : mine ? "rank-you" : "text-on-surface-variant"}"><span class="inline-flex items-center gap-1.5">${i + 1}${move}</span></td>
       <td class="px-4 md:px-6 py-5">
         <div class="flex items-center gap-2">
-          <span class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop || mine ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(r.name)}</span>
+          <span class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : mine ? "name-you" : "text-on-surface"}">${escapeHtml(r.name)}</span>
           ${isTop ? '<span class="material-symbols-outlined text-tertiary-fixed-dim text-base" style="font-variation-settings: \'FILL\' 1;">workspace_premium</span>' : ""}
           ${mine ? '<span class="you-pill">You</span>' : ""}
         </div>
@@ -1558,7 +1654,7 @@ function renderLifetime() {
                 <tr class="hover:bg-primary-fixed/5 transition-colors group">
                   <td class="py-4 px-6 font-data-tabular ${isTop ? "text-tertiary-fixed" : "text-on-surface-variant"} text-lg">${i + 1}</td>
                   <td class="py-4 px-6">
-                    <div class="flex items-center gap-2 font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop || mine ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(m.name)}${m.seasonsAsChamp >= 1 ? ` <span class="material-symbols-outlined text-tertiary-fixed-dim text-base align-middle" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>` : ""}${mine ? ` <span class="you-pill">You</span>` : ""}</div>
+                    <div class="flex items-center gap-2 font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : mine ? "name-you" : "text-on-surface"}">${escapeHtml(m.name)}${m.seasonsAsChamp >= 1 ? ` <span class="material-symbols-outlined text-tertiary-fixed-dim text-base align-middle" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>` : ""}${mine ? ` <span class="you-pill">You</span>` : ""}</div>
                   </td>
                   <td class="py-4 px-6 font-data-tabular text-on-surface-variant">${m.seasonsPlayed}</td>
                   <td class="py-4 px-6 font-data-tabular text-on-surface">${recordHtml({w: m.totals.W, l: m.totals.L, t: m.totals.P})}</td>
@@ -3151,6 +3247,33 @@ async function shareRecap() {
   try { await navigator.clipboard.writeText(text); showToast("RECAP COPIED"); }
   catch { showToast("COULD NOT COPY", "err"); }
 }
+function consBar(pct) {
+  return `<div class="cons-bar"><span class="cons-fill" style="width:${Math.round(pct)}%"></span></div>`;
+}
+// Post-lock "how the room leaned" summary. Aggregate only (no attribution).
+function renderConsensus(wr) {
+  const c = wr && wr.consensus;
+  if (!c || !c.length) return "";
+  const games = c.map((g) => {
+    let markets = "";
+    if (g.spread && g.spread.length) {
+      const total = g.spread.reduce((s, x) => s + x.count, 0) || 1;
+      const lead = g.spread[0].count;
+      const split = g.spread
+        .map((s, i) => `<span class="${i === 0 ? "lead" : ""}">${escapeHtml(teamAbbr(s.team))} ${s.count}</span>`)
+        .join(`<span class="cons-dot">·</span>`);
+      markets += `<div class="cons-market"><span class="cons-lbl">ATS</span>${consBar(lead / total * 100)}<span class="cons-split">${split}</span></div>`;
+    }
+    if (g.total) {
+      const t = g.total, tot = (t.over + t.under) || 1, overLead = t.over >= t.under;
+      const line = t.line != null ? ` ${t.line}` : "";
+      markets += `<div class="cons-market"><span class="cons-lbl">O/U${line}</span>${consBar(Math.max(t.over, t.under) / tot * 100)}` +
+        `<span class="cons-split"><span class="${overLead ? "lead" : ""}">O ${t.over}</span><span class="cons-dot">·</span><span class="${!overLead ? "lead" : ""}">U ${t.under}</span></span></div>`;
+    }
+    return `<div class="cons-game"><div class="cons-match">${escapeHtml(teamAbbr(g.away))} <span class="cons-at">@</span> ${escapeHtml(teamAbbr(g.home))}</div>${markets}</div>`;
+  }).join("");
+  return `<div class="cons-wrap"><div class="cons-head"><span class="cons-title">League Consensus</span><span class="cons-sub">how the room leaned this week</span></div><div class="cons-grid">${games}</div></div>`;
+}
 function renderWarRoomSkeleton() {
   return `<div class="wr-wrap"><div class="wr-topbar"><div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Live board</div></div></div>
     <div class="wr-empty">Loading the live board...</div></div>`;
@@ -3193,7 +3316,7 @@ function renderWarRoom() {
         <div class="wr-picks">${m.picks.map(wrChip).join("")}</div>
       </div>`;
   }).join("");
-  return head(actions) + renderRecapCard(wr) + `<div class="wr-grid">${rows}</div></div>`;
+  return head(actions) + renderRecapCard(wr) + renderConsensus(wr) + `<div class="wr-grid">${rows}</div></div>`;
 }
 
 function updatePreseasonBanner() {
