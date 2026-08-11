@@ -48,13 +48,17 @@
      keyboard's viewport leaves a fixed bottom bar floating mid-screen. Desktop
      (>= 768px) is untouched and keeps its window-scrolling layout. */
   @media (max-width: 767px) {
-    html { height: 100vh; height: 100dvh; overflow: hidden; }
-    body { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+    html { overflow: hidden; }
+    /* position:fixed + inset:0 fills the visual viewport EXACTLY. iOS standalone
+       leaves a gap under 100dvh, which showed as dead space below the nav. */
+    body { position: fixed; inset: 0; overflow: hidden; display: flex; flex-direction: column; }
     body.min-h-screen { min-height: 0; }
     #ticker { position: static; flex: 0 0 auto; }
     header.below-ticker { position: static; flex: 0 0 auto; }
-    #root { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 1.25rem; }
-    #mobile-nav { position: static; flex: 0 0 auto; }
+    #root { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 1rem; }
+    /* Nav sits flush at the bottom; keep only a small home-indicator clearance
+       so the icons sit near the bottom edge instead of floating a full inset up. */
+    #mobile-nav { position: static; flex: 0 0 auto; padding-bottom: max(4px, calc(env(safe-area-inset-bottom, 0px) - 22px)); }
   }
   body {
     font-family: 'Inter', system-ui, sans-serif;
@@ -821,7 +825,7 @@
 <main id="root" class="md:ml-64 px-margin-mobile md:px-gutter pt-6 md:pt-stack-lg pb-32"></main>
 
 <!-- Mobile Bottom Nav -->
-<nav id="mobile-nav" class="md:hidden backdrop-blur-xl border-t border-outline-variant fixed bottom-0 inset-x-0 z-50" style="background: rgba(14, 16, 17, 0.88); padding-bottom: env(safe-area-inset-bottom, 0px);">
+<nav id="mobile-nav" class="md:hidden backdrop-blur-xl border-t border-outline-variant fixed bottom-0 inset-x-0 z-50" style="background: rgba(14, 16, 17, 0.88);">
   <div class="flex items-center w-full">
     <button class="bottom-nav-link nav-link" data-view="standings">
       <span class="material-symbols-outlined">dashboard</span>
