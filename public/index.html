@@ -41,6 +41,21 @@
   :root { --safe-top: env(safe-area-inset-top, 0px); }
   #ticker { padding-top: var(--safe-top); height: calc(2.5rem + var(--safe-top)); }
   .below-ticker { top: calc(2.5rem + var(--safe-top)) !important; }
+
+  /* Mobile app-shell: the page itself does not scroll — only the content region
+     (#root) scrolls — so the bottom nav is a normal flex child at the bottom
+     instead of position:fixed. That eliminates the iOS bug where the on-screen
+     keyboard's viewport leaves a fixed bottom bar floating mid-screen. Desktop
+     (>= 768px) is untouched and keeps its window-scrolling layout. */
+  @media (max-width: 767px) {
+    html { height: 100vh; height: 100dvh; overflow: hidden; }
+    body { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+    body.min-h-screen { min-height: 0; }
+    #ticker { position: static; flex: 0 0 auto; }
+    header.below-ticker { position: static; flex: 0 0 auto; }
+    #root { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 1.25rem; }
+    #mobile-nav { position: static; flex: 0 0 auto; }
+  }
   body {
     font-family: 'Inter', system-ui, sans-serif;
     color: #e6e8e8;
@@ -805,7 +820,7 @@
 <main id="root" class="md:ml-64 px-margin-mobile md:px-gutter pt-6 md:pt-stack-lg pb-32"></main>
 
 <!-- Mobile Bottom Nav -->
-<nav class="md:hidden backdrop-blur-xl border-t border-outline-variant fixed bottom-0 inset-x-0 z-50" style="background: rgba(14, 16, 17, 0.88); padding-bottom: env(safe-area-inset-bottom, 0px);">
+<nav id="mobile-nav" class="md:hidden backdrop-blur-xl border-t border-outline-variant fixed bottom-0 inset-x-0 z-50" style="background: rgba(14, 16, 17, 0.88); padding-bottom: env(safe-area-inset-bottom, 0px);">
   <div class="flex items-center w-full pt-1">
     <button class="bottom-nav-link nav-link" data-view="standings">
       <span class="material-symbols-outlined">dashboard</span>
@@ -1850,8 +1865,7 @@ async function loginSubmit() {
     document.getElementById("login-modal").classList.remove("show");
     render();
     // Land at the top and re-settle as the keyboard finishes animating away.
-    const snapTop = () => window.scrollTo(0, 0);
-    snapTop(); requestAnimationFrame(snapTop); setTimeout(snapTop, 250); setTimeout(snapTop, 500);
+    scrollAppToTop(); requestAnimationFrame(scrollAppToTop); setTimeout(scrollAppToTop, 250); setTimeout(scrollAppToTop, 500);
   } catch (e) { err.textContent = "Network error: " + e.message; }
 }
 async function logout() {
@@ -3383,6 +3397,15 @@ function updatePreseasonBanner() {
   }
 }
 
+// Reset scroll to the top. On mobile the app-shell makes #root the scroll
+// container (the window doesn't scroll); on desktop the window scrolls. Reset
+// both so "go to top" works in either layout.
+function scrollAppToTop() {
+  window.scrollTo(0, 0);
+  const r = document.getElementById("root");
+  if (r) r.scrollTop = 0;
+}
+
 async function render() {
   syncNavActive();
   updatePreseasonBanner();
@@ -3392,7 +3415,7 @@ async function render() {
   // season change) keep the view the same, so they don't jump the page.
   if (render._lastView !== state.view) {
     render._lastView = state.view;
-    window.scrollTo(0, 0);
+    scrollAppToTop();
   }
   // Live season data comes from the DB; load it before views that show it.
   if ((state.view === "standings" && state.season === "2026") || state.view === "lifetime") {
