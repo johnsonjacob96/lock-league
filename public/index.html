@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>Lock League // 2026</title>
 <meta name="description" content="NFL weekly pick league. Lock your Favorite, Dog, Over, Under, and Super Lock every week.">
 
@@ -47,6 +47,9 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     min-height: 100dvh;
+    /* Disable double-tap-to-zoom (and the legacy tap delay) for a native feel;
+       pinch-zoom is disabled via user-scalable=no on the viewport. */
+    touch-action: manipulation;
   }
   ::selection { background: rgba(34, 227, 127, 0.25); color: #eef2ef; }
 
@@ -3573,9 +3576,12 @@ function applyViewportScale() {
   if (!meta) return;
   const shortSide = Math.min(window.screen.width || 9999, window.screen.height || 9999);
   const portrait = (window.innerHeight || 0) >= (window.innerWidth || 0);
+  // user-scalable=no locks out pinch-zoom (no maximum-scale, which would cap
+  // the fit-to-width scaling above). touch-action:manipulation (below) kills
+  // double-tap zoom. Together the app can't be user-zoomed into a weird state.
   const content = (shortSide <= 480 && portrait)
-    ? "width=393, viewport-fit=cover"
-    : "width=device-width, initial-scale=1.0, viewport-fit=cover";
+    ? "width=393, viewport-fit=cover, user-scalable=no"
+    : "width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no";
   if (meta.getAttribute("content") !== content) meta.setAttribute("content", content);
 }
 applyViewportScale();
