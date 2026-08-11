@@ -1843,8 +1843,15 @@ async function loginSubmit() {
     if (!r.ok) { err.textContent = j.error === "bad-passphrase" ? "Wrong password." : "Login failed."; return; }
     state.user = j.member;
     live2026Promise = null; // pick visibility depends on who's signed in
+    // Blur the password field so iOS dismisses the keyboard and restores the
+    // full viewport. Otherwise the fixed bottom nav stays floated up mid-screen
+    // (anchored to the keyboard-shrunk viewport) until the app is reopened.
+    document.getElementById("login-pass").blur();
     document.getElementById("login-modal").classList.remove("show");
     render();
+    // Land at the top and re-settle as the keyboard finishes animating away.
+    const snapTop = () => window.scrollTo(0, 0);
+    snapTop(); requestAnimationFrame(snapTop); setTimeout(snapTop, 250); setTimeout(snapTop, 500);
   } catch (e) { err.textContent = "Network error: " + e.message; }
 }
 async function logout() {
@@ -3550,8 +3557,25 @@ document.getElementById("sidebar-submit-picks").addEventListener("click", () => 
 
 // Login modal handlers
 document.getElementById("login-submit").onclick = loginSubmit;
-document.getElementById("login-cancel").onclick = () => document.getElementById("login-modal").classList.remove("show");
+document.getElementById("login-cancel").onclick = () => { document.getElementById("login-pass").blur(); document.getElementById("login-modal").classList.remove("show"); };
 document.getElementById("login-pass").addEventListener("keydown", e => { if (e.key === "Enter") loginSubmit(); });
+
+// iOS leaves position:fixed bars (our bottom nav) pinned to the shrunk
+// on-screen-keyboard viewport after any text field closes, so the nav can float
+// mid-screen (the picks form has inputs too, not just login). When a field
+// blurs and the keyboard is actually closing, nudge scroll by 1px and back to
+// force iOS to re-anchor fixed elements — without visibly moving the page.
+document.addEventListener("focusout", (e) => {
+  const t = e.target;
+  if (!t || !/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+  setTimeout(() => {
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; // focus moved to another field
+    const y = window.scrollY || 0;
+    window.scrollTo(0, y + 1);
+    window.scrollTo(0, y);
+  }, 60);
+});
 
 // Account modal handlers
 document.getElementById("acct-save").onclick = changePassphrase;
