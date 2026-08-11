@@ -34,6 +34,13 @@
   /* Keep our own type scale; don't let iOS auto-inflate text (a common cause
      of the app looking bigger/smaller on different phones). */
   html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  /* Respect the notch / Dynamic Island in the installed PWA (viewport-fit=cover
+     lets content go edge-to-edge, so the fixed top bars must inset themselves).
+     The ticker grows by the top safe inset and fills that strip with its own
+     background; the app bar and sidebar that sit below it shift down to match. */
+  :root { --safe-top: env(safe-area-inset-top, 0px); }
+  #ticker { padding-top: var(--safe-top); height: calc(2.5rem + var(--safe-top)); }
+  .below-ticker { top: calc(2.5rem + var(--safe-top)) !important; }
   body {
     font-family: 'Inter', system-ui, sans-serif;
     color: #e6e8e8;
@@ -695,7 +702,7 @@
 </div>
 
 <!-- Mobile Top App Bar -->
-<header class="md:hidden bg-surface-glass backdrop-blur-md sticky top-10 z-50 border-b border-outline-variant h-14 flex items-center justify-between px-4">
+<header class="below-ticker md:hidden bg-surface-glass backdrop-blur-md sticky top-10 z-50 border-b border-outline-variant h-14 flex items-center justify-between px-4">
   <div class="flex items-center gap-2.5">
     <img src="icons/icon-192.png" alt="Lock League" width="32" height="32" style="width:32px;height:32px;border-radius:9px;object-fit:cover;display:block;flex-shrink:0;border:1px solid #29302f">
 
@@ -705,7 +712,7 @@
 </header>
 
 <!-- Desktop Sidebar -->
-<aside class="bg-surface-container-low w-64 fixed left-0 top-10 bottom-0 hidden md:flex flex-col border-r border-outline-variant z-40">
+<aside class="below-ticker bg-surface-container-low w-64 fixed left-0 top-10 bottom-0 hidden md:flex flex-col border-r border-outline-variant z-40">
   <div class="px-6 py-6 border-b border-outline-variant">
     <div class="flex items-center gap-3">
       <img src="icons/icon-192.png" alt="Lock League" width="40" height="40" style="width:40px;height:40px;border-radius:11px;object-fit:cover;display:block;flex-shrink:0;border:1px solid #29302f">
@@ -3556,18 +3563,20 @@ document.getElementById("notif-test").onclick = sendTestNotification;
 
 // Phones vary from ~320 to ~430 CSS px wide, and iOS "Display Zoom" shifts it
 // further, so a fixed-pixel design looks a little zoomed in on small phones and
-// out on large ones. Scale the whole app to a 390px reference so it reads the
-// same proportionally on every phone. Mobile only — desktop keeps its native
-// layout — and clamped so extremes never get too tiny or too large. Uses CSS
-// `zoom` (reflows + stays crisp, unlike transform). Measured with scaling
-// cleared first so it can't feed back on itself.
+// out on large ones. Fix: on phones (portrait) lay the page out at a fixed 393px
+// reference width and let the device scale it to fit — every phone then shows the
+// same proportions. This uses the viewport width, which is bulletproof on iOS
+// Safari and installed PWAs (CSS `zoom` is not). Desktop, tablets, and landscape
+// keep the native device-width responsive layout.
 function applyViewportScale() {
-  const root = document.documentElement;
-  root.style.zoom = "";
-  const w = window.innerWidth;
-  if (w >= 768) return; // tablet/desktop: native responsive layout, no scaling
-  const z = Math.max(0.85, Math.min(1.12, w / 390));
-  root.style.zoom = String(z);
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) return;
+  const shortSide = Math.min(window.screen.width || 9999, window.screen.height || 9999);
+  const portrait = (window.innerHeight || 0) >= (window.innerWidth || 0);
+  const content = (shortSide <= 480 && portrait)
+    ? "width=393, viewport-fit=cover"
+    : "width=device-width, initial-scale=1.0, viewport-fit=cover";
+  if (meta.getAttribute("content") !== content) meta.setAttribute("content", content);
 }
 applyViewportScale();
 window.addEventListener("resize", applyViewportScale);
