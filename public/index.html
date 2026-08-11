@@ -2014,7 +2014,15 @@ window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); defe
 window.addEventListener("appinstalled", () => { deferredInstallPrompt = null; refreshSeasonPrep(); });
 
 function isPreseason() { return Date.now() < SEASON_2026_KICKOFF_MS; }
-function daysToKickoff() { return Math.max(0, Math.ceil((SEASON_2026_KICKOFF_MS - Date.now()) / 86400000)); }
+// Count down to the SAME moment the "This Week" tab does — the soonest game
+// that hasn't kicked off yet, using its exact day math (nextKickoffCountdown),
+// so the two tabs never disagree. Falls back to the season constant until the
+// week's schedule has loaded.
+function daysToKickoff() {
+  const cd = nextKickoffCountdown(state.thisWeekData?.games || []);
+  if (cd) return cd.days;
+  return Math.max(0, Math.floor((SEASON_2026_KICKOFF_MS - Date.now()) / 86400000));
+}
 function isIOS() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -2106,6 +2114,9 @@ function bindSeasonPrep() {
 
 async function refreshSeasonPrep() {
   if (!isPreseason() || !document.getElementById("season-prep")) return;
+  // Load the same schedule the Week tab uses so the kickoff countdown targets
+  // the real first game, not the season constant, and the two tabs agree.
+  if (!(state.thisWeekData?.games || []).length) await loadOdds().catch(() => {});
   if (pushSupported() && state.user) {
     try {
       if (!pushState.vapidPublic) {
