@@ -788,15 +788,14 @@ let state = {
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
-// Per-member accent colors - used on avatars, standings, ticker, hero.
-const MEMBER_COLORS = {
-  Brayden: "#fb923c", Chase: "#22d3ee", Chris: "#a78bfa", Jack: "#34d399",
-  Jacob: "#60a5fa", Jared: "#f472b6", Mason: "#facc15", Tyler: "#fb7185",
-};
-function memberColor(name) { return MEMBER_COLORS[name] || "#8A9296"; }
-function memberDot(name, extra = "") {
-  return `<span class="w-1.5 h-1.5 rounded-full inline-block shrink-0 ${extra}" style="background:${memberColor(name)}"></span>`;
-}
+// Member identity reads neutral by default. Only the signed-in member's own
+// name carries the brand accent, so you can spot yourself instantly without a
+// rainbow. Green/red stay reserved for performance (win/loss), never identity.
+const NAME_ACCENT = "#46e08a";
+const NAME_NEUTRAL = "#d4d8d7";
+function isMe(name) { return !!(state.user && state.user.name === name); }
+function memberColor(name) { return isMe(name) ? NAME_ACCENT : NAME_NEUTRAL; }
+function memberDot() { return ""; } // per-member rainbow dots retired
 
 // Units at -110: win = +1, loss = -1.1, push = 0.
 function fmtUnits(u) {
@@ -1132,7 +1131,7 @@ function renderStandings() {
             <span class="material-symbols-outlined text-xs mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
             ${season} ${isLive ? "Leader" : "Champion"}
           </div>
-          <h2 class="font-display-lg text-3xl md:text-5xl leading-none uppercase mb-3 break-words" style="color:${champ ? memberColor(champ.name) : "#46e08a"}">${escapeHtml(champ ? champ.name : "-")}</h2>
+          <h2 class="font-display-lg text-3xl md:text-5xl leading-none uppercase mb-3 break-words" style="color:#46e08a">${escapeHtml(champ ? champ.name : "-")}</h2>
           <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div class="flex items-baseline gap-2">
               <span class="text-on-surface-variant font-label-caps text-[10px]">RECORD</span>
@@ -1229,6 +1228,7 @@ function renderStandings() {
 function renderMemberRow(r, i, season) {
   const isExp = state.expanded === r.name;
   const isTop = i === 0;
+  const mine = isMe(r.name);
   // Per-week outcome class: green if member won the week, W/L/P majority
   // otherwise, gray when nothing is graded yet.
   const heatCls = Array.from({ length: WEEK_COUNT }, (_, w) => {
@@ -1253,13 +1253,13 @@ function renderMemberRow(r, i, season) {
   const heatMini = heatCls.map(c => `<div class="heat-dot ${c}"></div>`).join("");
 
   return `
-    <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : ""}" data-name="${escapeHtml(r.name)}">
-      <td class="px-4 md:px-6 py-5 ${isTop ? "text-primary-fixed font-bold" : "text-on-surface-variant font-bold"}">${i + 1}</td>
+    <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : mine ? "bg-primary-fixed/[0.06]" : ""}" data-name="${escapeHtml(r.name)}">
+      <td class="px-4 md:px-6 py-5 ${isTop || mine ? "text-primary-fixed font-bold" : "text-on-surface-variant font-bold"}">${i + 1}</td>
       <td class="px-4 md:px-6 py-5">
         <div class="flex items-center gap-2">
-          ${memberDot(r.name)}
-          <span class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(r.name)}</span>
+          <span class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop || mine ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(r.name)}</span>
           ${isTop ? '<span class="material-symbols-outlined text-tertiary-fixed-dim text-base" style="font-variation-settings: \'FILL\' 1;">workspace_premium</span>' : ""}
+          ${mine ? '<span class="font-data-tabular text-[9px] tracking-widest uppercase text-primary-fixed border border-primary-fixed/40 rounded px-1.5 py-0.5 leading-none">You</span>' : ""}
         </div>
         <div class="flex gap-[2px] mt-1.5 lg:hidden">${heatMini}</div>
       </td>
@@ -1506,13 +1506,14 @@ function renderLifetime() {
               const tot = m.totals.W + m.totals.L;
               const pctV = tot ? (m.totals.W / tot * 100).toFixed(1) : "-";
               const isTop = i === 0;
+              const mine = isMe(m.name);
               const isUnder = tot && (m.totals.W / tot) < 0.5;
               const barColor = isUnder ? "bg-live-red" : "bg-primary-fixed";
               return `
                 <tr class="hover:bg-primary-fixed/5 transition-colors group">
                   <td class="py-4 px-6 font-data-tabular ${isTop ? "text-tertiary-fixed" : "text-on-surface-variant"} text-lg">${i + 1}</td>
                   <td class="py-4 px-6">
-                    <div class="flex items-center gap-2 font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : "text-on-surface"}">${memberDot(m.name)}${escapeHtml(m.name)}${m.seasonsAsChamp >= 1 ? ` <span class="material-symbols-outlined text-tertiary-fixed-dim text-base align-middle" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>` : ""}</div>
+                    <div class="flex items-center gap-2 font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop || mine ? "text-primary-fixed" : "text-on-surface"}">${escapeHtml(m.name)}${m.seasonsAsChamp >= 1 ? ` <span class="material-symbols-outlined text-tertiary-fixed-dim text-base align-middle" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>` : ""}${mine ? ` <span class="font-data-tabular text-[9px] tracking-widest uppercase text-primary-fixed border border-primary-fixed/40 rounded px-1.5 py-0.5 leading-none">You</span>` : ""}</div>
                   </td>
                   <td class="py-4 px-6 font-data-tabular text-on-surface-variant">${m.seasonsPlayed}</td>
                   <td class="py-4 px-6 font-data-tabular text-on-surface">${recordHtml({w: m.totals.W, l: m.totals.L, t: m.totals.P})}</td>
