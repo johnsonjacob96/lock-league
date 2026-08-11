@@ -56,9 +56,8 @@
     #ticker { position: static; flex: 0 0 auto; }
     header.below-ticker { position: static; flex: 0 0 auto; }
     #root { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 1rem; }
-    /* Nav sits flush at the bottom; keep only a small home-indicator clearance
-       so the icons sit near the bottom edge instead of floating a full inset up. */
-    #mobile-nav { position: static; flex: 0 0 auto; padding-bottom: max(4px, calc(env(safe-area-inset-bottom, 0px) - 22px)); }
+    /* Nav flush to the very bottom edge — no home-indicator clearance. */
+    #mobile-nav { position: static; flex: 0 0 auto; padding-bottom: 0; }
   }
   body {
     font-family: 'Inter', system-ui, sans-serif;
