@@ -543,6 +543,44 @@
   .submit-picks-cta:hover { filter: brightness(1.06); }
   .submit-picks-cta:active { transform: scale(0.97); }
 
+  /* Season-start "get ready" nudge (preseason only) */
+  .season-prep { margin-bottom: 1.5rem; border-radius: 0.75rem; padding: 18px 20px;
+    background: linear-gradient(135deg, rgba(70,224,138,0.10), rgba(70,224,138,0.02));
+    border: 1px solid rgba(70,224,138,0.28); }
+  .sp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .sp-count { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .sp-count-num { font-size: 40px; line-height: 1; color: #46e08a; }
+  .sp-count-unit { font-size: 11px; letter-spacing: 0.16em; color: #9aa4a2; }
+  .sp-count-sub { margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; color: #6f7877; }
+  .sp-tag { align-self: center; font-size: 10px; letter-spacing: 0.16em; color: #04220f; background: #1fd97b; padding: 4px 9px; border-radius: 5px; }
+  .sp-ready { align-self: center; display: flex; align-items: center; gap: 7px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #46e08a; }
+  .sp-ready .material-symbols-outlined { font-size: 20px; }
+  .sp-steps { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .sp-step { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 9px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); }
+  .sp-step.done { opacity: 0.72; }
+  .sp-step.locked { opacity: 0.5; }
+  .sp-check { font-size: 22px; color: #46504f; flex-shrink: 0; }
+  .sp-step.done .sp-check { color: #46e08a; }
+  .sp-step-body { flex: 1; min-width: 0; }
+  .sp-step-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #e6e8e8; }
+  .sp-step-sub { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #9aa4a2; margin-top: 3px; line-height: 1.35; }
+  .sp-step-action { flex-shrink: 0; }
+  .sp-btn { background: #1fd97b; color: #04220f; border: 1px solid #1fd97b; border-radius: 7px; padding: 8px 14px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; transition: filter 0.12s, transform 0.08s; white-space: nowrap; }
+  .sp-btn:hover { filter: brightness(1.06); }
+  .sp-btn:active { transform: scale(0.97); }
+  .sp-btn.ghost { background: transparent; color: #46e08a; border-color: rgba(70,224,138,0.4); }
+  .sp-hint { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #9aa4a2; display: flex; align-items: center; gap: 5px; text-align: right; }
+  .sp-hint b { color: #e6e8e8; font-weight: 600; }
+  .sp-hint .sp-ic { font-size: 15px; vertical-align: middle; }
+  .sp-hint.sp-muted { color: #6f7877; }
+  @media (max-width: 640px) {
+    .sp-count-num { font-size: 32px; }
+    .sp-step { flex-wrap: wrap; }
+    .sp-step-action { width: 100%; }
+    .sp-step-action .sp-btn { width: 100%; }
+    .sp-hint { justify-content: flex-start; text-align: left; }
+  }
+
   /* Notifications toggle (account modal) */
   .notif-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 18px; }
   .notif-label { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #e6e8e8; }
@@ -1122,6 +1160,7 @@ function renderStandings() {
   `;
 
   return `
+    ${renderSeasonPrep()}
     <!-- Champion hero -->
     <section class="relative w-full rounded-xl overflow-hidden mb-6 hero-bg champion-glow">
       <div class="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent z-10"></div>
@@ -1862,6 +1901,144 @@ async function sendTestNotification() {
     const j = await r.json().catch(() => ({}));
     showToast(j.sent ? "TEST SENT" : "NO DEVICE FOUND", j.sent ? "ok" : "err");
   } catch { showToast("TEST FAILED", "err"); }
+}
+
+// ---- Season-start "get ready" nudge (preseason only) ----
+// The push/War-Room/recap stack is useless if nobody installs the app and turns
+// on alerts, and that path is buried in the account modal. In the weeks before
+// kickoff, surface a countdown + a two-step setup right on the home screen.
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstallPrompt = e; refreshSeasonPrep(); });
+window.addEventListener("appinstalled", () => { deferredInstallPrompt = null; refreshSeasonPrep(); });
+
+function isPreseason() { return Date.now() < SEASON_2026_KICKOFF_MS; }
+function daysToKickoff() { return Math.max(0, Math.ceil((SEASON_2026_KICKOFF_MS - Date.now()) / 86400000)); }
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function spBtn(action, label, cls = "") { return `<button class="sp-btn ${cls}" data-sp="${action}">${label}</button>`; }
+function spHint(html, muted = false) { return `<div class="sp-hint ${muted ? "sp-muted" : ""}">${html}</div>`; }
+function spStep(done, title, sub, action, locked = false) {
+  return `
+    <div class="sp-step ${done ? "done" : ""} ${locked ? "locked" : ""}">
+      <span class="material-symbols-outlined sp-check" style="font-variation-settings:'FILL' ${done ? 1 : 0}">${done ? "check_circle" : "radio_button_unchecked"}</span>
+      <div class="sp-step-body">
+        <div class="sp-step-title">${title}</div>
+        <div class="sp-step-sub">${sub}</div>
+      </div>
+      <div class="sp-step-action">${action}</div>
+    </div>`;
+}
+
+function seasonPrepInner() {
+  const days = daysToKickoff();
+  const installed = isStandalone();
+  const supported = pushSupported();
+  const signedIn = !!state.user;
+  const ios = isIOS();
+  const notifsOn = pushState.subscribed;
+
+  const countdown = `
+    <div>
+      <div class="sp-count">
+        <span class="sp-count-num font-display-lg">${days}</span>
+        <span class="sp-count-unit font-label-caps">${days === 1 ? "DAY" : "DAYS"} TO KICKOFF</span>
+      </div>
+      <div class="sp-count-sub">2026 season · Week 1 lines drop soon</div>
+    </div>`;
+
+  // The real goal is alerts reaching each member. Once they're on, we're done.
+  if (notifsOn) {
+    return `<div class="sp-head">${countdown}
+      <div class="sp-ready"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">verified</span> You're set for Week 1</div>
+    </div>`;
+  }
+
+  let steps = "";
+  if (ios && !installed) {
+    // iOS only allows web push from an installed PWA, so install is the gate.
+    steps += spStep(false, "Add Lock League to your phone",
+      "Then alerts can reach you, like a real app",
+      deferredInstallPrompt ? spBtn("install", "Install")
+        : spHint(`Tap <span class="material-symbols-outlined sp-ic">ios_share</span> then <b>Add to Home Screen</b>`));
+    steps += spStep(false, "Turn on alerts",
+      "Unlocks once the app is on your home screen", spHint("After install", true), false, true);
+  } else {
+    let action;
+    if (!signedIn) action = spBtn("signin", "Sign in first", "ghost");
+    else if (!supported) action = spHint("Not supported here", true);
+    else action = spBtn("notify", "Turn on");
+    steps += spStep(false, "Turn on alerts",
+      "Pick reminders + weekly results, never miss a lock", action);
+    if (!installed) {
+      steps += spStep(false, "Add to your home screen",
+        "Optional, but it feels like the real app",
+        deferredInstallPrompt ? spBtn("install", "Install")
+          : spHint(ios ? `<span class="material-symbols-outlined sp-ic">ios_share</span> <b>Add to Home Screen</b>` : `Browser menu → <b>Install</b>`));
+    }
+  }
+
+  return `<div class="sp-head">${countdown}<div class="sp-tag font-label-caps">GET READY</div></div>
+    <div class="sp-steps">${steps}</div>`;
+}
+
+function renderSeasonPrep() {
+  if (!isPreseason()) return "";
+  return `<div id="season-prep" class="season-prep">${seasonPrepInner()}</div>`;
+}
+
+function bindSeasonPrep() {
+  const c = document.getElementById("season-prep");
+  if (!c) return;
+  c.querySelectorAll("[data-sp]").forEach(b => {
+    b.onclick = () => {
+      const a = b.dataset.sp;
+      if (a === "install") triggerInstall();
+      else if (a === "signin") openLogin();
+      else if (a === "notify") seasonPrepEnableNotifs();
+    };
+  });
+}
+
+async function refreshSeasonPrep() {
+  if (!isPreseason() || !document.getElementById("season-prep")) return;
+  if (pushSupported() && state.user) {
+    try {
+      if (!pushState.vapidPublic) {
+        const cfg = await loadPushConfig();
+        if (cfg && cfg.vapidPublic) pushState.vapidPublic = cfg.vapidPublic;
+      }
+      const reg = await getSwRegistration();
+      const sub = reg ? await reg.pushManager.getSubscription() : null;
+      pushState.subscribed = !!sub && Notification.permission === "granted";
+    } catch { /* leave state as-is */ }
+  }
+  const c = document.getElementById("season-prep");
+  if (!c) return;
+  c.innerHTML = seasonPrepInner();
+  bindSeasonPrep();
+}
+
+async function triggerInstall() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  try { await deferredInstallPrompt.userChoice; } catch { /* dismissed */ }
+  deferredInstallPrompt = null;
+  refreshSeasonPrep();
+}
+
+async function seasonPrepEnableNotifs() {
+  if (!state.user) { openLogin(); return; }
+  if (!pushSupported()) { showToast("INSTALL THE APP FIRST", "err"); return; }
+  if (!pushState.vapidPublic) {
+    const cfg = await loadPushConfig();
+    if (cfg && cfg.vapidPublic) pushState.vapidPublic = cfg.vapidPublic;
+  }
+  if (!pushState.vapidPublic) { showToast("NOTIFICATIONS UNAVAILABLE", "err"); return; }
+  try { await enablePush(); } catch { showToast("SOMETHING WENT WRONG", "err"); }
+  await refreshSeasonPrep();
 }
 
 function renderUserArea() {
@@ -3039,6 +3216,8 @@ async function render() {
   if (state.view === "standings") {
     root.innerHTML = renderStandings();
     attachStandingsHandlers();
+    bindSeasonPrep();
+    refreshSeasonPrep();
     document.querySelectorAll(".year-pill").forEach(b => {
       b.addEventListener("click", () => {
         state.season = b.dataset.year;
