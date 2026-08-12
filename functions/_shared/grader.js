@@ -4,10 +4,8 @@ import { sql } from "./db.js";
 import { weeksToGrade, currentNflWeek, seasonTypeFor, testConfig } from "./nfl.js";
 import { pushPersonalized, alreadySent, markSent } from "./push-notify.js";
 import { gradeProp } from "./props.js";
-import { ESPN_HEADERS } from "../api/odds.js";
+import { espnScoreboardEvents, espnBoxscore } from "./espn.js";
 
-const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
-const ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary";
 function normTeam(s) { return String(s || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
 const safeJson = (s) => { try { return JSON.parse(s); } catch { return null; } };
 
@@ -20,14 +18,8 @@ export function sameTeam(a, b) {
 }
 
 export async function fetchScoreboard(season, week, seasontype = 2) {
-  const url = new URL(ESPN_SCOREBOARD);
-  url.searchParams.set("year", String(season));
-  url.searchParams.set("seasontype", String(seasontype));
-  url.searchParams.set("week", String(week));
-  const r = await fetch(url, { headers: ESPN_HEADERS });
-  if (!r.ok) throw new Error(`espn ${r.status}`);
-  const data = await r.json();
-  return (data.events || []).map((ev) => {
+  const events = await espnScoreboardEvents(season, seasontype, week);
+  return (events || []).map((ev) => {
     const comp = ev.competitions?.[0];
     const competitors = comp?.competitors || [];
     const home = competitors.find((c) => c.homeAway === "home");
@@ -49,18 +41,9 @@ export async function fetchScoreboard(season, week, seasontype = 2) {
 
 // Fetch one game's ESPN box score (player stat lines) for prop grading.
 // Returns the boxscore object or null. Callers memoize per grade run so a week
-// with several Super Locks in the same game only fetches it once.
-export async function fetchBoxscore(eventId) {
-  if (!eventId) return null;
-  try {
-    const r = await fetch(`${ESPN_SUMMARY}?event=${eventId}`, { headers: ESPN_HEADERS });
-    if (!r.ok) return null;
-    const data = await r.json();
-    return data.boxscore || null;
-  } catch {
-    return null;
-  }
-}
+// with several Super Locks in the same game only fetches it once. (Delegates to
+// the shared ESPN helper, which handles the site.api -> cdn host fallback.)
+export const fetchBoxscore = espnBoxscore;
 
 export function gradeSpread(pickSide, favLine, awayScore, homeScore, favIsHome) {
   const favMargin = favIsHome ? homeScore - awayScore : awayScore - homeScore;

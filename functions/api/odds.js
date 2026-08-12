@@ -13,16 +13,9 @@
 import { json } from "../_shared/auth.js";
 import { sql } from "../_shared/db.js";
 import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS, seasonTypeFor, testConfig } from "../_shared/nfl.js";
+import { espnScoreboardEvents } from "../_shared/espn.js";
 
 const API_BASE = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds";
-const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
-// ESPN's public API 403s requests from datacenter IPs without a browser-like
-// User-Agent (fine from a laptop, blocked from a Cloudflare colo). Send one.
-export const ESPN_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  "Accept": "application/json, text/plain, */*",
-  "Referer": "https://www.espn.com/nfl/scoreboard",
-};
 // Synthetic, cookie-free key for the shared Cache API entry.
 const EDGE_KEY = new Request("https://lock-league.internal/cache/odds");
 let cache = { ts: 0, data: null };
@@ -104,15 +97,9 @@ const numOrNull = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
 async function fetchEspn(env) {
   const { season, week } = currentSeasonWeek(env);
-  const url = new URL(ESPN_SCOREBOARD);
-  url.searchParams.set("year", String(season));
-  url.searchParams.set("seasontype", String(seasonTypeFor(env)));
-  url.searchParams.set("week", String(week));
-  const r = await fetch(url, { headers: ESPN_HEADERS });
-  if (!r.ok) throw new Error(`espn ${r.status}`);
-  const data = await r.json();
+  const events = await espnScoreboardEvents(season, seasonTypeFor(env), week);
   const games = [];
-  for (const ev of data.events || []) {
+  for (const ev of events || []) {
     const comp = ev.competitions?.[0];
     if (!comp) continue;
     const competitors = comp.competitors || [];
@@ -466,17 +453,18 @@ export async function onRequestGet(context) {
     try {
       const win = weekWindow(currentSeasonWeek(env).week, env);
       const from = Date.parse(win.from), to = Date.parse(win.to);
-      const def = await fetchSharpRaw(env);                              // market=spread,total
-      const allm = await fetchSharpRaw(env, 12, { market: undefined });  // no market filter
-      const parsed = normalizeSharp(def);
+      // Single unfiltered fetch (stays under SharpAPI's 12 req/min): shows ALL
+      // games' dates + market_types, so we can see if August preseason games
+      // exist at all and under what market.
+      const allm = await fetchSharpRaw(env, 12, { market: undefined });
+      const parsed = normalizeSharp(allm);
       const inWin = parsed.filter(g => { const t = Date.parse(g.kickoff); return t >= from && t < to; });
       return json({
         window: win,
-        default_spread_total: summarize(def),
         unfiltered: summarize(allm),
         parsedGames: parsed.length,
         parsedInWindow: inWin.length,
-        parsedInWindowSample: inWin.slice(0, 4).map(g => ({ away: g.away, home: g.home, kickoff: g.kickoff, books: Object.keys(g.books || {}) })),
+        parsedInWindowSample: inWin.slice(0, 6).map(g => ({ away: g.away, home: g.home, kickoff: g.kickoff, books: Object.keys(g.books || {}) })),
       }, { headers: { "Cache-Control": "no-store" } });
     } catch (e) {
       return json({ error: String(e && e.message || e) }, { status: 502, headers: { "Cache-Control": "no-store" } });
