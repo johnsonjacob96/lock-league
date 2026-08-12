@@ -1,0 +1,63 @@
+# Durable reminder to finalize the auto-grading Super Lock.
+#
+# Player stat props (rush/rec/pass yds, anytime TD, ...) aren't posted by the
+# books until ~1-2 days before Week 1 games. This job probes SharpAPI daily in
+# early September and, the moment any market beyond the known futures/core lines
+# appears, opens a GitHub issue with the exact prop market_type strings — so we
+# don't forget to set SHARP_PROP_MARKET + run the live pick->grade smoke test.
+#
+# Once props are confirmed and SHARP_PROP_MARKET is pinned, delete this workflow.
+name: props-watch
+
+on:
+  schedule:
+    # Every day Sep 1-9 at 15:23 UTC (props open ~2 days before the Week 1 slate).
+    - cron: "23 15 1-9 9 *"
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe SharpAPI props
+        id: probe
+        run: |
+          resp=$(curl -s "https://lock-league.pages.dev/api/odds?debug=props&nomarket=1")
+          echo "$resp" > /tmp/probe.json
+          node -e '
+            const j = require("/tmp/probe.json");
+            const KNOWN = new Set(["mvp","rookie_of_the_year","moneyline","point_spread","total_points","most_points_player"]);
+            const types = Object.keys(j.distinctMarketType || {});
+            const newTypes = types.filter(t => !KNOWN.has(t));
+            const live = newTypes.length > 0;
+            const fs = require("fs");
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `live=${live}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `types=${newTypes.join(", ")}\n`);
+            console.log("all market types:", types.join(", ") || "(none)");
+            console.log("new (non-futures) types:", newTypes.join(", ") || "(none)");
+          '
+      - name: Open issue when props go live
+        if: steps.probe.outputs.live == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW_TYPES: ${{ steps.probe.outputs.types }}
+        run: |
+          TITLE="Player props are LIVE — finalize SHARP_PROP_MARKET"
+          # Don't spam: only open the issue once.
+          if gh issue list --state open --search "$TITLE in:title" --json number --jq 'length' | grep -q '^0$'; then
+            gh issue create --title "$TITLE" \
+              --body "SharpAPI is now returning markets beyond the usual futures/core lines: **$NEW_TYPES**
+
+Next steps to light up the auto-grading Super Lock:
+1. Run \`curl 'https://lock-league.pages.dev/api/odds?debug=props&nomarket=1'\` and read the prop \`market_type\` strings.
+2. Set the CF Pages env var \`SHARP_PROP_MARKET\` to the string that returns the stat props (try \`/api/odds?debug=props&market=<value>\`).
+3. Live smoke test: open a Super Lock in My Card 'From board', lock a prop, confirm it auto-grades after the game.
+4. Delete the \`props-watch.yml\` workflow.
+
+(Opened automatically by props-watch.)"
+          else
+            echo "Issue already open; skipping."
+          fi
