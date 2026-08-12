@@ -555,6 +555,36 @@
   .slot .lp-book { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:#9aa4a2; border:1px solid #2c332f; border-radius:4px; padding:1px 5px; }
   .slot .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#6f7877; }
 
+  /* Weekly settlement ($5 to the winner) */
+  .stl-you { font-family:'Inter',sans-serif; font-size:14px; color:#d4d8d7; line-height:1.4; }
+  .stl-you.win { color:#e6e8e8; }
+  .stl-you.owe b { color:#f5a24a; }
+  .stl-you.paid { color:#46e08a; }
+  .stl-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .stl-pay { display:inline-flex; align-items:center; gap:6px; background:#3d95ce; color:#fff; font-family:'Inter',sans-serif; font-weight:700; font-size:13px; padding:9px 15px; border-radius:8px; text-decoration:none; transition:filter 0.12s; }
+  .stl-pay:hover { filter:brightness(1.08); }
+  .stl-mark, .stl-undo { background:transparent; border:1px solid #29302f; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.04em; padding:8px 12px; border-radius:8px; cursor:pointer; transition:border-color 0.12s,color 0.12s; }
+  .stl-mark:hover, .stl-undo:hover { border-color:#46e08a; color:#46e08a; }
+  .stl-undo { padding:2px 8px; margin-left:4px; }
+  .stl-nohandle { font-family:'JetBrains Mono',monospace; font-size:11px; color:#6f7877; }
+  .stl-payers { display:flex; flex-wrap:wrap; gap:7px; margin-top:11px; }
+  .stl-payer { display:inline-flex; align-items:center; gap:6px; background:#14171a; border:1px solid #262b2a; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:11px; padding:5px 10px; border-radius:7px; cursor:pointer; transition:border-color 0.12s,color 0.12s; }
+  .stl-payer .stl-dot { width:7px; height:7px; border-radius:50%; background:#4a5250; flex-shrink:0; }
+  .stl-payer.paid { color:#46e08a; border-color:#26372c; }
+  .stl-payer.paid .stl-dot { background:#46e08a; box-shadow:0 0 6px rgba(70,224,138,0.5); }
+  .stl-warn { margin-top:12px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#f4cf5a; line-height:1.4; }
+  .stl-warn .stl-openacct { background:none; border:none; color:#f4cf5a; text-decoration:underline; cursor:pointer; font:inherit; }
+  .stl-ledger-toggle { margin-top:14px; background:none; border:none; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em; cursor:pointer; padding:0; }
+  .stl-ledger-toggle:hover { color:#e6e8e8; }
+  .stl-ledger-inner { margin-top:12px; display:flex; flex-direction:column; gap:10px; }
+  .stl-wk { border-top:1px solid #1e2422; padding-top:9px; }
+  .stl-wk-head { display:flex; justify-content:space-between; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#9aa4a2; }
+  .stl-wk-winner { color:#c7ccca; }
+  .stl-wk-dues { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+  .stl-chip { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 7px; border-radius:5px; background:#171b1a; border:1px solid #262b2a; color:#6f7877; }
+  .stl-chip.paid { color:#46e08a; border-color:#26372c; }
+  .stl-chip.me { outline:1px solid rgba(56,189,248,0.5); }
+
   /* Segmented book toggle */
   .seg { display:inline-flex; padding:2px; background:#101315; border:1px solid #262a2d; border-radius:8px; }
   .seg button { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#9aa4a2; padding:4px 10px; border-radius:6px; background:transparent; border:none; cursor:pointer; font-weight:700; transition: color 0.12s, background 0.12s; }
@@ -811,6 +841,12 @@
       <button id="notif-toggle" class="notif-switch" role="switch" aria-checked="false" aria-label="Toggle notifications" disabled><span class="knob"></span></button>
     </div>
     <button id="notif-test" class="notif-test">Send test notification</button>
+    <label>Venmo handle (so members can pay you when you win)</label>
+    <div class="flex gap-2">
+      <input id="acct-venmo" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="your-venmo-username" class="flex-1">
+      <button class="btn" id="acct-venmo-save">Save</button>
+    </div>
+    <div class="font-data-tabular text-[10px] tracking-wide text-on-surface-variant mt-1 mb-2" id="acct-venmo-status"></div>
     <label>Current password</label>
     <input id="acct-current" type="password" autocomplete="current-password" placeholder="Current password">
     <label>New password (min 8 characters)</label>
@@ -894,6 +930,7 @@ let state = {
   myPicksSaveMsg: "",
   warRoom: null,
   serverConfig: null,
+  settlement: null,
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
@@ -1269,6 +1306,124 @@ function renderSeasonStatTiles(season) {
 }
 
 // ---- View: Standings ----
+// =================== Weekly settlement ($5 to the winner, Article 6a) ===================
+async function loadSettlement() {
+  if (!state.user) { state.settlement = null; return; }
+  try {
+    const r = await fetch("/api/settlement?season=2026", { credentials: "include" });
+    state.settlement = r.ok ? await r.json() : null;
+  } catch { state.settlement = null; }
+}
+
+// Prefilled one-tap Venmo pay link. The site never moves money; this just opens
+// Venmo to a pay screen with the recipient, $5, and week note filled in.
+function venmoPayLink(handle, amount, note) {
+  if (!handle) return null;
+  return `https://venmo.com/${encodeURIComponent(handle)}?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}`;
+}
+
+function ledgerHtml(s, meId) {
+  return `<div class="stl-ledger-inner">` + s.weeks.slice().reverse().map(w => {
+    const paid = w.dues.filter(d => d.paid).length;
+    return `<div class="stl-wk">
+      <div class="stl-wk-head"><span>Week ${w.week}</span><span class="stl-wk-winner">🏆 ${escapeHtml(w.winner_name)} · ${paid}/${w.dues.length} paid</span></div>
+      <div class="stl-wk-dues">${w.dues.map(d => `<span class="stl-chip ${d.paid ? "paid" : ""} ${d.member_id === meId ? "me" : ""}">${escapeHtml(d.name)}</span>`).join("")}</div>
+    </div>`;
+  }).join("") + `</div>`;
+}
+
+function settleCardHtml() {
+  const s = state.settlement;
+  if (!s || !s.weeks || !s.weeks.length) return "";
+  const meId = s.me.id;
+  const handleOf = (id) => s.members.find(m => m.id === id)?.venmo_handle || null;
+  const latest = s.weeks[s.weeks.length - 1];
+  const iWon = latest.winner_id === meId;
+  const myDue = latest.dues.find(d => d.member_id === meId);
+
+  let action = "";
+  if (iWon) {
+    const paid = latest.dues.filter(d => d.paid).length;
+    action = `
+      <div class="stl-you win">🏆 You won Week ${latest.week} (${latest.winner_record}). ${paid}/${latest.dues.length} have paid you $${latest.amount}.</div>
+      <div class="stl-payers">${latest.dues.map(d => `
+        <button class="stl-payer ${d.paid ? "paid" : ""}" data-week="${latest.week}" data-member="${d.member_id}" data-paid="${d.paid ? 1 : 0}" title="Tap to mark ${d.paid ? "unpaid" : "paid"}">
+          <span class="stl-dot"></span>${escapeHtml(d.name)}
+        </button>`).join("")}</div>`;
+  } else if (myDue) {
+    const link = venmoPayLink(handleOf(latest.winner_id), latest.amount, `Lock League Week ${latest.week}`);
+    action = myDue.paid
+      ? `<div class="stl-you paid">✓ You paid ${escapeHtml(latest.winner_name)} $${latest.amount} for Week ${latest.week}. <button class="stl-undo" data-week="${latest.week}" data-member="${meId}">Undo</button></div>`
+      : `<div class="stl-you owe">You owe ${escapeHtml(latest.winner_name)} <b>$${latest.amount}</b> for Week ${latest.week}.</div>
+         <div class="stl-actions">
+           ${link ? `<a class="stl-pay" href="${link}" target="_blank" rel="noopener">Pay $${latest.amount} on Venmo</a>`
+                  : `<span class="stl-nohandle">${escapeHtml(latest.winner_name)} hasn't linked Venmo yet</span>`}
+           <button class="stl-mark" data-week="${latest.week}" data-member="${meId}">Mark paid</button>
+         </div>`;
+  } else {
+    action = `<div class="stl-you">🏆 ${escapeHtml(latest.winner_name)} won Week ${latest.week} (${latest.winner_record}).</div>`;
+  }
+
+  // Your season net across all settled weeks (open = still unpaid).
+  let oweOpen = 0, owedOpen = 0;
+  for (const w of s.weeks) {
+    if (w.winner_id === meId) owedOpen += w.dues.filter(d => !d.paid).length * w.amount;
+    else { const d = w.dues.find(x => x.member_id === meId); if (d && !d.paid) oweOpen += w.amount; }
+  }
+  const netOpen = owedOpen - oweOpen;
+  const netLabel = netOpen === 0 ? "Square" : netOpen > 0 ? `+$${netOpen} to you` : `-$${Math.abs(netOpen)}`;
+  const netCls = netOpen > 0 ? "text-primary-fixed" : netOpen < 0 ? "text-live-red" : "text-on-surface-variant";
+
+  const noHandleWarn = !s.me.venmo_handle
+    ? `<div class="stl-warn">Add your Venmo so members can pay you when you win. <button class="stl-openacct">Add it →</button></div>` : "";
+
+  return `
+    <section class="glass-panel p-5 md:p-6 mb-6">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-fixed" style="font-variation-settings:'FILL' 1">payments</span>
+          <h3 class="font-headline-lg text-lg uppercase leading-none">Settle Up</h3>
+        </div>
+        <span class="font-data-tabular text-[11px] ${netCls}">${netLabel}</span>
+      </div>
+      ${action}
+      ${noHandleWarn}
+      <button class="stl-ledger-toggle" id="stl-toggle">Season ledger ▾</button>
+      <div class="stl-ledger" id="stl-ledger" style="display:none">${ledgerHtml(s, meId)}</div>
+    </section>`;
+}
+
+function bindSettleCard() {
+  const toggle = document.getElementById("stl-toggle");
+  if (toggle) toggle.onclick = () => {
+    const l = document.getElementById("stl-ledger");
+    const open = l.style.display !== "none";
+    l.style.display = open ? "none" : "block";
+    toggle.textContent = open ? "Season ledger ▾" : "Season ledger ▴";
+  };
+  document.querySelectorAll(".stl-openacct").forEach(b => b.onclick = openAccount);
+  document.querySelectorAll(".stl-payer").forEach(b => b.onclick = () =>
+    markDue(Number(b.dataset.week), Number(b.dataset.member), b.dataset.paid !== "1"));
+  document.querySelectorAll(".stl-mark").forEach(b => b.onclick = () =>
+    markDue(Number(b.dataset.week), Number(b.dataset.member), true));
+  document.querySelectorAll(".stl-undo").forEach(b => b.onclick = () =>
+    markDue(Number(b.dataset.week), Number(b.dataset.member), false));
+}
+
+async function markDue(week, memberId, paid) {
+  try {
+    const r = await fetch("/api/settlement?action=mark-paid", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season: 2026, week, member_id: memberId, paid }),
+    });
+    if (!r.ok) { showToast("COULDN'T UPDATE", "err"); return; }
+    await loadSettlement();
+    const m = document.getElementById("settle-mount");
+    if (m) { m.innerHTML = settleCardHtml(); bindSettleCard(); }
+  } catch { showToast("NETWORK ERROR", "err"); }
+}
+
 function renderStandings() {
   const season = state.season;
   const rows = buildStandings(season);
@@ -1302,6 +1457,7 @@ function renderStandings() {
 
   return `
     ${renderSeasonPrep()}
+    <div id="settle-mount">${settleCardHtml()}</div>
     <!-- Champion hero -->
     <section class="relative w-full rounded-xl overflow-hidden mb-6 hero-bg champion-glow">
       <div class="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent z-10"></div>
@@ -1897,8 +2053,38 @@ function openAccount() {
   document.getElementById("acct-current").value = "";
   document.getElementById("acct-next").value = "";
   document.getElementById("acct-err").textContent = "";
+  const venmo = document.getElementById("acct-venmo");
+  const vstatus = document.getElementById("acct-venmo-status");
+  venmo.value = state.settlement?.me?.venmo_handle || "";
+  vstatus.textContent = "";
   document.getElementById("account-modal").classList.add("show");
   refreshNotifUI();
+  // Backfill the handle if the ledger hasn't loaded yet this session.
+  if (!state.settlement) loadSettlement().then(() => {
+    if (document.getElementById("account-modal").classList.contains("show") && !venmo.value) {
+      venmo.value = state.settlement?.me?.venmo_handle || "";
+    }
+  });
+}
+async function saveVenmo() {
+  const inp = document.getElementById("acct-venmo");
+  const status = document.getElementById("acct-venmo-status");
+  const handle = inp.value.trim().replace(/^@+/, "");
+  status.textContent = "Saving…";
+  try {
+    const r = await fetch("/api/settlement?action=set-venmo", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle }),
+    });
+    const j = await r.json();
+    if (!r.ok) { status.textContent = j.error === "bad-handle" ? "Use 4–30 letters, numbers, - or _." : "Save failed."; return; }
+    status.textContent = j.venmo_handle ? `Saved · @${j.venmo_handle}` : "Cleared.";
+    // Refresh the ledger so pay links pick up the new handle.
+    state.settlement = null;
+    await loadSettlement();
+    if (state.view === "standings") { const m = document.getElementById("settle-mount"); if (m) { m.innerHTML = settleCardHtml(); bindSettleCard(); } }
+  } catch { status.textContent = "Network error."; }
 }
 async function changePassphrase() {
   const current = document.getElementById("acct-current").value;
@@ -3498,6 +3684,12 @@ async function render() {
         render();
       });
     });
+    // Weekly $5 settlement card (only shows once a week has a winner).
+    if (state.user) loadSettlement().then(() => {
+      if (state.view !== "standings") return;
+      const m = document.getElementById("settle-mount");
+      if (m) { m.innerHTML = settleCardHtml(); bindSettleCard(); }
+    });
   } else if (state.view === "lifetime") {
     root.innerHTML = renderLifetime();
     document.querySelectorAll(".archive-link").forEach(c => {
@@ -3670,6 +3862,7 @@ document.addEventListener("focusout", (e) => {
 
 // Account modal handlers
 document.getElementById("acct-save").onclick = changePassphrase;
+document.getElementById("acct-venmo-save").onclick = saveVenmo;
 document.getElementById("acct-cancel").onclick = () => document.getElementById("account-modal").classList.remove("show");
 document.getElementById("acct-logout").onclick = () => {
   document.getElementById("account-modal").classList.remove("show");
