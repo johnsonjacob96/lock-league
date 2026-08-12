@@ -146,6 +146,24 @@ export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const action = (url.searchParams.get("action") || "").toLowerCase();
 
+  // Cron/admin: wipe the preseason-test data (season 2026, week 2) after the
+  // dry run, so the test picks don't pollute the real regular-season week 2.
+  // Also clears the seeded preseason board so it flips to the live Week 1 board.
+  if (request.method === "POST" && action === "wipe-test") {
+    if (!env.CRON_SECRET || request.headers.get("X-Cron-Secret") !== env.CRON_SECRET) {
+      return json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+    }
+    const s = sql(env);
+    const out = {};
+    const run = async (label, fn) => { try { const r = await fn(); out[label] = Array.isArray(r) ? r.length : (r ?? true); } catch (e) { out[label] = "skip:" + String(e && e.message || e).slice(0, 40); } };
+    await run("picks", () => s`DELETE FROM picks WHERE season = 2026 AND week = 2 RETURNING id`);
+    await run("weekly_dues", () => s`DELETE FROM weekly_dues WHERE season = 2026 AND week = 2 RETURNING member_id`);
+    await run("week_notifications", () => s`DELETE FROM week_notifications WHERE season = 2026 AND week = 2 RETURNING season`);
+    await run("scoreboard_snapshot", () => s`DELETE FROM scoreboard_snapshot WHERE season = 2026 AND week = 2 RETURNING season`);
+    await run("odds_snapshot", () => s`DELETE FROM odds_snapshot WHERE id = 1 RETURNING id`);
+    return json({ ok: true, deleted: out }, { headers: { "Cache-Control": "no-store" } });
+  }
+
   if (request.method === "POST" && action === "mark-super-lock") {
     const memberId = await verifyCookie(env, request.headers.get("cookie"));
     if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });

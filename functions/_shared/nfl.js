@@ -26,8 +26,12 @@ const PRESEASON_TEST = {
   windowToMs: Date.UTC(2026, 7, 18, 0),
   // Auto-activation window: the LL_TEST_MODE secret can be set well in advance;
   // it only actually takes effect between these times, then reverts on its own.
+  // End = Sat Aug 15 14:00 UTC (9:00am CT): Thursday games are graded and Jacob
+  // reviews Friday, then the app auto-flips back to regular-season Week 1 on
+  // Saturday. (The season-2026/week-2 test picks are wiped separately by the
+  // flip-back workflow so they don't pollute the real regular-season week 2.)
   activeFromMs: Date.UTC(2026, 7, 12, 12), // Wed Aug 12 2026, 7:00am CT
-  activeToMs: Date.UTC(2026, 7, 19, 0),    // Tue Aug 19 2026, 00:00 UTC
+  activeToMs: Date.UTC(2026, 7, 15, 14),   // Sat Aug 15 2026, 9:00am CT
 };
 // Returns the preseason-test config only when the env flag is set AND we are
 // inside the activation window, so setting the secret early is safe.
