@@ -335,7 +335,7 @@
   .pick-btn.picked .pb-value { font-weight: 700; }
   .pick-btn .pb-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6f7877; }
 
-  /* Pick input (My Picks) */
+  /* Pick input (Super Lock entry) */
   .pick-input {
     width: 100%;
     background: #101315;
@@ -784,10 +784,6 @@
       <span class="material-symbols-outlined">leaderboard</span>
       <span>STANDINGS</span>
     </button>
-    <button class="side-nav-link nav-link" data-view="mypicks">
-      <span class="material-symbols-outlined">edit_square</span>
-      <span>MY PICKS</span>
-    </button>
     <button class="side-nav-link nav-link" data-view="thisweek">
       <span class="material-symbols-outlined">timer</span>
       <span>THIS WEEK</span>
@@ -799,6 +795,10 @@
     <button class="side-nav-link nav-link" data-view="lifetime">
       <span class="material-symbols-outlined">military_tech</span>
       <span>LIFETIME</span>
+    </button>
+    <button class="side-nav-link nav-link" data-view="payments">
+      <span class="material-symbols-outlined">payments</span>
+      <span>PAYMENTS</span>
     </button>
     <button class="side-nav-link nav-link" data-view="rules">
       <span class="material-symbols-outlined">gavel</span>
@@ -870,10 +870,6 @@
       <span class="material-symbols-outlined">dashboard</span>
       <span class="font-label-caps text-[10px]">Home</span>
     </button>
-    <button class="bottom-nav-link nav-link" data-view="mypicks">
-      <span class="material-symbols-outlined">ads_click</span>
-      <span class="font-label-caps text-[10px]">Picks</span>
-    </button>
     <button class="bottom-nav-link nav-link" data-view="thisweek">
       <span class="material-symbols-outlined">timer</span>
       <span class="font-label-caps text-[10px]">Week</span>
@@ -885,6 +881,10 @@
     <button class="bottom-nav-link nav-link" data-view="lifetime">
       <span class="material-symbols-outlined">history</span>
       <span class="font-label-caps text-[10px]">Lifetime</span>
+    </button>
+    <button class="bottom-nav-link nav-link" data-view="payments">
+      <span class="material-symbols-outlined">payments</span>
+      <span class="font-label-caps text-[10px]">Pay</span>
     </button>
     <button class="bottom-nav-link nav-link" data-view="rules">
       <span class="material-symbols-outlined">gavel</span>
@@ -925,9 +925,7 @@ let state = {
   tickerWeek: "ALL",
   user: null,
   thisWeekData: null,
-  myPicksDraft: {},
   myPicksWeek: null,
-  myPicksSaveMsg: "",
   warRoom: null,
   serverConfig: null,
   settlement: null,
@@ -1457,7 +1455,6 @@ function renderStandings() {
 
   return `
     ${renderSeasonPrep()}
-    <div id="settle-mount">${settleCardHtml()}</div>
     <!-- Champion hero -->
     <section class="relative w-full rounded-xl overflow-hidden mb-6 hero-bg champion-glow">
       <div class="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent z-10"></div>
@@ -2596,23 +2593,55 @@ function renderMyCardBody() {
     const p = currentMyPicks[bt];
     const txt = p && (p.pick_text || p.text) ? escapeHtml(p.pick_text || p.text) : "";
     const filled = !!txt;
-    const mv = filled ? lineMove(p) : null;
+    const isSuper = bt === "Super Lock";
+    const mv = (filled && !isSuper) ? lineMove(p) : null;
     const moveHtml = mv ? `
-      <div class="slot-move ${mv.better ? "better" : "worse"}" title="${mv.better ? "Your locked line beats the current line" : "The line has moved against your pick"}">
+      <div class="slot-move ${mv.better ? "better" : "worse"}" title="${mv.better ? "Your locked line beats the current line" : "A better number is available"}">
         <span class="mv-caret">${mv.better ? "▲" : "▼"}</span>
-        <span>${mv.better ? "You beat the line" : "Line moved"} · locked ${mv.lockedFmt}, now ${mv.curFmt}</span>
+        <span>${mv.better ? "You beat the line" : "Better number available"} · locked ${mv.lockedFmt}, now ${mv.curFmt}</span>
       </div>` : "";
+    const metaHtml = (filled && !isSuper)
+      ? `<div class="lp-meta">${p.book ? `<span class="lp-book">${bookLabel(p.book)}</span>` : ""}${p.locked_at ? `<span class="lp-ts">Locked ${fmtLockedAt(p.locked_at)}</span>` : ""}</div>`
+      : "";
     return `<div class="slot ${filled ? "filled" : ""}">
       <span class="slot-key k-${meta.key}"></span>
       <div class="min-w-0 flex-1">
         <div class="slot-name" style="${filled ? `color:${meta.color}` : ""}">${bt}</div>
         ${filled
-          ? `<div class="slot-val truncate">${txt}</div>${moveHtml}`
-          : `<div class="slot-empty">${bt === "Super Lock" ? "Set in My Picks" : "Tap a line below"}</div>`}
+          ? `<div class="slot-val truncate">${txt}</div>${metaHtml}${moveHtml}`
+          : `<div class="slot-empty">${isSuper ? "Enter it below ↓" : "Tap a line below"}</div>`}
       </div>
       ${filled ? `<span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};font-variation-settings:'FILL' 1">check_circle</span>` : ""}
     </div>`;
   }).join("");
+}
+
+// Super Lock is the one manual bet — its entry + grade now live in My Card
+// (there's no separate picks tab). Kept out of #my-card-body so a live-odds
+// refresh can't clobber a half-typed entry.
+function superLockEditorHtml() {
+  const p = currentMyPicks["Super Lock"];
+  const txt = p && (p.pick_text || p.text) ? escapeHtml(p.pick_text || p.text) : "";
+  const res = p?.result || "";
+  const markHtml = txt ? `
+    <div class="flex flex-wrap items-center gap-2 mt-3">
+      <span class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant uppercase mr-1">Grade</span>
+      <button class="sl-mark-btn W ${res === "W" ? "current" : ""}" data-result="W">Hit · W</button>
+      <button class="sl-mark-btn L ${res === "L" ? "current" : ""}" data-result="L">Miss · L</button>
+      <button class="sl-mark-btn P ${res === "P" ? "current" : ""}" data-result="P">Push · P</button>
+    </div>` : "";
+  return `
+    <div class="flex items-center gap-1.5 mb-2 flex-wrap">
+      <span class="material-symbols-outlined text-[15px] text-tertiary-fixed" style="font-variation-settings:'FILL' 1">lock</span>
+      <span class="font-label-caps text-[10px] tracking-widest uppercase text-tertiary-fixed">Super Lock</span>
+      <span class="font-data-tabular text-[9.5px] text-on-surface-variant">prop / specialty · -120 or harder · graded manually</span>
+    </div>
+    <div class="flex gap-2">
+      <input class="pick-input flex-1" id="mycard-superlock" autocapitalize="none" value="${txt}" placeholder="Player prop / specialty bet">
+      <button class="btn-primary" id="mycard-sl-save">Save</button>
+    </div>
+    ${markHtml}
+    <span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed block mt-2" id="mycard-sl-msg"></span>`;
 }
 
 function myCardProgress() {
@@ -2640,11 +2669,61 @@ function renderMyCardPanel() {
       <span class="font-data-tabular text-[11px] text-on-surface-variant" id="mycard-progress">${myCardProgress()}</span>
     </div>
     <div id="my-card-body" class="space-y-2.5">${renderMyCardBody()}</div>
-    <div class="mt-5 pt-4 border-t border-outline-variant flex items-center justify-between gap-3">
-      <div class="font-data-tabular text-[10px] tracking-wide text-on-surface-variant uppercase">Locks Sun 12:00 PM CT</div>
-      <button class="font-data-tabular text-[10px] tracking-wide text-primary-fixed uppercase jump-mypicks">Edit / Super Lock &rarr;</button>
-    </div>
+    <div id="my-card-sl" class="mt-4 pt-4 border-t border-outline-variant">${superLockEditorHtml()}</div>
+    <div class="mt-4 pt-4 border-t border-outline-variant font-data-tabular text-[10px] tracking-wide text-on-surface-variant uppercase">Locks Sun 12:00 PM CT · Started games lock at kickoff</div>
   </div>`;
+}
+
+function myCardWeek() {
+  const cur = currentNflWeekClient();
+  return state.myPicksWeek || cur.week || 1;
+}
+function bindSuperLockEditor() {
+  const save = document.getElementById("mycard-sl-save");
+  if (save) save.onclick = () => { const inp = document.getElementById("mycard-superlock"); saveSuperLockText(inp ? inp.value : ""); };
+  document.querySelectorAll("#my-card-sl .sl-mark-btn").forEach(b => b.onclick = () => markSuperLockMyCard(b.dataset.result));
+}
+function refreshSuperLockEditor() {
+  const el = document.getElementById("my-card-sl");
+  if (!el) return;
+  el.innerHTML = superLockEditorHtml();
+  bindSuperLockEditor();
+}
+async function saveSuperLockText(raw) {
+  const text = (raw || "").trim();
+  const msg = document.getElementById("mycard-sl-msg");
+  if (!text) { if (msg) msg.textContent = "ENTER A SUPER LOCK FIRST"; return; }
+  try {
+    const r = await fetch("/api/picks", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season: 2026, week: myCardWeek(), picks: [{ bet_type: "Super Lock", pick_text: text }] }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      if (msg) msg.textContent = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
+        : j.error === "super-lock-price" ? "MUST BE -120 OR HARDER" : "ERROR · " + (j.error || "");
+      return;
+    }
+    currentMyPicks["Super Lock"] = { ...(currentMyPicks["Super Lock"] || {}), pick_text: text, locked_at: new Date().toISOString() };
+    showToast("SUPER LOCK SAVED");
+    refreshMyCard();
+    refreshSuperLockEditor();
+  } catch { if (msg) msg.textContent = "NETWORK ERROR"; }
+}
+async function markSuperLockMyCard(result) {
+  try {
+    const r = await fetch("/api/picks?action=mark-super-lock", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season: 2026, week: myCardWeek(), result }),
+    });
+    const j = await r.json();
+    if (!r.ok) { showToast("MARK ERROR: " + (j.error || ""), "err"); return; }
+    currentMyPicks["Super Lock"] = { ...(currentMyPicks["Super Lock"] || {}), result };
+    showToast(`SUPER LOCK MARKED ${result}`);
+    refreshSuperLockEditor();
+  } catch { showToast("NETWORK ERROR", "err"); }
 }
 
 function renderThisWeek() {
@@ -2973,7 +3052,7 @@ function renderRecentPicksWidget() {
         </div>
         <div class="flex items-start gap-3">
           <div class="avatar shrink-0"><span class="material-symbols-outlined text-base">lock</span></div>
-          <div class="text-[12px] text-on-surface-variant leading-snug">Super Lock must be -120 or harder. Submit in <button class="text-primary-fixed underline jump-mypicks">My Picks</button>.</div>
+          <div class="text-[12px] text-on-surface-variant leading-snug">Super Lock must be -120 or harder. Enter it in My Card, on the right.</div>
         </div>
       </div>
     </div>
@@ -3038,7 +3117,7 @@ async function clickPickButton(btn) {
     } else {
       document.querySelectorAll(`.pick-btn[data-bet="${bet_type}"]`).forEach(b => b.classList.remove("picked"));
       btn.classList.add("picked");
-      currentMyPicks[bet_type] = { pick_text, game_key, side, book, line, price };
+      currentMyPicks[bet_type] = { pick_text, game_key, side, book, line, price, locked_at: new Date().toISOString() };
       refreshMyCard();
       showToast(`LOCKED ${BET_META[bet_type].short}: ${pick_text}`);
     }
@@ -3074,7 +3153,7 @@ async function unpick(btn, bet_type, season, week) {
   }
 }
 
-// =================== My Picks ===================
+// =================== My Card data + Who's In ===================
 function currentNflWeekClient() {
   // Prefer the server's answer (it knows about preseason test mode; the client's
   // calendar math alone would say "offseason").
@@ -3142,145 +3221,6 @@ function fillWhosIn() {
   if (c && list?.length) c.textContent = `${list.filter(m => m.picks >= 5).length}/${list.length} IN`;
 }
 
-async function renderMyPicks() {
-  if (!state.user) {
-    return `
-      <section class="mb-stack-lg">
-        <span class="font-label-caps text-label-caps text-primary-fixed uppercase">Member · Sign-In Required</span>
-        <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">My Picks</h1>
-      </section>
-      <div class="glass-panel p-8 text-center cursor-pointer hover:border-primary-fixed/40 transition-colors" id="signin-prompt">
-        <div class="font-data-tabular text-on-surface-variant mb-4 text-sm">Sign in to submit your weekly picks.</div>
-        <div class="font-data-tabular text-primary-fixed text-sm tracking-widest uppercase">→ Sign In</div>
-      </div>
-    `;
-  }
-  const cur = currentNflWeekClient();
-  const season = 2026;
-  const week = state.myPicksWeek || cur.week || 1;
-  const existing = await loadMyPicks(season, week);
-
-  // Fav / Dog / Over / Under are locked on the board (structured, line-validated
-  // server-side). This tab reviews them; it no longer accepts free-typed lines.
-  const GRADABLE = ["Favorite", "Dog", "Over", "Under"];
-  const lockedCount = GRADABLE.filter(bt => existing[bt] && existing[bt].pick_text).length;
-  const reviewRows = GRADABLE.map(bt => {
-    const meta = BET_META[bt];
-    const p = existing[bt];
-    if (!p || !p.pick_text) {
-      return `<div class="slot">
-        <span class="slot-key k-${meta.key}"></span>
-        <div class="min-w-0 flex-1">
-          <div class="slot-name">${bt}</div>
-          <div class="slot-empty">Not locked &middot; pick it on the board</div>
-        </div>
-      </div>`;
-    }
-    const mv = lineMove(p);
-    const moveHtml = mv ? `
-      <div class="slot-move ${mv.better ? "better" : "worse"}">
-        <span class="mv-caret">${mv.better ? "▲" : "▼"}</span>
-        <span>${mv.better ? "You beat the line" : "Better number available"} &middot; locked ${mv.lockedFmt}, now ${mv.curFmt}</span>
-      </div>` : "";
-    const mechips = `<div class="lp-meta">${p.book ? `<span class="lp-book">${bookLabel(p.book)}</span>` : ""}${p.locked_at ? `<span class="lp-ts">Locked ${fmtLockedAt(p.locked_at)}</span>` : ""}</div>`;
-    return `<div class="slot filled">
-      <span class="slot-key k-${meta.key}"></span>
-      <div class="min-w-0 flex-1">
-        <div class="slot-name" style="color:${meta.color}">${bt}</div>
-        <div class="slot-val truncate">${escapeHtml(p.pick_text)}</div>
-        ${mechips}
-        ${moveHtml}
-      </div>
-      <span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};font-variation-settings:'FILL' 1">check_circle</span>
-    </div>`;
-  }).join("");
-
-  const sl = existing["Super Lock"];
-  const slVal = sl?.pick_text || "";
-  const slMarkHtml = sl ? `
-    <section class="mt-10 glass-panel p-6 md:p-7 border-l-2 border-l-tertiary-fixed-dim">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <div class="font-label-caps text-[10px] tracking-widest text-tertiary-fixed uppercase mb-1">Mark Your Super Lock</div>
-          <div class="font-display-lg text-2xl text-on-surface uppercase">Week ${week}</div>
-        </div>
-        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase">Grade Manually</div>
-      </div>
-      <div class="bg-surface-container-lowest/60 border border-outline-variant p-4 mb-5 font-data-tabular text-sm">${escapeHtml(sl.pick_text)}</div>
-      <div class="flex flex-wrap gap-2">
-        <button class="sl-mark-btn W ${sl.result === 'W' ? 'current' : ''}" data-result="W">Hit · W</button>
-        <button class="sl-mark-btn L ${sl.result === 'L' ? 'current' : ''}" data-result="L">Miss · L</button>
-        <button class="sl-mark-btn P ${sl.result === 'P' ? 'current' : ''}" data-result="P">Push · P</button>
-      </div>
-      ${sl.graded_at ? `<div class="font-data-tabular text-[10px] text-on-surface-variant mt-4 tracking-widest uppercase">Last marked · ${new Date(sl.graded_at).toLocaleString()}</div>` : ""}
-    </section>
-  ` : "";
-
-  return `
-    <section class="mb-stack-lg flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-      <div>
-        <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly · Submission</div>
-        <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">${escapeHtml(state.user.name)}</h1>
-      </div>
-      <div class="glass-panel px-5 py-3 flex items-center gap-stack-sm border border-outline-variant">
-        <button class="material-symbols-outlined p-1 text-on-surface-variant hover:text-primary-fixed transition-colors disabled:opacity-30" id="week-prev" ${week <= 1 ? "disabled" : ""}>chevron_left</button>
-        <span class="font-data-tabular text-data-tabular px-4 text-primary-fixed-dim font-bold uppercase">Week ${week}</span>
-        <button class="material-symbols-outlined p-1 text-on-surface-variant hover:text-primary-fixed transition-colors disabled:opacity-30" id="week-next" ${week >= 18 ? "disabled" : ""}>chevron_right</button>
-      </div>
-    </section>
-
-    <section class="glass-panel p-6 md:p-8">
-      <div class="flex items-center justify-between mb-5">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary-fixed" style="font-variation-settings:'FILL' 1">receipt_long</span>
-          <h3 class="font-headline-lg text-lg uppercase leading-none">Week ${week} Card</h3>
-        </div>
-        <span class="font-data-tabular text-[11px] text-on-surface-variant">${lockedCount} / 4 locked</span>
-      </div>
-      <div class="space-y-2.5">${reviewRows}</div>
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 mt-5 border-t border-outline-variant">
-        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase" id="lock-status">Fav · Dog · Over · Under are locked on the board</div>
-        <button class="btn-primary jump-board">Go To Board <span class="material-symbols-outlined text-sm align-middle ml-1">arrow_forward</span></button>
-      </div>
-    </section>
-
-    <section class="glass-panel p-6 md:p-8 mt-6">
-      <div class="flex items-center gap-1.5 mb-1">
-        <span class="material-symbols-outlined text-[16px] text-tertiary-fixed" style="font-variation-settings:'FILL' 1">lock</span>
-        <h3 class="font-label-caps text-[11px] tracking-widest uppercase text-tertiary-fixed">Super Lock</h3>
-      </div>
-      <p class="text-on-surface-variant text-[12px] mb-3 leading-snug">Your specialty / player-prop pick. Free-text, graded manually. Must be -120 or harder.</p>
-      <input class="pick-input" id="superlock-input" value="${escapeHtml(slVal)}" placeholder="Player prop / specialty bet">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 mt-4 border-t border-outline-variant">
-        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase">Cutoff · Sun 12:00 PM CT</div>
-        <div class="flex items-center gap-4">
-          <span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed" id="save-msg">${escapeHtml(state.myPicksSaveMsg || "")}</span>
-          <button class="btn-primary" id="superlock-save">Save Super Lock <span class="material-symbols-outlined text-sm align-middle ml-1">send</span></button>
-        </div>
-      </div>
-    </section>
-    ${slMarkHtml}
-  `;
-}
-
-async function markSuperLock(result) {
-  const cur = currentNflWeekClient();
-  const season = 2026;
-  const week = state.myPicksWeek || cur.week || 1;
-  try {
-    const r = await fetch("/api/picks?action=mark-super-lock", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ season, week, result }),
-    });
-    const j = await r.json();
-    if (!r.ok) { state.myPicksSaveMsg = "MARK ERROR · " + (j.error || "unknown"); }
-    else { state.myPicksSaveMsg = `SUPER LOCK MARKED ${result}`; }
-  } catch (e) { state.myPicksSaveMsg = "NETWORK ERROR"; }
-  render();
-}
-
 // Compact "Locked Tue 8:14 PM" stamp in Central time (the league's zone).
 function fmtLockedAt(iso) {
   const d = new Date(iso);
@@ -3288,31 +3228,43 @@ function fmtLockedAt(iso) {
   return d.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
 }
 
-// Only Super Lock is submitted here now; the four gradable bets are board-only.
-async function submitSuperLock() {
-  const inp = document.getElementById("superlock-input");
-  const text = (inp?.value || "").trim();
-  const cur = currentNflWeekClient();
-  const week = state.myPicksWeek || cur.week || 1;
-  const season = 2026;
-  if (!text) { state.myPicksSaveMsg = "ENTER A SUPER LOCK FIRST"; render(); return; }
-  try {
-    const r = await fetch("/api/picks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ season, week, picks: [{ bet_type: "Super Lock", pick_text: text }] }),
-    });
-    const j = await r.json();
-    if (!r.ok) {
-      state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
-        : j.error === "super-lock-price" ? "SUPER LOCK MUST BE -120 OR HARDER"
-        : "ERROR · " + j.error;
-    } else {
-      state.myPicksSaveMsg = "SUPER LOCK SAVED";
-    }
-  } catch (e) { state.myPicksSaveMsg = "NETWORK ERROR"; }
-  render();
+// ---- Payments tab (weekly $5 settlement; lives in its own hideable view) ----
+async function renderPayments() {
+  if (!state.user) {
+    return `
+      <section class="mb-stack-lg">
+        <span class="font-label-caps text-label-caps text-primary-fixed uppercase">Members · Sign-In Required</span>
+        <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">Payments</h1>
+      </section>
+      <div class="glass-panel p-8 text-center cursor-pointer hover:border-primary-fixed/40 transition-colors" id="signin-prompt">
+        <div class="font-data-tabular text-on-surface-variant mb-4 text-sm">Sign in to see the weekly settlement ledger.</div>
+        <div class="font-data-tabular text-primary-fixed text-sm tracking-widest uppercase">→ Sign In</div>
+      </div>`;
+  }
+  await loadSettlement();
+  const s = state.settlement;
+  const hasWeeks = s && s.weeks && s.weeks.length;
+  const empty = `
+    <div class="glass-panel p-8 text-center">
+      <span class="material-symbols-outlined text-outline-variant text-3xl">payments</span>
+      <div class="font-data-tabular text-on-surface-variant mt-3 text-sm">No weeks settled yet.</div>
+      <div class="text-on-surface-variant text-[13px] mt-1 leading-relaxed">Once a week has a winner, the $5 dues (Article 6a) show up here with one-tap Venmo links.</div>
+      ${!s?.me?.venmo_handle ? `<button class="btn-primary mt-5 pay-openacct">Add your Venmo</button>` : ""}
+    </div>`;
+  return `
+    <section class="mb-stack-lg">
+      <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly · Article 6a</div>
+      <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">Payments</h1>
+      <p class="text-on-surface-variant text-sm mt-2.5 max-w-xl leading-relaxed">The $5-to-the-winner weekly flow. The site tracks who owes whom and gives you a one-tap Venmo link — it never holds money. The season pot runs on LeagueSafe.</p>
+    </section>
+    ${hasWeeks ? settleCardHtml() : empty}
+    <section class="glass-panel p-5 md:p-6 mt-2">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="material-symbols-outlined text-secondary-fixed-dim">savings</span>
+        <h3 class="font-label-caps text-[11px] tracking-widest uppercase text-on-surface-variant">Season Pot · LeagueSafe</h3>
+      </div>
+      <p class="text-on-surface-variant text-[13px] leading-relaxed">$100 entry per member (Article 11), paid via LeagueSafe. Regular-season payout: <b class="text-on-surface">1st $500 · 2nd $200 · 3rd $100</b>. LeagueSafe holds and distributes the pot — nothing to do here.</p>
+    </section>`;
 }
 
 // Poll live scores every 60s while This Week is open; re-render on change.
@@ -3684,12 +3636,6 @@ async function render() {
         render();
       });
     });
-    // Weekly $5 settlement card (only shows once a week has a winner).
-    if (state.user) loadSettlement().then(() => {
-      if (state.view !== "standings") return;
-      const m = document.getElementById("settle-mount");
-      if (m) { m.innerHTML = settleCardHtml(); bindSettleCard(); }
-    });
   } else if (state.view === "lifetime") {
     root.innerHTML = renderLifetime();
     document.querySelectorAll(".archive-link").forEach(c => {
@@ -3725,39 +3671,15 @@ async function render() {
     currentMyPicks = await loadMyPicks(2026, week);
     markPickedButtons(currentMyPicks);
     refreshMyCard();
+    refreshSuperLockEditor(); // fill the Super Lock editor from the loaded picks + bind it
     fillWhosIn();
-    document.querySelectorAll(".jump-mypicks").forEach(b => {
-      b.addEventListener("click", () => { state.view = "mypicks"; render(); });
-    });
-  } else if (state.view === "mypicks") {
-    // Load the live board first so the review can flag better numbers (line moves).
-    if (state.user && !state.thisWeekData) await loadOdds();
-    root.innerHTML = await renderMyPicks();
-    if (state.view !== "mypicks") return;
-    const slSave = document.getElementById("superlock-save");
-    if (slSave) slSave.onclick = submitSuperLock;
-    document.querySelectorAll(".jump-board").forEach(b => {
-      b.onclick = () => { state.view = "thisweek"; render(); };
-    });
-    document.querySelectorAll(".sl-mark-btn").forEach(b => {
-      b.onclick = () => markSuperLock(b.dataset.result);
-    });
+  } else if (state.view === "payments") {
+    root.innerHTML = await renderPayments();
+    if (state.view !== "payments") return;
+    bindSettleCard();
     const prompt = document.getElementById("signin-prompt");
     if (prompt) prompt.onclick = openLogin;
-    const wkPrev = document.getElementById("week-prev");
-    const wkNext = document.getElementById("week-next");
-    if (wkPrev) wkPrev.onclick = () => {
-      const cur = currentNflWeekClient();
-      const wk = state.myPicksWeek || cur.week || 1;
-      state.myPicksWeek = Math.max(1, wk - 1);
-      render();
-    };
-    if (wkNext) wkNext.onclick = () => {
-      const cur = currentNflWeekClient();
-      const wk = state.myPicksWeek || cur.week || 1;
-      state.myPicksWeek = Math.min(18, wk + 1);
-      render();
-    };
+    document.querySelectorAll(".pay-openacct").forEach(b => b.onclick = openAccount);
   }
 }
 
