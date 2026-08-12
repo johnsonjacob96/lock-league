@@ -415,6 +415,26 @@ export async function onRequestGet(context) {
   const ttlS = ttlSeconds(env);
   const ttlMs = ttlS * 1000;
 
+  // Debug: why is the board not showing the expected week's games? Dumps the
+  // decision inputs + each live source's outcome, so we can see (in the real CF
+  // env) whether the ESPN preseason fallback is throwing.
+  if (url.searchParams.get("debug") === "why") {
+    const out = { now: new Date().toISOString() };
+    try { out.testConfig = testConfig(env); } catch (e) { out.testConfig_err = String(e && e.message || e); }
+    try { out.currentSeasonWeek = currentSeasonWeek(env); } catch (e) { out.csw_err = String(e && e.message || e); }
+    try { out.seasonType = seasonTypeFor(env); } catch (e) { out.st_err = String(e && e.message || e); }
+    try { out.weekWindow = weekWindow(currentSeasonWeek(env).week, env); } catch (e) { out.ww_err = String(e && e.message || e); }
+    try {
+      const p = await fetchSharpApi(env);
+      out.sharp = { ok: true, games: (p.games || []).length, first: (p.games || [])[0] };
+    } catch (e) { out.sharp = { ok: false, error: String(e && e.message || e) }; }
+    try {
+      const p = await fetchEspn(env);
+      out.espn = { ok: true, source: p.source, games: (p.games || []).length, first: (p.games || [])[0] };
+    } catch (e) { out.espn = { ok: false, error: String(e && e.message || e) }; }
+    return json(out, { headers: { "Cache-Control": "no-store" } });
+  }
+
   // Debug: inspect a raw SharpAPI sample to finalize the field mapping.
   if (url.searchParams.get("debug") === "sharp") {
     if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
