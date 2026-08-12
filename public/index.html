@@ -753,6 +753,22 @@
   .wr-chip.is-live { box-shadow: inset 0 0 0 1px rgba(70, 224, 138, 0.18); }
   .wr-chip.is-live .wr-sub { color: #46e08a; }
   .wr-empty { color: #9aa4a2; font-family: 'Inter', sans-serif; font-size: 14px; padding: 26px 4px; max-width: 40rem; line-height: 1.5; }
+  /* Picks tab: week navigator + past-week history */
+  .pk-weeknav { display: inline-flex; align-items: center; gap: 8px; background: #14171a; border: 1px solid #29302f; border-radius: 10px; padding: 4px; }
+  .pk-wk-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 7px; background: transparent; border: none; color: #c7cdcb; cursor: pointer; transition: all .12s; }
+  .pk-wk-btn .material-symbols-outlined { font-size: 20px; }
+  .pk-wk-btn:hover:not(:disabled) { background: #1c2320; color: #46e08a; }
+  .pk-wk-btn:disabled { opacity: .3; cursor: not-allowed; }
+  .pk-wk-label { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.04em; color: #e6e8e8; min-width: 118px; text-align: center; text-transform: uppercase; }
+  .pk-wk-label .pk-wk-cur { color: #46e08a; }
+  .pk-jump { background: none; border: none; color: #9aa4a2; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; text-decoration: underline; padding: 0; }
+  .pk-jump:hover { color: #46e08a; }
+  .pk-hist-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #23282a; padding-bottom: 10px; margin-bottom: 14px; }
+  .pk-hist-title { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 18px; text-transform: uppercase; letter-spacing: 0.01em; color: #e6e8e8; }
+  .pk-hist-win { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9aa4a2; }
+  .pk-hist-win .pk-crown { color: #f4cf5a; margin-right: 4px; }
+  .pk-hist-win b { color: #46e08a; font-weight: 600; }
+  .pk-hist-empty { background: #14171a; border: 1px solid #29302f; border-radius: 12px; padding: 40px 20px; text-align: center; color: #9aa4a2; font-family: 'Inter', sans-serif; font-size: 14px; }
   /* Weekly recap card (War Room, week complete) */
   .rc-card { background: linear-gradient(180deg, rgba(70, 224, 138, 0.09), rgba(25, 28, 30, 0.35)); border: 1px solid #2b4a3a; border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
   .rc-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #46e08a; margin-bottom: 6px; }
@@ -811,8 +827,8 @@
       <span>STANDINGS</span>
     </button>
     <button class="side-nav-link nav-link" data-view="thisweek">
-      <span class="material-symbols-outlined">timer</span>
-      <span>THIS WEEK</span>
+      <span class="material-symbols-outlined">checklist</span>
+      <span>PICKS</span>
     </button>
     <button class="side-nav-link nav-link" data-view="warroom">
       <span class="material-symbols-outlined">swords</span>
@@ -897,8 +913,8 @@
       <span class="font-label-caps text-[10px]">Home</span>
     </button>
     <button class="bottom-nav-link nav-link" data-view="thisweek">
-      <span class="material-symbols-outlined">timer</span>
-      <span class="font-label-caps text-[10px]">Week</span>
+      <span class="material-symbols-outlined">checklist</span>
+      <span class="font-label-caps text-[10px]">Picks</span>
     </button>
     <button class="bottom-nav-link nav-link" data-view="warroom">
       <span class="material-symbols-outlined">swords</span>
@@ -952,6 +968,8 @@ let state = {
   user: null,
   thisWeekData: null,
   myPicksWeek: null,
+  picksWeek: null,      // Picks tab: selected week (defaults to current on entry)
+  picksHistory: null,   // { week, picks } for a past-week view
   warRoom: null,
   serverConfig: null,
   settlement: null,
@@ -2944,6 +2962,94 @@ async function markSuperLockMyCard(result) {
   } catch { showToast("NETWORK ERROR", "err"); }
 }
 
+// ---- Picks tab: week navigator + past-week history ----
+function weekNavHtml(sel, curWeek) {
+  return `<div class="flex items-center gap-3 flex-wrap">
+    <div class="pk-weeknav">
+      <button class="pk-wk-btn" data-wk="${sel - 1}" ${sel > 1 ? "" : "disabled"} aria-label="Previous week"><span class="material-symbols-outlined">chevron_left</span></button>
+      <span class="pk-wk-label">Week ${String(sel).padStart(2, "0")}${sel === curWeek ? ` <span class="pk-wk-cur">· Now</span>` : ""}</span>
+      <button class="pk-wk-btn" data-wk="${sel + 1}" ${sel < curWeek ? "" : "disabled"} aria-label="Next week"><span class="material-symbols-outlined">chevron_right</span></button>
+    </div>
+    ${sel !== curWeek ? `<button class="pk-jump" data-wk="${curWeek}">Jump to current</button>` : ""}
+  </div>`;
+}
+function bindWeekNav() {
+  document.querySelectorAll(".pk-wk-btn, .pk-jump").forEach(b => {
+    if (b.disabled) return;
+    b.onclick = () => {
+      const wk = Number(b.dataset.wk);
+      if (Number.isFinite(wk)) { state.picksWeek = wk; render(); }
+    };
+  });
+}
+async function loadWeekPicks(week) {
+  try {
+    const r = await fetch(`/api/picks?season=2026&week=${week}`, { credentials: "include" });
+    const j = r.ok ? await r.json() : { picks: [] };
+    state.picksHistory = { week, picks: j.picks || [] };
+  } catch { state.picksHistory = { week, picks: [] }; }
+}
+// One pick chip for a past (graded) week — reuses the War Room chip styles.
+function histChip(bt, p) {
+  const meta = BET_META[bt] || {};
+  const res = p && p.result;
+  const status = res === "W" ? "win" : res === "L" ? "lose" : res === "P" ? "push"
+    : (bt === "Super Lock" && p && !(p.prop_meta || p.prop) ? "manual" : "pending");
+  const txt = p && (p.pick_text || p.text) ? shortPickText(p.pick_text || p.text) : "—";
+  const sub = res || (p ? "" : "no pick");
+  return `<div class="wr-chip ${WR_STATUS[status] || WR_STATUS.pending}">
+    <span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(bt)}</span>
+    <span class="wr-pick">${escapeHtml(txt)}</span>
+    <span class="wr-sub">${escapeHtml(sub)}</span>
+  </div>`;
+}
+function picksHistoryHeader(sel, curWeek) {
+  return `
+    <section class="mb-6">
+      <div class="flex items-center gap-3">
+        <span class="w-2 h-8 bg-primary-fixed inline-block rounded-sm"></span>
+        <h1 class="font-display-lg text-3xl md:text-4xl uppercase text-on-surface leading-none">Picks</h1>
+      </div>
+      <div class="mt-3">${weekNavHtml(sel, curWeek)}</div>
+    </section>`;
+}
+function renderPicksHistory(sel, curWeek) {
+  const hist = state.picksHistory;
+  const header = picksHistoryHeader(sel, curWeek);
+  if (!hist || hist.week !== sel) return header + `<div class="pk-hist-empty">Loading Week ${sel}…</div>`;
+  const picks = hist.picks || [];
+  if (!picks.length) return header + `<div class="pk-hist-empty">No picks recorded for Week ${sel}.</div>`;
+  const byMember = new Map();
+  for (const p of picks) {
+    const m = byMember.get(p.member_id) || byMember.set(p.member_id, { id: p.member_id, name: p.member_name, picks: {}, W: 0, L: 0, P: 0 }).get(p.member_id);
+    m.picks[p.bet_type] = p;
+    if (p.result === "W") m.W++; else if (p.result === "L") m.L++; else if (p.result === "P") m.P++;
+  }
+  const members = [...byMember.values()].sort((a, b) => b.W - a.W || a.L - b.L || a.name.localeCompare(b.name));
+  const graded = members.some(m => m.W + m.L + m.P > 0);
+  let winner = null;
+  if (graded && members.length) {
+    const top = members[0];
+    const tie = members.filter(m => m.W === top.W && m.L === top.L).length > 1;
+    if (!tie && top.W > 0) winner = top;
+  }
+  const winLine = winner
+    ? `<span class="pk-hist-win"><span class="pk-crown">🏆</span><b>${escapeHtml(winner.name)}</b> · ${winner.W}-${winner.L}${winner.P ? "-" + winner.P : ""}</span>`
+    : (graded ? `<span class="pk-hist-win">Tie at the top</span>` : `<span class="pk-hist-win">Not graded yet</span>`);
+  const cards = members.map((m, i) => `
+    <div class="wr-card">
+      <div class="wr-head">
+        <span class="wr-rank">${String(i + 1).padStart(2, "0")}</span>
+        <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
+        <span class="wr-rec">${m.W}-${m.L}${m.P ? "-" + m.P : ""}</span>
+      </div>
+      <div class="wr-picks">${BET_TYPES_ORDER.map(bt => histChip(bt, m.picks[bt])).join("")}</div>
+    </div>`).join("");
+  return header +
+    `<div class="pk-hist-head"><span class="pk-hist-title">Week ${sel}</span>${winLine}</div>` +
+    `<div class="wr-grid">${cards}</div>`;
+}
+
 function renderThisWeek() {
   const data = state.thisWeekData;
   if (!data) return skeletonThisWeek();
@@ -2951,6 +3057,9 @@ function renderThisWeek() {
   const games = (data.games || []).slice().sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
   const cd = nextKickoffCountdown(games);
   const isErr = data.source === "error";
+  const cur = currentNflWeekClient();
+  const curWeek = cur.week || 1;
+  const sel = state.picksWeek || curWeek;
 
   const box = (v, l, id) => `
     <div class="glass-panel px-3 py-2 flex flex-col items-center min-w-[58px]">
@@ -2963,8 +3072,9 @@ function renderThisWeek() {
       <div>
         <div class="flex items-center gap-3">
           <span class="w-2 h-8 bg-primary-fixed inline-block rounded-sm"></span>
-          <h1 class="font-display-lg text-3xl md:text-4xl uppercase text-on-surface leading-none">This Week</h1>
+          <h1 class="font-display-lg text-3xl md:text-4xl uppercase text-on-surface leading-none">Picks</h1>
         </div>
+        <div class="mt-3">${weekNavHtml(sel, curWeek)}</div>
         <p class="text-on-surface-variant text-sm mt-2.5">${games.length ? `${games.length} games this week. Lines from FanDuel and DraftKings.` : (isErr ? "Lines are unavailable right now." : "No games posted yet.")}</p>
       </div>
       ${cd ? `
@@ -3834,6 +3944,9 @@ async function render() {
   if (render._lastView !== state.view) {
     render._lastView = state.view;
     scrollAppToTop();
+    // Entering Picks fresh always defaults to the current week (the dispatch
+    // fills in curWeek); in-tab week navigation keeps its selection.
+    if (state.view === "thisweek") state.picksWeek = null;
   }
   // Live season data comes from the DB; load it before views that show it.
   if ((state.view === "standings" && state.season === "2026") || state.view === "lifetime") {
@@ -3874,23 +3987,40 @@ async function render() {
     attachWarRoomHandlers();
     startWarRoomPoll();
   } else if (state.view === "thisweek") {
-    root.innerHTML = skeletonThisWeek();
-    await Promise.all([loadOdds(), loadScores()]);
-    root.innerHTML = renderThisWeek();
-    document.querySelectorAll(".game-card").forEach(bindGameCard);
-    const signinBtn = document.getElementById("mycard-signin");
-    if (signinBtn) signinBtn.addEventListener("click", openLogin);
-    bindOddsRefresh();
-    startCountdownTick();
-    startScoresPoll();
-    startOddsPoll();
     const cur = currentNflWeekClient();
-    const week = state.myPicksWeek || cur.week || 1;
-    currentMyPicks = await loadMyPicks(2026, week);
-    markPickedButtons(currentMyPicks);
-    refreshMyCard();
-    refreshSuperLockEditor(); // fill the Super Lock editor from the loaded picks + bind it
-    fillWhosIn();
+    const curWeek = cur.week || 1;
+    if (state.picksWeek == null) state.picksWeek = curWeek;
+    const sel = state.picksWeek;
+    if (sel >= curWeek) {
+      // Current week: the live board + My Card (the picking view).
+      state.picksWeek = curWeek; // clamp any overshoot to the current week
+      root.innerHTML = skeletonThisWeek();
+      await Promise.all([loadOdds(), loadScores()]);
+      if (state.view !== "thisweek" || state.picksWeek !== curWeek) return;
+      root.innerHTML = renderThisWeek();
+      document.querySelectorAll(".game-card").forEach(bindGameCard);
+      const signinBtn = document.getElementById("mycard-signin");
+      if (signinBtn) signinBtn.addEventListener("click", openLogin);
+      bindOddsRefresh();
+      startCountdownTick();
+      startScoresPoll();
+      startOddsPoll();
+      const week = state.myPicksWeek || curWeek;
+      currentMyPicks = await loadMyPicks(2026, week);
+      markPickedButtons(currentMyPicks);
+      refreshMyCard();
+      refreshSuperLockEditor(); // fill the Super Lock editor from the loaded picks + bind it
+      fillWhosIn();
+      bindWeekNav();
+    } else {
+      // Past week: static history of everyone's picks + results (read-only).
+      root.innerHTML = renderPicksHistory(sel, curWeek);
+      bindWeekNav();
+      await loadWeekPicks(sel);
+      if (state.view !== "thisweek" || state.picksWeek !== sel) return;
+      root.innerHTML = renderPicksHistory(sel, curWeek);
+      bindWeekNav();
+    }
   } else if (state.view === "payments") {
     root.innerHTML = await renderPayments();
     if (state.view !== "payments") return;
@@ -3975,6 +4105,7 @@ document.querySelectorAll(".nav-link[data-view]").forEach(btn => {
 document.getElementById("sidebar-submit-picks").addEventListener("click", () => {
   if (!state.user) { openLogin(); return; }
   state.view = "thisweek";
+  state.picksWeek = null; // MAKE PICKS always lands on the current week
   render();
 });
 
