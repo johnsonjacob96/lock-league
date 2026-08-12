@@ -112,10 +112,11 @@ export function normalizeSharpProps(rows) {
     const stype = String(r.selection_type ?? "").toLowerCase();
     const home = r.home_team ?? r.home?.name ?? r.home;
     const away = r.away_team ?? r.away?.name ?? r.away;
+    const kickoff = r.event_start_time ?? r.start_time ?? r.commence_time ?? r.kickoff ?? null;
 
     const id = `${market}|${player.toLowerCase()}`;
     let e = agg.get(id);
-    if (!e) { e = { market, label: def.label, unit: def.unit, kind: def.kind, player, home, away, byBook: {} }; agg.set(id, e); }
+    if (!e) { e = { market, label: def.label, unit: def.unit, kind: def.kind, player, home, away, kickoff, byBook: {} }; agg.set(id, e); }
     const b = e.byBook[book] || (e.byBook[book] = { over: null, under: null, yes: null, line: null, main: false });
     if (def.kind === "yes") {
       // Anytime TD: single-sided yes price (some feeds also send a "no").
@@ -139,7 +140,7 @@ export function normalizeSharpProps(rows) {
     if (e.kind === "ou" && line == null) continue;
     out.push({
       market: e.market, label: e.label, unit: e.unit, kind: e.kind,
-      player: e.player, home: e.home, away: e.away, line,
+      player: e.player, home: e.home, away: e.away, kickoff: e.kickoff, line,
       fanduel: fd ? { line: fd.line, over: fd.over, under: fd.under, yes: fd.yes } : null,
       draftkings: dk ? { line: dk.line, over: dk.over, under: dk.under, yes: dk.yes } : null,
     });

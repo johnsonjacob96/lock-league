@@ -13,6 +13,10 @@ export async function ensureExtras(env) {
   await s`ALTER TABLE picks ADD COLUMN IF NOT EXISTS alert_line NUMERIC`;
   // Part C: each member's Venmo handle (for prefilled one-tap settlement links).
   await s`ALTER TABLE members ADD COLUMN IF NOT EXISTS venmo_handle TEXT`;
+  // Props: structured Super Lock. When set, holds the picked player prop
+  // {market, player, line, side, price, book, game_key} so it auto-grades off
+  // the ESPN box score. NULL = a free-text Super Lock (manual Hit/Miss/Push).
+  await s`ALTER TABLE picks ADD COLUMN IF NOT EXISTS prop_meta JSONB`;
   // Part C: weekly $5-to-the-winner settlement status (Article 6a). One row per
   // (season, week, member) once a week has a winner; the winner has no due.
   await s`CREATE TABLE IF NOT EXISTS weekly_dues (

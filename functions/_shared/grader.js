@@ -3,9 +3,12 @@
 import { sql } from "./db.js";
 import { weeksToGrade, currentNflWeek, seasonTypeFor, testConfig } from "./nfl.js";
 import { pushPersonalized, alreadySent, markSent } from "./push-notify.js";
+import { gradeProp } from "./props.js";
 
 const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
+const ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary";
 function normTeam(s) { return String(s || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
+const safeJson = (s) => { try { return JSON.parse(s); } catch { return null; } };
 
 // True when one name is (or contains) the other after normalization, so
 // "Chiefs" matches "Kansas City Chiefs" and "49ers" matches "San Francisco 49ers".
@@ -30,6 +33,7 @@ export async function fetchScoreboard(season, week, seasontype = 2) {
     const away = competitors.find((c) => c.homeAway === "away");
     const status = comp?.status?.type?.completed ? "final" : (ev.status?.type?.name || "scheduled");
     return {
+      id: ev.id, // ESPN event id, for the box-score summary (prop grading)
       home: home?.team?.displayName,
       away: away?.team?.displayName,
       home_score: home?.score != null ? Number(home.score) : null,
@@ -40,6 +44,21 @@ export async function fetchScoreboard(season, week, seasontype = 2) {
       detail: ev.status?.type?.shortDetail || "", // e.g. "Q3 5:24" / "Final"
     };
   });
+}
+
+// Fetch one game's ESPN box score (player stat lines) for prop grading.
+// Returns the boxscore object or null. Callers memoize per grade run so a week
+// with several Super Locks in the same game only fetches it once.
+export async function fetchBoxscore(eventId) {
+  if (!eventId) return null;
+  try {
+    const r = await fetch(`${ESPN_SUMMARY}?event=${eventId}`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data.boxscore || null;
+  } catch {
+    return null;
+  }
 }
 
 export function gradeSpread(pickSide, favLine, awayScore, homeScore, favIsHome) {
@@ -90,21 +109,30 @@ export async function gradeWeek(env, season, week) {
   }
   const picks = await s`
     SELECT * FROM picks WHERE season = ${season} AND week = ${week} AND result IS NULL`;
+  const boxCache = new Map(); // eventId -> boxscore (fetched at most once per run)
   for (const p of picks) {
-    if (!p.game_key) continue; // free-text picks (incl. Super Lock) need manual mark
+    if (!p.game_key) continue; // free-text picks (incl. free-text Super Lock) need manual mark
     const [pAway, pHome] = p.game_key.split("@");
     const ev = events.find((e) => sameTeam(e.away, pAway) && sameTeam(e.home, pHome));
     if (!ev || ev.status !== "final") continue;
-    if (ev.home_score == null || ev.away_score == null) continue;
 
     let result = null;
     if (p.bet_type === "Favorite" || p.bet_type === "Dog") {
+      if (ev.home_score == null || ev.away_score == null) continue;
       result = resolveSpreadResult(p, ev);
     } else if (p.bet_type === "Over" || p.bet_type === "Under") {
+      if (ev.home_score == null || ev.away_score == null) continue;
       const total = ev.home_score + ev.away_score;
       result = gradeTotal(p.side, Number(p.line), total);
     } else if (p.bet_type === "Super Lock") {
-      continue; // player props / specialty — manual via mark-super-lock action
+      // Only structured Super Locks (prop_meta set) auto-grade; free-text ones
+      // stay manual (mark-super-lock action).
+      const meta = typeof p.prop_meta === "string" ? safeJson(p.prop_meta) : p.prop_meta;
+      if (!meta || !meta.market) continue;
+      let box = boxCache.get(ev.id);
+      if (box === undefined) { box = await fetchBoxscore(ev.id); boxCache.set(ev.id, box); }
+      if (!box) continue; // couldn't fetch -> retry next run
+      result = gradeProp(meta, box); // may be null (player unmatched) -> leave for manual
     }
     if (result) {
       await s`UPDATE picks SET result = ${result}, graded_at = NOW() WHERE id = ${p.id}`;

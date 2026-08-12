@@ -4,6 +4,7 @@ import { verifyCookie, json } from "../_shared/auth.js";
 import { pickCutoff, BET_TYPES, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, sameTeam } from "../_shared/grader.js";
 import { ensureExtras } from "../_shared/migrations.js";
+import { PROP_DEFS, propPickText, samePlayer } from "../_shared/props.js";
 
 // ESPN scoreboard, cached briefly per warm isolate — used to reject picks on
 // games that have already kicked off.
@@ -81,6 +82,48 @@ function deriveGradable(game, betType, side, preferredBook) {
   const tag = side === "over" ? "O" : "U";
   const price = side === "over" ? (t.overPrice ?? null) : (t.underPrice ?? null);
   return { line: t.point, price, book, pick_text: `${game.away} / ${game.home} ${tag}${t.point}` };
+}
+
+// Same-origin read of the live prop board for one game, so a structured Super
+// Lock is validated against exactly what the picker showed. Reuses /api/props'
+// cache. Fails soft (null) if props are down / not posted yet.
+async function fetchLiveProps(request, gameKey) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4500);
+  try {
+    const u = new URL("/api/props", request.url);
+    u.searchParams.set("game_key", gameKey);
+    const r = await fetch(u, { signal: ctrl.signal });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return Array.isArray(j.markets) ? j.markets : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Re-derive a structured Super Lock's line/price/book/canonical text from the
+// live prop menu, so a stored prop can never claim a line the book isn't
+// offering. Returns null if that player+market isn't on the board.
+export function deriveProp(markets, prop) { // exported for tests; CF ignores non-handler exports
+  const m = markets.find((x) => x.market === prop.market);
+  if (!m) return null;
+  const pl = m.players.find((x) => samePlayer(x.player, prop.player));
+  if (!pl) return null;
+  const book = prop.book && pl[prop.book] ? prop.book : (pl.fanduel ? "fanduel" : (pl.draftkings ? "draftkings" : null));
+  const bk = book ? pl[book] : null;
+  if (m.kind === "yes") {
+    const price = bk ? (bk.yes ?? null) : null;
+    return { market: prop.market, player: pl.player, line: null, side: "yes", price, book, pick_text: propPickText({ market: prop.market, player: pl.player, side: "yes" }) };
+  }
+  const side = prop.side === "under" ? "under" : "over";
+  // Use the priced book's own line (books can hang different numbers), falling
+  // back to the aggregate line only if that book didn't post one.
+  const line = (bk && bk.line != null) ? bk.line : pl.line;
+  const price = bk ? (side === "under" ? (bk.under ?? null) : (bk.over ?? null)) : null;
+  return { market: prop.market, player: pl.player, line, side, price, book, pick_text: propPickText({ market: prop.market, player: pl.player, line, side }) };
 }
 
 // Returns the offending pick if any submitted game has already started.
@@ -197,9 +240,18 @@ export async function onRequest({ request, env }) {
     for (const p of picks) {
       if (!BET_TYPES.includes(p.bet_type)) return json({ error: "bad-bet-type", bet_type: p.bet_type }, { status: 400 });
       if (p.bet_type === "Super Lock") {
-        if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
-        if (p.price != null && !(Number(p.price) <= -120)) {
-          return json({ error: "super-lock-price", detail: "Super Lock must be -120 or harder", price: p.price }, { status: 400 });
+        if (p.prop) {
+          // Structured Super Lock (picked off the live prop board -> auto-grades).
+          if (!PROP_DEFS[p.prop.market]) return json({ error: "bad-prop-market", market: p.prop.market }, { status: 400 });
+          if (!p.prop.player || typeof p.prop.player !== "string") return json({ error: "missing-prop-player" }, { status: 400 });
+          if (!p.prop.game_key || typeof p.prop.game_key !== "string") return json({ error: "missing-game", bet_type: p.bet_type }, { status: 400 });
+          p.game_key = p.prop.game_key; // ties it to the game (started-game guard + auto-grade)
+        } else {
+          // Free-text Super Lock (manual Hit/Miss/Push, honor system on price).
+          if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
+          if (p.price != null && !(Number(p.price) <= -120)) {
+            return json({ error: "super-lock-price", detail: "Super Lock must be -120 or harder", price: p.price }, { status: 400 });
+          }
         }
       } else {
         if (SIDE_FOR[p.bet_type] !== p.side) return json({ error: "bad-side", bet_type: p.bet_type, side: p.side, expected: SIDE_FOR[p.bet_type] }, { status: 400 });
@@ -227,6 +279,30 @@ export async function onRequest({ request, env }) {
         }
       }
     }
+    // Structured Super Lock: re-derive line/price/book/text from the live prop
+    // board, same anti-cheat treatment as the gradable bets. Enforce the league's
+    // "-120 or harder" lock rule on the derived price. If props are momentarily
+    // down (or not posted yet), degrade to a well-formed structured prop.
+    const structured = picks.filter((p) => p.bet_type === "Super Lock" && p.prop);
+    for (const p of structured) {
+      const markets = await fetchLiveProps(request, p.game_key);
+      let d = markets ? deriveProp(markets, p.prop) : null;
+      if (markets && !d) return json({ error: "prop-not-offered", game_key: p.game_key, market: p.prop.market, player: p.prop.player }, { status: 422 });
+      if (!d) {
+        // Degrade: trust the client's structured prop but require it be well-formed.
+        const kind = PROP_DEFS[p.prop.market].kind;
+        if (kind !== "yes" && !Number.isFinite(Number(p.prop.line))) return json({ error: "missing-line", bet_type: "Super Lock" }, { status: 400 });
+        d = { market: p.prop.market, player: p.prop.player, line: p.prop.line ?? null,
+              side: kind === "yes" ? "yes" : (p.prop.side === "under" ? "under" : "over"),
+              price: p.prop.price ?? null, book: p.prop.book || null,
+              pick_text: propPickText({ market: p.prop.market, player: p.prop.player, line: p.prop.line, side: p.prop.side }) };
+      }
+      if (d.price != null && !(Number(d.price) <= -120)) {
+        return json({ error: "super-lock-price", detail: "Super Lock must be -120 or harder", price: d.price, player: d.player }, { status: 400 });
+      }
+      p.prop = { market: d.market, player: d.player, line: d.line, side: d.side, price: d.price, book: d.book, game_key: p.game_key };
+      p.pick_text = d.pick_text; p.price = d.price; p.book = d.book;
+    }
     // A game that has kicked off can no longer be picked (TNF after kickoff,
     // international games that start before the Sunday noon cutoff, ...).
     const started = await findStartedGame(picks, season, week, seasonTypeFor(env));
@@ -239,10 +315,11 @@ export async function onRequest({ request, env }) {
     // Distinct bet_types per member → upserts are independent; run in parallel.
     // Re-locking clears alert_line so line-move alerts restart from the new line.
     await Promise.all(picks.map(p => s`
-        INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at, alert_line)
+        INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at, alert_line, prop_meta)
         VALUES (${memberId}, ${season}, ${week}, ${p.bet_type}, ${p.pick_text},
                 ${p.game_key || null}, ${p.side || null}, ${p.line ?? null},
-                ${p.book || null}, ${p.price ?? null}, ${lockedAt}, NULL)
+                ${p.book || null}, ${p.price ?? null}, ${lockedAt}, NULL,
+                ${p.prop ? JSON.stringify(p.prop) : null}::jsonb)
         ON CONFLICT (member_id, season, week, bet_type)
         DO UPDATE SET
           pick_text  = EXCLUDED.pick_text,
@@ -252,7 +329,8 @@ export async function onRequest({ request, env }) {
           book       = EXCLUDED.book,
           price      = EXCLUDED.price,
           locked_at  = EXCLUDED.locked_at,
-          alert_line = NULL`));
+          alert_line = NULL,
+          prop_meta  = EXCLUDED.prop_meta`));
     return json({ ok: true, count: picks.length });
   }
 
