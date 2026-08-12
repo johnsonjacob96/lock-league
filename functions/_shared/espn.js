@@ -14,33 +14,50 @@ export const ESPN_HEADERS = {
 const SITE = "https://site.api.espn.com/apis/site/v2/sports/football/nfl";
 const CDN = "https://cdn.espn.com/core/nfl";
 
-// Scoreboard events for a season / seasontype / week. Returns the events array
-// (identical shape from both hosts). Throws if neither host yields events.
-export async function espnScoreboardEvents(season, seasontype, week) {
-  const q = `year=${season}&seasontype=${seasontype}&week=${week}`;
+// Fetch + parse JSON defensively. ESPN's hosts are flaky from datacenter IPs:
+// site.api 403s, and cdn sometimes returns a 200 with an EMPTY body (which makes
+// a naive r.json() throw "Unexpected end of JSON input"). Return null on any of
+// those so the caller can try the next host / retry.
+async function getJson(url) {
   try {
-    const r = await fetch(`${SITE}/scoreboard?${q}`, { headers: ESPN_HEADERS });
-    if (r.ok) { const d = await r.json(); if (Array.isArray(d.events)) return d.events; }
-  } catch { /* fall through to CDN */ }
-  const r2 = await fetch(`${CDN}/scoreboard?xhr=1&${q}`, { headers: ESPN_HEADERS });
-  if (!r2.ok) throw new Error(`espn ${r2.status}`);
-  const d2 = await r2.json();
-  const events = d2 && d2.content && d2.content.sbData && d2.content.sbData.events;
-  if (!Array.isArray(events)) throw new Error("espn: no events");
-  return events;
+    const r = await fetch(url, { headers: ESPN_HEADERS });
+    if (!r.ok) return null;
+    const t = await r.text();
+    if (!t) return null;
+    return JSON.parse(t);
+  } catch {
+    return null;
+  }
 }
 
-// Box score (player stat lines) for one game. Tries site summary, falls back to
-// the CDN boxscore. Returns the boxscore object or null.
+// Scoreboard events for a season / seasontype / week. Returns the events array
+// (identical shape from both hosts). Tries site.api then cdn, a couple of rounds,
+// because either host can transiently 403 or return an empty body.
+export async function espnScoreboardEvents(season, seasontype, week) {
+  const q = `year=${season}&seasontype=${seasontype}&week=${week}`;
+  const urls = [`${SITE}/scoreboard?${q}`, `${CDN}/scoreboard?xhr=1&${q}`];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const u of urls) {
+      const d = await getJson(u);
+      const events = d && (Array.isArray(d.events) ? d.events
+        : (d.content && d.content.sbData && d.content.sbData.events));
+      if (Array.isArray(events) && events.length) return events;
+    }
+  }
+  throw new Error("espn: no events");
+}
+
+// Box score (player stat lines) for one game. Tries site summary then cdn
+// boxscore, a couple of rounds. Returns the boxscore object or null.
 export async function espnBoxscore(eventId) {
   if (!eventId) return null;
-  try {
-    const r = await fetch(`${SITE}/summary?event=${eventId}`, { headers: ESPN_HEADERS });
-    if (r.ok) { const d = await r.json(); if (d.boxscore) return d.boxscore; }
-  } catch { /* fall through to CDN */ }
-  try {
-    const r = await fetch(`${CDN}/boxscore?xhr=1&gameId=${eventId}`, { headers: ESPN_HEADERS });
-    if (r.ok) { const d = await r.json(); return (d && d.gamepackageJSON && d.gamepackageJSON.boxscore) || d.boxscore || null; }
-  } catch { /* give up -> null (leaves picks for a later grade run) */ }
+  const urls = [`${SITE}/summary?event=${eventId}`, `${CDN}/boxscore?xhr=1&gameId=${eventId}`];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const u of urls) {
+      const d = await getJson(u);
+      const bs = d && (d.boxscore || (d.gamepackageJSON && d.gamepackageJSON.boxscore));
+      if (bs && Array.isArray(bs.players) && bs.players.length) return bs;
+    }
+  }
   return null;
 }

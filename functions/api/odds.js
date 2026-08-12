@@ -557,10 +557,16 @@ export async function onRequestGet(context) {
   }
 
   // Source 2 — ESPN consensus (free). Primary on the no-key path, fallback otherwise.
+  // Snapshot ESPN successes too: ESPN is flaky from the Worker, so persisting a
+  // good board means one success (from any isolate) sticks for everyone instead
+  // of each colo re-rolling against a 403/empty response and serving a stale
+  // (possibly wrong-week) snapshot. This is the current-best board regardless of
+  // source; a later SharpAPI success overwrites it with FD/DK.
   try {
     const payload = await fetchEspn(env);
     cache = { ts: Date.now(), data: payload };
     waitUntil(putEdge(edge, payload, ttlS));
+    waitUntil(saveSnapshot(env, payload));
     return json(payload, hdr(primary ? "MISS-ESPN-FALLBACK" : "MISS-ESPN"));
   } catch { /* fall through */ }
 
