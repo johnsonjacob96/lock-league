@@ -370,6 +370,32 @@
   .sl-mark-btn.L:hover, .sl-mark-btn.L.current { background: rgba(239, 68, 68, 0.16); color: #ef4444; border-color: #ef4444; }
   .sl-mark-btn.P:hover, .sl-mark-btn.P.current { background: rgba(244, 207, 90, 0.16); color: #f4cf5a; border-color: #f4cf5a; }
 
+  /* Structured Super Lock (player-prop) picker */
+  .sl-toggle { display:inline-flex; background:#101315; border:1px solid #29302f; border-radius:8px; padding:2px; gap:2px; }
+  .sl-seg { padding:6px 12px; border-radius:6px; border:none; background:transparent; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700; cursor:pointer; transition:all .12s; }
+  .sl-seg.active { background:#1c2320; color:#f4cf5a; }
+  .sl-select { width:100%; background:#101315; border:1px solid #29302f; border-radius:8px; color:#e6e8e8; padding:11px 13px; font-family:'Inter',sans-serif; font-size:14px; -webkit-appearance:none; appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa4a2' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; padding-right:34px; }
+  .sl-select:focus { outline:none; border-color:#46e08a; box-shadow:0 0 0 3px rgba(70,224,138,0.14); }
+  .sl-select:disabled { opacity:0.5; }
+  .sl-sides { display:flex; gap:8px; }
+  .sl-side-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:9px 8px; border-radius:8px; background:#101315; border:1px solid #29302f; color:#c7cdcb; cursor:pointer; transition:all .12s; }
+  .sl-side-btn:hover { border-color:#3a423e; }
+  .sl-side-btn.active { background:rgba(244,207,90,0.12); border-color:#f4cf5a; color:#f4cf5a; }
+  .sl-side-btn .sl-side-lab { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; }
+  .sl-side-btn .sl-side-price { font-family:'JetBrains Mono',monospace; font-size:11px; opacity:0.85; }
+  .sl-hint { font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.45; letter-spacing:0.02em; color:#9aa4a2; }
+  .sl-hint.warn { color:#f5a24a; }
+  .sl-locked { background:#101315; border:1px solid #29302f; border-radius:8px; padding:11px 13px; }
+  .sl-locked .sl-locked-txt { color:#f4cf5a; font-weight:600; font-size:14px; }
+  .sl-locked .sl-auto { display:inline-flex; align-items:center; gap:4px; font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.05em; text-transform:uppercase; color:#46e08a; margin-top:4px; }
+  .sl-res { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:0.08em; padding:2px 7px; border-radius:5px; }
+  .sl-res.W { background:rgba(70,224,138,0.16); color:#46e08a; }
+  .sl-res.L { background:rgba(239,68,68,0.16); color:#ef4444; }
+  .sl-res.P { background:rgba(244,207,90,0.16); color:#f4cf5a; }
+  .sl-link { background:none; border:none; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.05em; text-transform:uppercase; cursor:pointer; text-decoration:underline; padding:0; }
+  .sl-link:hover { color:#e6e8e8; }
+
   /* Modal form fields */
   .modal label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #9aa4a2; margin-bottom: 6px; }
   .modal select, .modal input {
@@ -551,9 +577,9 @@
   .slot .slot-move.better { color:#46e08a; }
   .slot .slot-move.worse { color:#f5a24a; }
   .k-fav{background:#46e08a} .k-dog{background:#38bdf8} .k-over{background:#f5a24a} .k-under{background:#22d3cf} .k-super{background:#f4cf5a}
-  .slot .lp-meta { display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
-  .slot .lp-book { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:#9aa4a2; border:1px solid #2c332f; border-radius:4px; padding:1px 5px; }
-  .slot .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#6f7877; }
+  .slot .lp-meta, .sl-locked .lp-meta { display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
+  .slot .lp-book, .sl-locked .lp-book { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:#9aa4a2; border:1px solid #2c332f; border-radius:4px; padding:1px 5px; }
+  .slot .lp-ts, .sl-locked .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#6f7877; }
 
   /* Weekly settlement ($5 to the winner) */
   .stl-you { font-family:'Inter',sans-serif; font-size:14px; color:#d4d8d7; line-height:1.4; }
@@ -2616,32 +2642,152 @@ function renderMyCardBody() {
   }).join("");
 }
 
-// Super Lock is the one manual bet — its entry + grade now live in My Card
-// (there's no separate picks tab). Kept out of #my-card-body so a live-odds
-// refresh can't clobber a half-typed entry.
+// Super Lock entry + grade live in My Card (no separate picks tab). Kept out of
+// #my-card-body so a live-odds refresh can't clobber a half-typed entry.
+// Two modes: "board" picks a structured player prop off the live board (it
+// auto-grades off the box score); "custom" is the old free-text bet (manual
+// Hit/Miss/Push) for anything the books don't post.
+let slMode = "board";          // "board" | "custom"
+let slGameKey = "";            // game selected for prop picking
+let slMarkets = null;          // loaded prop menu for slGameKey (null=unloaded, []=none)
+let slLoading = false;
+let slDraft = { market: "", player: "", side: "" };
+let slEditing = false;         // "Change pick" forces the entry UI over a locked pick
+
+function slMeta(p) { return (p && (p.prop_meta || p.prop)) || null; }
+const fmtPrice = (p) => (p == null ? "—" : americanOdds(p));
+const slShort = (n) => String(n || "").split(" ").slice(-1)[0];
+
+function slGamesList() {
+  const games = (state.thisWeekData && state.thisWeekData.games) || [];
+  return games.slice().sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
+    .map(g => ({ key: `${g.away}@${g.home}`, label: `${slShort(g.away)} @ ${slShort(g.home)}` }));
+}
+// Best price for a side across both books (higher American odds = better payout);
+// carries that book's own line so the server can re-derive against the same book.
+function slBestSide(pl, side) {
+  const cands = [];
+  for (const bk of ["fanduel", "draftkings"]) {
+    const b = pl[bk];
+    if (b && b[side] != null) cands.push({ book: bk, price: b[side], line: b.line });
+  }
+  if (!cands.length) return { price: null, book: null, line: pl.line };
+  cands.sort((a, b) => b.price - a.price);
+  return cands[0];
+}
+
 function superLockEditorHtml() {
   const p = currentMyPicks["Super Lock"];
-  const txt = p && (p.pick_text || p.text) ? escapeHtml(p.pick_text || p.text) : "";
-  const res = p?.result || "";
-  const markHtml = txt ? `
+  const header = `
+    <div class="flex items-center gap-1.5 mb-2 flex-wrap">
+      <span class="material-symbols-outlined text-[15px] text-tertiary-fixed" style="font-variation-settings:'FILL' 1">lock</span>
+      <span class="font-label-caps text-[10px] tracking-widest uppercase text-tertiary-fixed">Super Lock</span>
+      <span class="font-data-tabular text-[9.5px] text-on-surface-variant">prop · -120 or longer</span>
+    </div>`;
+  const msg = `<span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed block mt-2" id="mycard-sl-msg"></span>`;
+  if (p && (p.pick_text || p.text) && !slEditing) return header + slLockedHtml(p) + msg;
+  const toggle = `
+    <div class="sl-toggle mb-3">
+      <button class="sl-seg ${slMode === "board" ? "active" : ""}" data-slmode="board">From board</button>
+      <button class="sl-seg ${slMode === "custom" ? "active" : ""}" data-slmode="custom">Custom</button>
+    </div>`;
+  return header + toggle + (slMode === "board" ? slBoardPickerHtml() : slCustomHtml(p)) + msg;
+}
+
+function slLockedHtml(p) {
+  const meta = slMeta(p);
+  const txt = escapeHtml(p.pick_text || p.text);
+  const res = p.result || "";
+  const resBadge = res ? `<span class="sl-res ${res}">${res === "W" ? "HIT" : res === "L" ? "MISS" : "PUSH"}</span>` : "";
+  const lockedTs = p.locked_at ? `<span class="lp-ts">Locked ${fmtLockedAt(p.locked_at)}</span>` : "";
+  const repick = `<div class="mt-2"><button class="sl-link" id="sl-repick">Change pick</button></div>`;
+  if (meta) {
+    const book = meta.book ? `<span class="lp-book">${bookLabel(meta.book)}</span>` : "";
+    return `
+      <div class="sl-locked">
+        <div class="flex items-center justify-between gap-2">
+          <span class="sl-locked-txt">${txt}</span>${resBadge}
+        </div>
+        <div class="lp-meta">${book}${lockedTs}</div>
+        <div class="sl-auto"><span class="material-symbols-outlined text-[12px]" style="font-variation-settings:'FILL' 1">bolt</span>${res ? "Auto-graded from box score" : "Auto-grades after the game"}</div>
+      </div>${repick}`;
+  }
+  // Free-text: manual Hit/Miss/Push.
+  const markHtml = `
     <div class="flex flex-wrap items-center gap-2 mt-3">
       <span class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant uppercase mr-1">Grade</span>
       <button class="sl-mark-btn W ${res === "W" ? "current" : ""}" data-result="W">Hit · W</button>
       <button class="sl-mark-btn L ${res === "L" ? "current" : ""}" data-result="L">Miss · L</button>
       <button class="sl-mark-btn P ${res === "P" ? "current" : ""}" data-result="P">Push · P</button>
-    </div>` : "";
+    </div>`;
+  return `<div class="sl-locked"><span class="sl-locked-txt">${txt}</span>${lockedTs ? `<div class="lp-meta">${lockedTs}</div>` : ""}</div>${markHtml}${repick}`;
+}
+
+function slCustomHtml(p) {
+  const txt = p && (p.pick_text || p.text) && !slMeta(p) ? escapeHtml(p.pick_text || p.text) : "";
   return `
-    <div class="flex items-center gap-1.5 mb-2 flex-wrap">
-      <span class="material-symbols-outlined text-[15px] text-tertiary-fixed" style="font-variation-settings:'FILL' 1">lock</span>
-      <span class="font-label-caps text-[10px] tracking-widest uppercase text-tertiary-fixed">Super Lock</span>
-      <span class="font-data-tabular text-[9.5px] text-on-surface-variant">prop / specialty · -120 or harder · graded manually</span>
-    </div>
     <div class="flex gap-2">
       <input class="pick-input flex-1" id="mycard-superlock" autocapitalize="none" value="${txt}" placeholder="Player prop / specialty bet">
       <button class="btn-primary" id="mycard-sl-save">Save</button>
     </div>
-    ${markHtml}
-    <span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed block mt-2" id="mycard-sl-msg"></span>`;
+    <div class="sl-hint mt-2">Graded by hand (Hit/Miss/Push). Use this for anything the books don't post as a prop.</div>`;
+}
+
+function slBoardPickerHtml() {
+  const games = slGamesList();
+  const gameOpts = `<option value="">Select a game…</option>` +
+    games.map(g => `<option value="${escapeHtml(g.key)}" ${g.key === slGameKey ? "selected" : ""}>${escapeHtml(g.label)}</option>`).join("");
+  let body;
+  if (!slGameKey) body = `<div class="sl-hint mt-2">Pick a game to load its player props.</div>`;
+  else if (slLoading) body = `<div class="sl-hint mt-2">Loading props…</div>`;
+  else if (!slMarkets || !slMarkets.length) body = `<div class="sl-hint warn mt-2">No player props posted for this game yet. Books usually post them 1–2 days before kickoff — check back closer to game time, or use Custom to enter one by hand.</div>`;
+  else body = slMarketPickerHtml();
+  return `<select class="sl-select" id="sl-game">${gameOpts}</select>${body}`;
+}
+
+function slMarketPickerHtml() {
+  const marketOpts = `<option value="">Select a prop…</option>` +
+    slMarkets.map(m => `<option value="${m.market}" ${m.market === slDraft.market ? "selected" : ""}>${escapeHtml(m.label)}</option>`).join("");
+  let sub = "";
+  const m = slMarkets.find(x => x.market === slDraft.market);
+  if (m) {
+    const playerOpts = `<option value="">Select player…</option>` + m.players.map(pl => {
+      const lbl = m.kind === "yes"
+        ? `${pl.player} (${fmtPrice(slBestSide(pl, "yes").price)})`
+        : `${pl.player} — ${m.unit} ${pl.line}`;
+      return `<option value="${escapeHtml(pl.player)}" ${pl.player === slDraft.player ? "selected" : ""}>${escapeHtml(lbl)}</option>`;
+    }).join("");
+    sub += `<select class="sl-select mt-2" id="sl-player">${playerOpts}</select>`;
+    const pl = m.players.find(x => x.player === slDraft.player);
+    if (pl) {
+      if (m.kind === "yes") {
+        sub += slLockBtnHtml(m, pl, "yes");
+      } else {
+        const ov = slBestSide(pl, "over"), un = slBestSide(pl, "under");
+        sub += `<div class="sl-sides mt-2">
+          <button class="sl-side-btn ${slDraft.side === "over" ? "active" : ""}" data-slside="over">
+            <span class="sl-side-lab">Over ${ov.line ?? pl.line}</span>
+            <span class="sl-side-price">${fmtPrice(ov.price)}${ov.book ? " · " + bookLabel(ov.book) : ""}</span></button>
+          <button class="sl-side-btn ${slDraft.side === "under" ? "active" : ""}" data-slside="under">
+            <span class="sl-side-lab">Under ${un.line ?? pl.line}</span>
+            <span class="sl-side-price">${fmtPrice(un.price)}${un.book ? " · " + bookLabel(un.book) : ""}</span></button>
+        </div>`;
+        if (slDraft.side) sub += slLockBtnHtml(m, pl, slDraft.side);
+      }
+    }
+  }
+  return `<select class="sl-select mt-2" id="sl-market">${marketOpts}</select>${sub}`;
+}
+
+function slLockBtnHtml(m, pl, side) {
+  const best = slBestSide(pl, side);
+  const meets = best.price != null && Number(best.price) >= -120;
+  const label = m.kind === "yes" ? `Lock ${slShort(pl.player)} anytime TD` : `Lock ${side === "over" ? "Over" : "Under"} ${best.line ?? pl.line}`;
+  const warn = (best.price != null && !meets)
+    ? `<div class="sl-hint warn mt-1">${fmtPrice(best.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
+    : (best.price == null ? `<div class="sl-hint warn mt-1">No price available for this side.</div>` : "");
+  const dis = meets ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
+  return `<button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>${label} · ${fmtPrice(best.price)}</button>${warn}`;
 }
 
 function myCardProgress() {
@@ -2679,15 +2825,85 @@ function myCardWeek() {
   return state.myPicksWeek || cur.week || 1;
 }
 function bindSuperLockEditor() {
+  const root = document.getElementById("my-card-sl");
+  if (!root) return;
+  // Mode toggle (board vs custom).
+  root.querySelectorAll(".sl-seg").forEach(b => b.onclick = () => { slMode = b.dataset.slmode; refreshSuperLockEditor(); });
+  // Custom free-text save + manual grade.
   const save = document.getElementById("mycard-sl-save");
   if (save) save.onclick = () => { const inp = document.getElementById("mycard-superlock"); saveSuperLockText(inp ? inp.value : ""); };
-  document.querySelectorAll("#my-card-sl .sl-mark-btn").forEach(b => b.onclick = () => markSuperLockMyCard(b.dataset.result));
+  root.querySelectorAll(".sl-mark-btn").forEach(b => b.onclick = () => markSuperLockMyCard(b.dataset.result));
+  // Change an already-locked pick.
+  const repick = document.getElementById("sl-repick");
+  if (repick) repick.onclick = () => { slEditing = true; refreshSuperLockEditor(); };
+  // Board picker: game -> market -> player -> side -> lock.
+  const gameSel = document.getElementById("sl-game");
+  if (gameSel) gameSel.onchange = () => {
+    slGameKey = gameSel.value; slDraft = { market: "", player: "", side: "" }; slMarkets = null;
+    if (slGameKey) loadPropMenu(slGameKey); else refreshSuperLockEditor();
+  };
+  const marketSel = document.getElementById("sl-market");
+  if (marketSel) marketSel.onchange = () => { slDraft.market = marketSel.value; slDraft.player = ""; slDraft.side = ""; refreshSuperLockEditor(); };
+  const playerSel = document.getElementById("sl-player");
+  if (playerSel) playerSel.onchange = () => { slDraft.player = playerSel.value; slDraft.side = ""; refreshSuperLockEditor(); };
+  root.querySelectorAll(".sl-side-btn").forEach(b => b.onclick = () => { slDraft.side = b.dataset.slside; refreshSuperLockEditor(); });
+  const lock = document.getElementById("sl-lock");
+  if (lock && !lock.disabled) lock.onclick = () => lockStructuredProp();
 }
 function refreshSuperLockEditor() {
   const el = document.getElementById("my-card-sl");
   if (!el) return;
   el.innerHTML = superLockEditorHtml();
   bindSuperLockEditor();
+}
+async function loadPropMenu(gameKey) {
+  slLoading = true; refreshSuperLockEditor();
+  let markets = [];
+  try {
+    const r = await fetch(`/api/props?game_key=${encodeURIComponent(gameKey)}`, { credentials: "include" });
+    const j = await r.json();
+    markets = (j && Array.isArray(j.markets)) ? j.markets : [];
+  } catch { markets = []; }
+  if (slGameKey !== gameKey) return; // selection moved on; drop the stale response
+  slMarkets = markets; slLoading = false;
+  refreshSuperLockEditor();
+}
+// Client mirror of the server's canonical prop text (functions/_shared/props.js).
+function propTextClient(prop, m) {
+  if (m.kind === "yes" || prop.side === "yes") return `${prop.player} anytime TD`;
+  const dir = prop.side === "under" ? "u" : "o";
+  return `${prop.player} ${dir}${prop.line} ${m.unit}`;
+}
+async function lockStructuredProp() {
+  const m = (slMarkets || []).find(x => x.market === slDraft.market);
+  const pl = m && m.players.find(x => x.player === slDraft.player);
+  if (!m || !pl) return;
+  const side = m.kind === "yes" ? "yes" : slDraft.side;
+  if (!side) return;
+  const best = slBestSide(pl, side);
+  const prop = { market: m.market, player: pl.player, line: m.kind === "yes" ? null : (best.line ?? pl.line), side, book: best.book, game_key: slGameKey };
+  const msg = document.getElementById("mycard-sl-msg");
+  try {
+    const r = await fetch("/api/picks", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season: 2026, week: myCardWeek(), picks: [{ bet_type: "Super Lock", prop }] }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      if (msg) msg.textContent = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
+        : j.error === "super-lock-price" ? "ODDS MUST BE -120 OR LONGER"
+        : j.error === "prop-not-offered" ? "THAT LINE IS NO LONGER OFFERED"
+        : j.error === "game-started" ? "GAME ALREADY STARTED"
+        : "ERROR · " + (j.error || "");
+      return;
+    }
+    currentMyPicks["Super Lock"] = { pick_text: propTextClient(prop, m), prop, book: best.book, price: best.price, locked_at: new Date().toISOString() };
+    slEditing = false; slDraft = { market: "", player: "", side: "" };
+    showToast("SUPER LOCK LOCKED");
+    refreshMyCard();
+    refreshSuperLockEditor();
+  } catch { if (msg) msg.textContent = "NETWORK ERROR"; }
 }
 async function saveSuperLockText(raw) {
   const text = (raw || "").trim();
@@ -2702,10 +2918,12 @@ async function saveSuperLockText(raw) {
     const j = await r.json();
     if (!r.ok) {
       if (msg) msg.textContent = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
-        : j.error === "super-lock-price" ? "MUST BE -120 OR HARDER" : "ERROR · " + (j.error || "");
+        : j.error === "super-lock-price" ? "ODDS MUST BE -120 OR LONGER" : "ERROR · " + (j.error || "");
       return;
     }
-    currentMyPicks["Super Lock"] = { ...(currentMyPicks["Super Lock"] || {}), pick_text: text, locked_at: new Date().toISOString() };
+    // Free-text overwrites any prior structured pick, so clear prop metadata.
+    currentMyPicks["Super Lock"] = { pick_text: text, locked_at: new Date().toISOString() };
+    slEditing = false;
     showToast("SUPER LOCK SAVED");
     refreshMyCard();
     refreshSuperLockEditor();
@@ -3052,7 +3270,7 @@ function renderRecentPicksWidget() {
         </div>
         <div class="flex items-start gap-3">
           <div class="avatar shrink-0"><span class="material-symbols-outlined text-base">lock</span></div>
-          <div class="text-[12px] text-on-surface-variant leading-snug">Super Lock must be -120 or harder. Enter it in My Card, on the right.</div>
+          <div class="text-[12px] text-on-surface-variant leading-snug">Super Lock odds must be -120 or longer (no shorter than -120; plus-money is fine). Enter it in My Card, on the right.</div>
         </div>
       </div>
     </div>

@@ -249,8 +249,8 @@ export async function onRequest({ request, env }) {
         } else {
           // Free-text Super Lock (manual Hit/Miss/Push, honor system on price).
           if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
-          if (p.price != null && !(Number(p.price) <= -120)) {
-            return json({ error: "super-lock-price", detail: "Super Lock must be -120 or harder", price: p.price }, { status: 400 });
+          if (p.price != null && !(Number(p.price) >= -120)) {
+            return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: p.price }, { status: 400 });
           }
         }
       } else {
@@ -281,7 +281,8 @@ export async function onRequest({ request, env }) {
     }
     // Structured Super Lock: re-derive line/price/book/text from the live prop
     // board, same anti-cheat treatment as the gradable bets. Enforce the league's
-    // "-120 or harder" lock rule on the derived price. If props are momentarily
+    // "-120 or longer" lock rule on the derived price (no shorter than -120;
+    // plus-money allowed). If props are momentarily
     // down (or not posted yet), degrade to a well-formed structured prop.
     const structured = picks.filter((p) => p.bet_type === "Super Lock" && p.prop);
     for (const p of structured) {
@@ -297,8 +298,8 @@ export async function onRequest({ request, env }) {
               price: p.prop.price ?? null, book: p.prop.book || null,
               pick_text: propPickText({ market: p.prop.market, player: p.prop.player, line: p.prop.line, side: p.prop.side }) };
       }
-      if (d.price != null && !(Number(d.price) <= -120)) {
-        return json({ error: "super-lock-price", detail: "Super Lock must be -120 or harder", price: d.price, player: d.player }, { status: 400 });
+      if (d.price != null && !(Number(d.price) >= -120)) {
+        return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: d.price, player: d.player }, { status: 400 });
       }
       p.prop = { market: d.market, player: d.player, line: d.line, side: d.side, price: d.price, book: d.book, game_key: p.game_key };
       p.pick_text = d.pick_text; p.price = d.price; p.book = d.book;
