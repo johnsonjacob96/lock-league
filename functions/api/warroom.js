@@ -101,7 +101,7 @@ export async function onRequest({ request, env, waitUntil }) {
       FROM picks p JOIN members m ON m.id = p.member_id
       WHERE p.season = ${cur.season} AND p.week = ${cur.week}
       ORDER BY m.name`,
-    fetchScoreboard(cur.season, cur.week, seasonTypeFor(env)).catch(() => []),
+    fetchScoreboard(cur.season, cur.week, seasonTypeFor(env), env).catch(() => []),
   ]);
 
   const findEv = (gameKey) => {

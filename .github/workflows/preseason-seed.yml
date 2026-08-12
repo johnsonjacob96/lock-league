@@ -47,7 +47,7 @@ jobs:
               const r = await fetch(process.env.SITE_URL + "/api/odds?action=seed", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "X-Cron-Secret": process.env.CRON_SECRET },
-                body: JSON.stringify({ events, source: "espn" }),
+                body: JSON.stringify({ events, source: "espn", season: 2026, week: 2, seasontype: 1 }),
               });
               console.log("seed", r.status, await r.text());
               if (!r.ok) process.exit(1);

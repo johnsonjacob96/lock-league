@@ -19,7 +19,7 @@ export async function onRequestGet(context) {
     return json(cache.data, { headers: { "X-Cache": "HIT", "Cache-Control": "public, max-age=30" } });
   }
   try {
-    const games = await fetchScoreboard(cur.season, cur.week, seasonTypeFor(env));
+    const games = await fetchScoreboard(cur.season, cur.week, seasonTypeFor(env), env);
     const data = { season: cur.season, week: cur.week, fetched_at: new Date().toISOString(), games, test: !!testConfig(env) };
     cache = { ts: Date.now(), key, data };
     return json(data, { headers: { "X-Cache": "MISS", "Cache-Control": "public, max-age=30" } });

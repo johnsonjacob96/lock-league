@@ -10,12 +10,12 @@ import { PROP_DEFS, propPickText, samePlayer } from "../_shared/props.js";
 // games that have already kicked off.
 const SB_TTL_MS = 60 * 1000;
 const sbCache = new Map(); // "season:week:seasontype" -> { ts, events }
-async function scoreboardFor(season, week, seasontype = 2) {
+async function scoreboardFor(season, week, seasontype = 2, env = null) {
   const key = `${season}:${week}:${seasontype}`;
   const hit = sbCache.get(key);
   if (hit && Date.now() - hit.ts < SB_TTL_MS) return hit.events;
   try {
-    const events = await fetchScoreboard(season, week, seasontype);
+    const events = await fetchScoreboard(season, week, seasontype, env);
     sbCache.set(key, { ts: Date.now(), events });
     return events;
   } catch {
@@ -127,10 +127,10 @@ export function deriveProp(markets, prop) { // exported for tests; CF ignores no
 }
 
 // Returns the offending pick if any submitted game has already started.
-async function findStartedGame(picks, season, week, seasontype = 2) {
+async function findStartedGame(picks, season, week, seasontype = 2, env = null) {
   const keyed = picks.filter(p => p.game_key);
   if (!keyed.length) return null;
-  const events = await scoreboardFor(season, week, seasontype);
+  const events = await scoreboardFor(season, week, seasontype, env);
   const now = Date.now();
   for (const p of keyed) {
     const [away, home] = String(p.game_key).split("@");
@@ -306,7 +306,7 @@ export async function onRequest({ request, env }) {
     }
     // A game that has kicked off can no longer be picked (TNF after kickoff,
     // international games that start before the Sunday noon cutoff, ...).
-    const started = await findStartedGame(picks, season, week, seasonTypeFor(env));
+    const started = await findStartedGame(picks, season, week, seasonTypeFor(env), env);
     if (started) {
       return json({ error: "game-started", ...started }, { status: 423 });
     }

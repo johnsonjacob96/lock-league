@@ -5,6 +5,7 @@ import { weeksToGrade, currentNflWeek, seasonTypeFor, testConfig } from "./nfl.j
 import { pushPersonalized, alreadySent, markSent } from "./push-notify.js";
 import { gradeProp } from "./props.js";
 import { espnScoreboardEvents, espnBoxscore } from "./espn.js";
+import { loadScoreboardSeed } from "./scoreseed.js";
 
 function normTeam(s) { return String(s || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
 const safeJson = (s) => { try { return JSON.parse(s); } catch { return null; } };
@@ -17,8 +18,15 @@ export function sameTeam(a, b) {
   return na === nb || na.includes(nb) || nb.includes(na);
 }
 
-export async function fetchScoreboard(season, week, seasontype = 2) {
-  const events = await espnScoreboardEvents(season, seasontype, week);
+export async function fetchScoreboard(season, week, seasontype = 2, env = null) {
+  let events = null;
+  try {
+    events = await espnScoreboardEvents(season, seasontype, week);
+  } catch (e) {
+    // Worker can't reach ESPN — fall back to the GitHub-seeded scoreboard.
+    if (env) events = await loadScoreboardSeed(env, season, week, seasontype);
+    if (!events) throw e;
+  }
   return (events || []).map((ev) => {
     const comp = ev.competitions?.[0];
     const competitors = comp?.competitors || [];
@@ -80,7 +88,7 @@ export function resolveSpreadResult(p, ev) {
 
 export async function gradeWeek(env, season, week) {
   const s = sql(env);
-  const events = await fetchScoreboard(season, week, seasonTypeFor(env));
+  const events = await fetchScoreboard(season, week, seasonTypeFor(env), env);
   let updated = 0, graded = 0;
   for (const ev of events) {
     if (!ev.home || !ev.away) continue;

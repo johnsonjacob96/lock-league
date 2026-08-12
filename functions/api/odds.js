@@ -14,6 +14,7 @@ import { json } from "../_shared/auth.js";
 import { sql } from "../_shared/db.js";
 import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS, seasonTypeFor, testConfig } from "../_shared/nfl.js";
 import { espnScoreboardEvents } from "../_shared/espn.js";
+import { saveScoreboardSeed } from "../_shared/scoreseed.js";
 
 const API_BASE = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds";
 // Synthetic, cookie-free key for the shared Cache API entry.
@@ -623,5 +624,11 @@ export async function onRequestPost(context) {
   const payload = { source: body.source || "espn", live: true, seeded: true, fetched_at: new Date().toISOString(), games };
   await saveSnapshot(env, payload);
   cache = { ts: Date.now(), data: payload }; // warm this isolate's L1 immediately
-  return json({ ok: true, games: games.length, source: payload.source, first: games[0] }, { headers: { "Cache-Control": "no-store" } });
+  // Also stash the raw events for the scoreboard (scores/War Room/grading), since
+  // the Worker can't reach ESPN. fetchScoreboard falls back to these.
+  let scoreboardSeeded = false;
+  if (Array.isArray(body.events) && body.season && body.week && body.seasontype) {
+    scoreboardSeeded = await saveScoreboardSeed(env, Number(body.season), Number(body.week), Number(body.seasontype), body.events);
+  }
+  return json({ ok: true, games: games.length, source: payload.source, scoreboardSeeded, first: games[0] }, { headers: { "Cache-Control": "no-store" } });
 }
