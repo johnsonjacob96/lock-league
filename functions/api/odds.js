@@ -442,6 +442,47 @@ export async function onRequestGet(context) {
     return json(out, { headers: { "Cache-Control": "no-store" } });
   }
 
+  // Debug: does SharpAPI actually carry preseason (August) games, and under what
+  // market/date? Dumps a date histogram + market_types for both the default
+  // (market=spread,total) fetch and an unfiltered fetch, plus how many parsed
+  // games land in the current pick-week window.
+  if (url.searchParams.get("debug") === "sharpdates") {
+    if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    const summarize = (rows) => {
+      const dateHist = {}, marketByMonth = {};
+      let minDate = null, maxDate = null;
+      for (const r of rows) {
+        const t = r.event_start_time ?? r.start_time ?? r.commence_time ?? r.kickoff;
+        const d = String(t || "").slice(0, 10);
+        if (!d) continue;
+        dateHist[d] = (dateHist[d] || 0) + 1;
+        if (!minDate || d < minDate) minDate = d;
+        if (!maxDate || d > maxDate) maxDate = d;
+        const mon = d.slice(0, 7), mk = String(r.market_type ?? r.market ?? "?");
+        (marketByMonth[mon] || (marketByMonth[mon] = {}))[mk] = (marketByMonth[mon][mk] || 0) + 1;
+      }
+      return { count: rows.length, minDate, maxDate, marketByMonth, augDates: Object.keys(dateHist).filter(d => d < "2026-09").sort() };
+    };
+    try {
+      const win = weekWindow(currentSeasonWeek(env).week, env);
+      const from = Date.parse(win.from), to = Date.parse(win.to);
+      const def = await fetchSharpRaw(env);                              // market=spread,total
+      const allm = await fetchSharpRaw(env, 12, { market: undefined });  // no market filter
+      const parsed = normalizeSharp(def);
+      const inWin = parsed.filter(g => { const t = Date.parse(g.kickoff); return t >= from && t < to; });
+      return json({
+        window: win,
+        default_spread_total: summarize(def),
+        unfiltered: summarize(allm),
+        parsedGames: parsed.length,
+        parsedInWindow: inWin.length,
+        parsedInWindowSample: inWin.slice(0, 4).map(g => ({ away: g.away, home: g.home, kickoff: g.kickoff, books: Object.keys(g.books || {}) })),
+      }, { headers: { "Cache-Control": "no-store" } });
+    } catch (e) {
+      return json({ error: String(e && e.message || e) }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    }
+  }
+
   // Debug: inspect a raw SharpAPI sample to finalize the field mapping.
   if (url.searchParams.get("debug") === "sharp") {
     if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
