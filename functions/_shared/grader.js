@@ -4,6 +4,7 @@ import { sql } from "./db.js";
 import { weeksToGrade, currentNflWeek, seasonTypeFor, testConfig } from "./nfl.js";
 import { pushPersonalized, alreadySent, markSent } from "./push-notify.js";
 import { gradeProp } from "./props.js";
+import { ESPN_HEADERS } from "../api/odds.js";
 
 const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
 const ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary";
@@ -23,7 +24,7 @@ export async function fetchScoreboard(season, week, seasontype = 2) {
   url.searchParams.set("year", String(season));
   url.searchParams.set("seasontype", String(seasontype));
   url.searchParams.set("week", String(week));
-  const r = await fetch(url);
+  const r = await fetch(url, { headers: ESPN_HEADERS });
   if (!r.ok) throw new Error(`espn ${r.status}`);
   const data = await r.json();
   return (data.events || []).map((ev) => {
@@ -52,7 +53,7 @@ export async function fetchScoreboard(season, week, seasontype = 2) {
 export async function fetchBoxscore(eventId) {
   if (!eventId) return null;
   try {
-    const r = await fetch(`${ESPN_SUMMARY}?event=${eventId}`);
+    const r = await fetch(`${ESPN_SUMMARY}?event=${eventId}`, { headers: ESPN_HEADERS });
     if (!r.ok) return null;
     const data = await r.json();
     return data.boxscore || null;

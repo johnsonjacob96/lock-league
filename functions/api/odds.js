@@ -16,6 +16,13 @@ import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS, seasonTypeFor, testCo
 
 const API_BASE = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds";
 const ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
+// ESPN's public API 403s requests from datacenter IPs without a browser-like
+// User-Agent (fine from a laptop, blocked from a Cloudflare colo). Send one.
+export const ESPN_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Accept": "application/json, text/plain, */*",
+  "Referer": "https://www.espn.com/nfl/scoreboard",
+};
 // Synthetic, cookie-free key for the shared Cache API entry.
 const EDGE_KEY = new Request("https://lock-league.internal/cache/odds");
 let cache = { ts: 0, data: null };
@@ -101,7 +108,7 @@ async function fetchEspn(env) {
   url.searchParams.set("year", String(season));
   url.searchParams.set("seasontype", String(seasonTypeFor(env)));
   url.searchParams.set("week", String(week));
-  const r = await fetch(url);
+  const r = await fetch(url, { headers: ESPN_HEADERS });
   if (!r.ok) throw new Error(`espn ${r.status}`);
   const data = await r.json();
   const games = [];
