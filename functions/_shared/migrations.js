@@ -29,10 +29,15 @@ export async function ensureExtras(env) {
     paid_at    TIMESTAMPTZ,
     PRIMARY KEY (season, week, member_id)
   )`;
-  // Season pot tracker (Article 11: $100 entry, $500/$200/$100 payout). The app
-  // never custodies money — this only TRACKS who has paid the season entry so the
-  // pot has a LeagueSafe-style dashboard. Money still moves P2P to the collector's
-  // own Venmo (real escrow needs a licensed money-transmitter rail = LeagueSafe).
+  // League money config. Two flows, NEITHER custodied by the app:
+  //  - Season pot (Article 11: $100 entry, $500/$200/$100) is held + paid out by
+  //    LeagueSafe; the app just links to it (`leaguesafe_url`) and shows the info.
+  //  - Weekly game runs on Venmo, PRE-FUNDED: every member sends the collector
+  //    (Jared) a season buy-in (`weekly_buyin`, $90); the collector banks it and
+  //    Venmos each week's winner the weekly prize (`weekly_prize`, $40).
+  //    `collector_id` = the weekly banker; `deadline` = the buy-in deadline.
+  //    `entry_amount`/`payout` are the season-pot figures shown on the LeagueSafe
+  //    card (display only). pot_entries tracks who has paid the weekly buy-in.
   await s`CREATE TABLE IF NOT EXISTS pot_config (
     season       INT PRIMARY KEY,
     entry_amount NUMERIC NOT NULL DEFAULT 100,
@@ -40,12 +45,24 @@ export async function ensureExtras(env) {
     deadline     TIMESTAMPTZ,
     payout       JSONB
   )`;
+  await s`ALTER TABLE pot_config ADD COLUMN IF NOT EXISTS leaguesafe_url TEXT`;
+  await s`ALTER TABLE pot_config ADD COLUMN IF NOT EXISTS weekly_buyin NUMERIC NOT NULL DEFAULT 90`;
+  await s`ALTER TABLE pot_config ADD COLUMN IF NOT EXISTS weekly_prize NUMERIC NOT NULL DEFAULT 40`;
   await s`CREATE TABLE IF NOT EXISTS pot_entries (
     season    INT NOT NULL,
     member_id INT NOT NULL REFERENCES members(id),
     paid      BOOLEAN NOT NULL DEFAULT FALSE,
     paid_at   TIMESTAMPTZ,
     PRIMARY KEY (season, member_id)
+  )`;
+  // One row per week once it has a winner: has the collector paid that week's
+  // winner their weekly prize yet? (Jared -> winner, tracked so the ledger knows.)
+  await s`CREATE TABLE IF NOT EXISTS weekly_payouts (
+    season   INT NOT NULL,
+    week     INT NOT NULL,
+    paid     BOOLEAN NOT NULL DEFAULT FALSE,
+    paid_at  TIMESTAMPTZ,
+    PRIMARY KEY (season, week)
   )`;
   done = true;
 }

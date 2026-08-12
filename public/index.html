@@ -626,8 +626,9 @@
   .pot-collector { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding:11px 13px; background:#14171a; border:1px solid #222827; border-radius:9px; }
   .pot-collector-l { font-family:'Inter',sans-serif; font-size:13px; color:#c7ccca; }
   .pot-collector-l b { color:#e6e8e8; }
-  .pot-pay { display:inline-flex; align-items:center; gap:6px; background:#3d95ce; color:#fff; font-family:'Inter',sans-serif; font-weight:700; font-size:13px; padding:9px 15px; border-radius:8px; text-decoration:none; transition:filter 0.12s; }
+  .pot-pay { display:inline-flex; align-items:center; gap:6px; background:#3d95ce; color:#fff; font-family:'Inter',sans-serif; font-weight:700; font-size:13px; padding:9px 15px; border-radius:8px; text-decoration:none; transition:filter 0.12s; white-space:nowrap; }
   .pot-pay:hover { filter:brightness(1.08); }
+  .pot-pay.ls { background:#1fd97b; color:#0e1011; }
   .pot-paid-tag { font-family:'JetBrains Mono',monospace; font-size:12px; color:#46e08a; }
   .pot-note { font-family:'JetBrains Mono',monospace; font-size:11px; color:#6f7877; }
   .pot-setup { margin-top:16px; padding:13px; background:#14171a; border:1px solid #222827; border-radius:9px; }
@@ -1432,96 +1433,120 @@ function ordinal(n) {
 
 function potCardHtml() {
   const p = state.pot;
-  const shell = (inner) => `<section class="glass-panel p-5 md:p-6 pot-card">${inner}</section>`;
-  if (!p) return shell(`<div class="pot-foot">Sign in to see the season pot.</div>`);
-  if (p.error) return shell(`<div class="pot-foot">Could not load the season pot. It refreshes on its own.</div>`);
-  const cfg = p.config, prog = p.progress;
+  if (!p) return `<div class="pot-foot" style="padding:16px">Sign in to see league payments.</div>`;
+  if (p.error) return `<div class="pot-foot" style="padding:16px">Could not load payments. It refreshes on its own.</div>`;
   const fmt = (n) => "$" + Number(n || 0).toLocaleString("en-US");
-  const payout = (cfg.payout || []).map((x) => `${ordinal(x.place)} ${fmt(x.amount)}`).join(" · ");
-  const pct = prog.member_count ? Math.round((100 * prog.paid_count) / prog.member_count) : 0;
-  const me = p.roster.find((r) => r.id === p.me.id);
-  const iAmCollector = !!p.me.is_collector;
-  const unset = cfg.collector_id == null;
+  const sp = p.season_pot, wk = p.weekly, canCfg = p.can_configure;
+  const payout = (sp.payout || []).map((x) => `${ordinal(x.place)} ${fmt(x.amount)}`).join(" · ");
 
-  let deadlineHtml = "";
-  if (cfg.deadline) {
-    const d = new Date(cfg.deadline);
-    const overdue = Date.now() > d.getTime();
-    const ds = d.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
-    deadlineHtml = `<span class="pot-deadline${overdue ? " over" : ""}">Entries due ${ds}${overdue ? " · past due" : ""}</span>`;
-  }
-
-  let collectorHtml;
-  if (unset) {
-    const opts = p.roster.map((r) => `<option value="${r.id}"${r.id === p.me.id ? " selected" : ""}>${escapeHtml(r.name)}</option>`).join("");
-    collectorHtml = `<div class="pot-setup">
-      <div class="pot-setup-t">Who's collecting the pot this season?</div>
-      <div class="pot-setup-row">
-        <select id="pot-collector-sel" class="pot-select">${opts}</select>
-        <button id="pot-collector-save" class="pot-btn">Set collector</button>
-      </div>
-      <div class="pot-setup-h">Entries go to this person's Venmo. The app only tracks who's paid.</div>
-    </div>`;
-  } else {
-    const payLink = me && !me.paid && cfg.collector_venmo
-      ? venmoPayLink(cfg.collector_venmo, cfg.entry_amount, `Lock League ${p.season} season entry`)
-      : null;
-    let right;
-    if (me && me.paid) right = `<span class="pot-paid-tag">You're in ✓</span>`;
-    else if (me && me.id === cfg.collector_id) right = `<span class="pot-note">You're the collector</span>`;
-    else if (payLink) right = `<a class="pot-pay" href="${payLink}" target="_blank" rel="noopener">Pay ${fmt(cfg.entry_amount)} entry on Venmo</a>`;
-    else right = `<span class="pot-note">${escapeHtml(cfg.collector_name || "The collector")} hasn't linked Venmo yet</span>`;
-    collectorHtml = `<div class="pot-collector">
-      <span class="pot-collector-l">Collected by <b>${escapeHtml(cfg.collector_name || "?")}</b>${cfg.collector_venmo ? ` · @${escapeHtml(cfg.collector_venmo)}` : ""}</span>
-      ${right}
-    </div>`;
-  }
-
-  const rows = p.roster.map((r) => {
-    const canToggle = iAmCollector || r.id === p.me.id;
-    const chip = r.paid ? `<span class="pot-chip paid">Paid</span>` : `<span class="pot-chip unpaid">Unpaid</span>`;
-    const toggle = canToggle
-      ? `<button class="pot-toggle" data-member="${r.id}" data-paid="${r.paid ? 1 : 0}">${r.paid ? "Undo" : "Mark paid"}</button>`
-      : "";
-    const tags = `${r.is_collector ? ` <span class="pot-tag">collector</span>` : ""}${r.id === p.me.id ? ` <span class="pot-tag you">you</span>` : ""}`;
-    return `<div class="pot-row${r.paid ? " is-paid" : ""}">
-      <span class="pot-name">${escapeHtml(r.name)}${tags}</span>
-      <span class="pot-row-r">${chip}${toggle}</span>
-    </div>`;
-  }).join("");
-
-  const settings = iAmCollector ? `<details class="pot-settings"><summary>Pot settings</summary>
-    <div class="pot-set-body">
-      <label class="pot-set-l">Entry amount ($)</label>
-      <input type="number" min="0" step="5" id="pot-entry" class="pot-input" value="${cfg.entry_amount}">
-      <label class="pot-set-l">Entry deadline</label>
-      <input type="date" id="pot-deadline" class="pot-input" value="${cfg.deadline ? new Date(cfg.deadline).toISOString().slice(0, 10) : ""}">
-      <label class="pot-set-l">Collector</label>
-      <select id="pot-collector-sel2" class="pot-select">${p.roster.map((r) => `<option value="${r.id}"${r.id === cfg.collector_id ? " selected" : ""}>${escapeHtml(r.name)}</option>`).join("")}</select>
-      <button id="pot-settings-save" class="pot-btn">Save settings</button>
-    </div></details>` : "";
-
-  return shell(`
+  // ---- Season Pot (held + paid out by LeagueSafe) ----
+  const lsBtn = sp.leaguesafe_url
+    ? `<a class="pot-pay ls" href="${escapeHtml(sp.leaguesafe_url)}" target="_blank" rel="noopener">Open in LeagueSafe</a>`
+    : canCfg ? `<span class="pot-note">Add the LeagueSafe link in settings</span>`
+             : `<span class="pot-note">On LeagueSafe</span>`;
+  const seasonCard = `<section class="glass-panel p-5 md:p-6 pot-card">
     <div class="pot-head">
       <div>
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-secondary-fixed-dim">savings</span>
           <h3 class="font-label-caps text-[11px] tracking-widest uppercase text-on-surface-variant">Season Pot · Article 11</h3>
         </div>
-        <div class="pot-total">${fmt(prog.pot_total)}<span class="pot-total-sub">pot · ${fmt(cfg.entry_amount)} entry</span></div>
+        <div class="pot-total">${fmt(sp.pot_total)}<span class="pot-total-sub">pot · ${fmt(sp.entry_amount)} entry</span></div>
         ${payout ? `<div class="pot-payout">${payout}</div>` : ""}
+      </div>
+      ${lsBtn}
+    </div>
+    <div class="pot-foot">Held and paid out by LeagueSafe. The app just links to it, nothing to settle here.</div>
+  </section>`;
+
+  // ---- Weekly Fund (season buy-in to the banker; funds the weekly payouts) ----
+  const me = wk.me, roster = wk.roster, prog = wk.progress;
+  const pct = prog.member_count ? Math.round((100 * prog.paid_count) / prog.member_count) : 0;
+  const iAmCollector = !!me.is_collector;
+  const unset = !wk.collector;
+
+  let deadlineHtml = "";
+  if (wk.deadline) {
+    const d = new Date(wk.deadline);
+    const overdue = Date.now() > d.getTime();
+    const ds = d.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
+    deadlineHtml = `<span class="pot-deadline${overdue ? " over" : ""}">Buy-in due ${ds}${overdue ? " · past due" : ""}</span>`;
+  }
+
+  let fundBody;
+  if (unset) {
+    const opts = roster.map((r) => `<option value="${r.id}"${r.id === me.id ? " selected" : ""}>${escapeHtml(r.name)}</option>`).join("");
+    fundBody = `<div class="pot-setup">
+      <div class="pot-setup-t">Who's banking the weekly fund?</div>
+      <div class="pot-setup-row">
+        <select id="pot-collector-sel" class="pot-select">${opts}</select>
+        <button id="pot-collector-save" class="pot-btn">Set banker</button>
+      </div>
+      <div class="pot-setup-h">Everyone sends this person their season buy-in; they Venmo the weekly winners.</div>
+    </div>`;
+  } else {
+    const cName = wk.collector.name, cVenmo = wk.collector.venmo_handle;
+    const payLink = !me.paid && !iAmCollector && cVenmo
+      ? venmoPayLink(cVenmo, wk.buyin, `Lock League ${p.season} weekly buy-in`)
+      : null;
+    let right;
+    if (iAmCollector) right = `<span class="pot-note">You're the banker</span>`;
+    else if (me.paid) right = `<span class="pot-paid-tag">You're in ✓</span>`;
+    else if (payLink) right = `<a class="pot-pay" href="${payLink}" target="_blank" rel="noopener">Pay ${fmt(wk.buyin)} to ${escapeHtml(cName)}</a>`;
+    else right = `<span class="pot-note">${escapeHtml(cName)} hasn't linked Venmo yet</span>`;
+    const rows = roster.map((r) => {
+      const canToggle = iAmCollector || r.id === me.id;
+      const chip = r.paid ? `<span class="pot-chip paid">Paid</span>` : `<span class="pot-chip unpaid">Unpaid</span>`;
+      const toggle = canToggle ? `<button class="pot-toggle" data-member="${r.id}" data-paid="${r.paid ? 1 : 0}">${r.paid ? "Undo" : "Mark paid"}</button>` : "";
+      const tags = `${r.is_collector ? ` <span class="pot-tag">banker</span>` : ""}${r.id === me.id ? ` <span class="pot-tag you">you</span>` : ""}`;
+      return `<div class="pot-row${r.paid ? " is-paid" : ""}"><span class="pot-name">${escapeHtml(r.name)}${tags}</span><span class="pot-row-r">${chip}${toggle}</span></div>`;
+    }).join("");
+    fundBody = `
+      <div class="pot-collector">
+        <span class="pot-collector-l">Banked by <b>${escapeHtml(cName)}</b>${cVenmo ? ` · @${escapeHtml(cVenmo)}` : ""}</span>
+        ${right}
+      </div>
+      <div class="pot-progress">
+        <div class="pot-bar"><span style="width:${pct}%"></span></div>
+        <div class="pot-prog-l">${prog.paid_count}/${prog.member_count} paid · ${fmt(prog.collected)} of ${fmt(prog.total)} in</div>
+      </div>
+      <div class="pot-roster">${rows}</div>`;
+  }
+
+  const settings = canCfg ? `<details class="pot-settings"><summary>Payment settings</summary>
+    <div class="pot-set-body">
+      <label class="pot-set-l">LeagueSafe league URL</label>
+      <input type="url" id="pot-lsurl" class="pot-input" placeholder="https://www.leaguesafe.com/..." value="${sp.leaguesafe_url ? escapeHtml(sp.leaguesafe_url) : ""}">
+      <label class="pot-set-l">Weekly buy-in ($ to the banker)</label>
+      <input type="number" min="0" step="5" id="pot-buyin" class="pot-input" value="${wk.buyin}">
+      <label class="pot-set-l">Weekly prize ($ to each winner)</label>
+      <input type="number" min="0" step="5" id="pot-prize" class="pot-input" value="${wk.prize}">
+      <label class="pot-set-l">Buy-in deadline</label>
+      <input type="date" id="pot-deadline" class="pot-input" value="${wk.deadline ? new Date(wk.deadline).toISOString().slice(0, 10) : ""}">
+      <label class="pot-set-l">Banker</label>
+      <select id="pot-collector-sel2" class="pot-select">${roster.map((r) => `<option value="${r.id}"${wk.collector && r.id === wk.collector.id ? " selected" : ""}>${escapeHtml(r.name)}</option>`).join("")}</select>
+      <label class="pot-set-l">Season pot entry ($, display)</label>
+      <input type="number" min="0" step="5" id="pot-entry" class="pot-input" value="${sp.entry_amount}">
+      <button id="pot-settings-save" class="pot-btn">Save settings</button>
+    </div></details>` : "";
+
+  const fundCard = `<section class="glass-panel p-5 md:p-6 pot-card mt-4">
+    <div class="pot-head">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-secondary-fixed-dim">account_balance_wallet</span>
+          <h3 class="font-label-caps text-[11px] tracking-widest uppercase text-on-surface-variant">Weekly Fund · Article 6a</h3>
+        </div>
+        <div class="pot-total">${fmt(wk.buyin)}<span class="pot-total-sub">season buy-in · ${fmt(wk.prize)}/week to the winner</span></div>
       </div>
       ${deadlineHtml}
     </div>
-    <div class="pot-progress">
-      <div class="pot-bar"><span style="width:${pct}%"></span></div>
-      <div class="pot-prog-l">${prog.paid_count}/${prog.member_count} paid · ${fmt(prog.collected)} of ${fmt(prog.pot_total)} collected</div>
-    </div>
-    ${collectorHtml}
-    <div class="pot-roster">${rows}</div>
+    ${fundBody}
     ${settings}
-    <div class="pot-foot">The app never holds money. Entries move directly to the collector's Venmo; this is just the ledger. Real escrow (holding + paying out the pot) runs on LeagueSafe.</div>
-  `);
+    <div class="pot-foot">The app never holds money. Buy-ins go straight to the banker's Venmo; they pay the weekly winners.</div>
+  </section>`;
+
+  return seasonCard + fundCard;
 }
 
 function bindPotCard() {
@@ -1531,9 +1556,12 @@ function bindPotCard() {
   });
   document.getElementById("pot-settings-save")?.addEventListener("click", () => {
     savePotConfig({
-      entry_amount: Number(document.getElementById("pot-entry")?.value),
+      leaguesafe_url: document.getElementById("pot-lsurl")?.value ?? "",
+      weekly_buyin: Number(document.getElementById("pot-buyin")?.value),
+      weekly_prize: Number(document.getElementById("pot-prize")?.value),
       deadline: document.getElementById("pot-deadline")?.value || null,
       collector_id: Number(document.getElementById("pot-collector-sel2")?.value),
+      entry_amount: Number(document.getElementById("pot-entry")?.value),
     });
   });
   document.querySelectorAll(".pot-toggle").forEach((b) => b.addEventListener("click", () =>
@@ -1541,10 +1569,14 @@ function bindPotCard() {
 }
 
 async function refreshPotCard() {
-  await loadPot();
+  // Config changes (banker, prize) also affect the weekly-payouts card, so
+  // refresh both mounts together.
+  await Promise.all([loadPot(), loadSettlement()]);
   if (state.view === "payments") {
-    const m = document.getElementById("pot-mount");
-    if (m) { m.innerHTML = potCardHtml(); bindPotCard(); }
+    const pm = document.getElementById("pot-mount");
+    if (pm) { pm.innerHTML = potCardHtml(); bindPotCard(); }
+    const sm = document.getElementById("settle-mount");
+    if (sm) { sm.innerHTML = settleCardHtml(); bindSettleCard(); }
   }
 }
 
@@ -1572,74 +1604,65 @@ async function savePotConfig(patch) {
   } catch { showToast("NETWORK ERROR", "err"); }
 }
 
-function ledgerHtml(s, meId) {
+function ledgerHtml(s) {
   return `<div class="stl-ledger-inner">` + s.weeks.slice().reverse().map(w => {
-    const paid = w.dues.filter(d => d.paid).length;
+    const me = w.winner_id === s.me.id;
     return `<div class="stl-wk">
-      <div class="stl-wk-head"><span>Week ${w.week}</span><span class="stl-wk-winner">🏆 ${escapeHtml(w.winner_name)} · ${paid}/${w.dues.length} paid</span></div>
-      <div class="stl-wk-dues">${w.dues.map(d => `<span class="stl-chip ${d.paid ? "paid" : ""} ${d.member_id === meId ? "me" : ""}">${escapeHtml(d.name)}</span>`).join("")}</div>
+      <div class="stl-wk-head"><span>Week ${w.week}</span><span class="stl-wk-winner">🏆 ${escapeHtml(w.winner_name)}${me ? " (you)" : ""} · $${w.amount} · <span class="${w.paid ? "text-primary-fixed" : ""}">${w.paid ? "paid" : "unpaid"}</span></span></div>
     </div>`;
   }).join("") + `</div>`;
 }
 
 function settleCardHtml() {
   const s = state.settlement;
-  if (!s || !s.weeks || !s.weeks.length) return "";
-  const meId = s.me.id;
-  const handleOf = (id) => s.members.find(m => m.id === id)?.venmo_handle || null;
+  if (!s || !s.weeks || !s.weeks.length) {
+    return `<div class="glass-panel p-8 text-center">
+      <span class="material-symbols-outlined text-outline-variant text-3xl">emoji_events</span>
+      <div class="font-data-tabular text-on-surface-variant mt-3 text-sm">No weeks settled yet.</div>
+      <div class="text-on-surface-variant text-[13px] mt-1 leading-relaxed">Once a week has a winner, the ${s ? "$" + s.prize : "weekly"} payout from the banker shows up here.</div>
+    </div>`;
+  }
+  const me = s.me, iAmCollector = me.is_collector;
+  const cName = s.collector?.name || "the banker";
   const latest = s.weeks[s.weeks.length - 1];
-  const iWon = latest.winner_id === meId;
-  const myDue = latest.dues.find(d => d.member_id === meId);
+  const iWon = latest.winner_id === me.id;
 
-  let action = "";
-  if (iWon) {
-    const paid = latest.dues.filter(d => d.paid).length;
-    action = `
-      <div class="stl-you win">🏆 You won Week ${latest.week} (${latest.winner_record}). ${paid}/${latest.dues.length} have paid you $${latest.amount}.</div>
-      <div class="stl-payers">${latest.dues.map(d => `
-        <button class="stl-payer ${d.paid ? "paid" : ""}" data-week="${latest.week}" data-member="${d.member_id}" data-paid="${d.paid ? 1 : 0}" title="Tap to mark ${d.paid ? "unpaid" : "paid"}">
-          <span class="stl-dot"></span>${escapeHtml(d.name)}
-        </button>`).join("")}</div>`;
-  } else if (myDue) {
-    const link = venmoPayLink(handleOf(latest.winner_id), latest.amount, `Lock League Week ${latest.week}`);
-    action = myDue.paid
-      ? `<div class="stl-you paid">✓ You paid ${escapeHtml(latest.winner_name)} $${latest.amount} for Week ${latest.week}. <button class="stl-undo" data-week="${latest.week}" data-member="${meId}">Undo</button></div>`
-      : `<div class="stl-you owe">You owe ${escapeHtml(latest.winner_name)} <b>$${latest.amount}</b> for Week ${latest.week}.</div>
-         <div class="stl-actions">
-           ${link ? `<a class="stl-pay" href="${link}" target="_blank" rel="noopener">Pay $${latest.amount} on Venmo</a>`
-                  : `<span class="stl-nohandle">${escapeHtml(latest.winner_name)} hasn't linked Venmo yet</span>`}
-           <button class="stl-mark" data-week="${latest.week}" data-member="${meId}">Mark paid</button>
-         </div>`;
+  let action;
+  if (latest.paid) {
+    const canUndo = iAmCollector || iWon;
+    action = `<div class="stl-you paid">✓ ${escapeHtml(latest.winner_name)} was paid $${latest.amount} for Week ${latest.week}.${canUndo ? ` <button class="stl-undo" data-week="${latest.week}">Undo</button>` : ""}</div>`;
+  } else if (iAmCollector) {
+    const link = venmoPayLink(latest.winner_venmo, latest.amount, `Lock League Week ${latest.week}`);
+    action = `<div class="stl-you owe">You owe <b>${escapeHtml(latest.winner_name)}</b> $${latest.amount} for Week ${latest.week} (${latest.winner_record}).</div>
+      <div class="stl-actions">
+        ${link ? `<a class="stl-pay" href="${link}" target="_blank" rel="noopener">Pay $${latest.amount} on Venmo</a>`
+               : `<span class="stl-nohandle">${escapeHtml(latest.winner_name)} hasn't linked Venmo yet</span>`}
+        <button class="stl-mark" data-week="${latest.week}">Mark paid</button>
+      </div>`;
+  } else if (iWon) {
+    action = `<div class="stl-you win">🏆 You won Week ${latest.week} (${latest.winner_record}). ${escapeHtml(cName)} owes you <b>$${latest.amount}</b>.</div>
+      <div class="stl-actions"><button class="stl-mark" data-week="${latest.week}">Mark received</button></div>`;
   } else {
-    action = `<div class="stl-you">🏆 ${escapeHtml(latest.winner_name)} won Week ${latest.week} (${latest.winner_record}).</div>`;
+    action = `<div class="stl-you">🏆 ${escapeHtml(latest.winner_name)} won Week ${latest.week} (${latest.winner_record}) · $${latest.amount} from ${escapeHtml(cName)}.</div>`;
   }
 
-  // Your season net across all settled weeks (open = still unpaid).
-  let oweOpen = 0, owedOpen = 0;
-  for (const w of s.weeks) {
-    if (w.winner_id === meId) owedOpen += w.dues.filter(d => !d.paid).length * w.amount;
-    else { const d = w.dues.find(x => x.member_id === meId); if (d && !d.paid) oweOpen += w.amount; }
-  }
-  const netOpen = owedOpen - oweOpen;
-  const netLabel = netOpen === 0 ? "Square" : netOpen > 0 ? `+$${netOpen} to you` : `-$${Math.abs(netOpen)}`;
-  const netCls = netOpen > 0 ? "text-primary-fixed" : netOpen < 0 ? "text-live-red" : "text-on-surface-variant";
-
-  const noHandleWarn = !s.me.venmo_handle
-    ? `<div class="stl-warn">Add your Venmo so members can pay you when you win. <button class="stl-openacct">Add it →</button></div>` : "";
+  const noHandleWarn = !me.venmo_handle
+    ? `<div class="stl-warn">Add your Venmo so ${escapeHtml(cName)} can pay you when you win. <button class="stl-openacct">Add it →</button></div>` : "";
+  const unpaidCount = s.weeks.filter(w => !w.paid).length;
 
   return `
     <section class="glass-panel p-5 md:p-6 mb-6">
       <div class="flex items-center justify-between gap-3 mb-3">
         <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary-fixed" style="font-variation-settings:'FILL' 1">payments</span>
-          <h3 class="font-headline-lg text-lg uppercase leading-none">Settle Up</h3>
+          <span class="material-symbols-outlined text-primary-fixed" style="font-variation-settings:'FILL' 1">emoji_events</span>
+          <h3 class="font-headline-lg text-lg uppercase leading-none">Weekly Payouts</h3>
         </div>
-        <span class="font-data-tabular text-[11px] ${netCls}">${netLabel}</span>
+        <span class="font-data-tabular text-[11px] text-on-surface-variant">${unpaidCount ? unpaidCount + " unpaid" : "all paid"}</span>
       </div>
       ${action}
       ${noHandleWarn}
       <button class="stl-ledger-toggle" id="stl-toggle">Season ledger ▾</button>
-      <div class="stl-ledger" id="stl-ledger" style="display:none">${ledgerHtml(s, meId)}</div>
+      <div class="stl-ledger" id="stl-ledger" style="display:none">${ledgerHtml(s)}</div>
     </section>`;
 }
 
@@ -1652,22 +1675,18 @@ function bindSettleCard() {
     toggle.textContent = open ? "Season ledger ▾" : "Season ledger ▴";
   };
   document.querySelectorAll(".stl-openacct").forEach(b => b.onclick = openAccount);
-  document.querySelectorAll(".stl-payer").forEach(b => b.onclick = () =>
-    markDue(Number(b.dataset.week), Number(b.dataset.member), b.dataset.paid !== "1"));
-  document.querySelectorAll(".stl-mark").forEach(b => b.onclick = () =>
-    markDue(Number(b.dataset.week), Number(b.dataset.member), true));
-  document.querySelectorAll(".stl-undo").forEach(b => b.onclick = () =>
-    markDue(Number(b.dataset.week), Number(b.dataset.member), false));
+  document.querySelectorAll(".stl-mark").forEach(b => b.onclick = () => markPayout(Number(b.dataset.week), true));
+  document.querySelectorAll(".stl-undo").forEach(b => b.onclick = () => markPayout(Number(b.dataset.week), false));
 }
 
-async function markDue(week, memberId, paid) {
+async function markPayout(week, paid) {
   try {
     const r = await fetch("/api/settlement?action=mark-paid", {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ season: 2026, week, member_id: memberId, paid }),
+      body: JSON.stringify({ season: state.settlement?.season || 2026, week, paid }),
     });
-    if (!r.ok) { showToast("COULDN'T UPDATE", "err"); return; }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); showToast((j.detail || "COULDN'T UPDATE").toUpperCase(), "err"); return; }
     await loadSettlement();
     const m = document.getElementById("settle-mount");
     if (m) { m.innerHTML = settleCardHtml(); bindSettleCard(); }
@@ -2329,10 +2348,15 @@ async function saveVenmo() {
     const j = await r.json();
     if (!r.ok) { status.textContent = j.error === "bad-handle" ? "Use 4–30 letters, numbers, - or _." : "Save failed."; return; }
     status.textContent = j.venmo_handle ? `Saved · @${j.venmo_handle}` : "Cleared.";
-    // Refresh the ledger so pay links pick up the new handle.
+    // Refresh so pay links (buy-in to the banker, payout to the winner) pick up
+    // the new handle.
     state.settlement = null;
-    await loadSettlement();
-    if (state.view === "standings") { const m = document.getElementById("settle-mount"); if (m) { m.innerHTML = settleCardHtml(); bindSettleCard(); } }
+    state.pot = null;
+    if (state.view === "payments") {
+      await refreshPotCard();
+    } else {
+      await loadSettlement();
+    }
   } catch { status.textContent = "Network error."; }
 }
 async function changePassphrase() {
@@ -3778,26 +3802,17 @@ async function renderPayments() {
       </div>`;
   }
   await Promise.all([loadSettlement(), loadPot()]);
-  const s = state.settlement;
-  const hasWeeks = s && s.weeks && s.weeks.length;
-  const empty = `
-    <div class="glass-panel p-8 text-center">
-      <span class="material-symbols-outlined text-outline-variant text-3xl">payments</span>
-      <div class="font-data-tabular text-on-surface-variant mt-3 text-sm">No weeks settled yet.</div>
-      <div class="text-on-surface-variant text-[13px] mt-1 leading-relaxed">Once a week has a winner, the $5 dues (Article 6a) show up here with one-tap Venmo links.</div>
-      ${!s?.me?.venmo_handle ? `<button class="btn-primary mt-5 pay-openacct">Add your Venmo</button>` : ""}
-    </div>`;
   return `
     <section class="mb-stack-lg">
-      <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly + Season Pot</div>
+      <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Season Pot + Weekly Fund</div>
       <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">Payments</h1>
-      <p class="text-on-surface-variant text-sm mt-2.5 max-w-xl leading-relaxed">The weekly $5-to-the-winner flow and the season pot, both tracked here. The site never holds money — it gives you one-tap Venmo links and tracks who's paid.</p>
+      <p class="text-on-surface-variant text-sm mt-2.5 max-w-xl leading-relaxed">Season pot runs on LeagueSafe. The weekly game runs on Venmo through the banker. The site never holds money, it just tracks who's paid and gives one-tap Venmo links.</p>
     </section>
     <div id="pot-mount">${potCardHtml()}</div>
     <section class="mb-stack-sm mt-6">
-      <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly · Article 6a</div>
+      <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly Payouts</div>
     </section>
-    ${hasWeeks ? settleCardHtml() : empty}`;
+    <div id="settle-mount">${settleCardHtml()}</div>`;
 }
 
 // Poll live scores every 60s while This Week is open; re-render on change.

@@ -1,22 +1,28 @@
-// /api/pot — season-pot tracker (Article 11: $100 entry, $500/$200/$100 payout).
+// /api/pot — league money dashboard. Two flows, NEITHER custodied by the app:
 //
-// The site never holds money. This tracks who has paid their season entry, shows
-// collection progress + payout structure, and builds a one-tap Venmo deep link to
-// whoever is collecting the pot (the commissioner). Money moves peer-to-peer to
-// the collector's own Venmo — the app has NO custody, exactly like the weekly $5
-// settlement ledger. Real escrow (holding + auto-distributing the pot) needs a
-// licensed money-transmitter rail, which is precisely what LeagueSafe provides;
-// that is deliberately out of scope for a self-hosted friend-league app.
+//  1. Season pot (Article 11: $100 entry, $500/$200/$100) — held + paid out by
+//     LeagueSafe. The app just links to the league (`leaguesafe_url`) and shows
+//     the entry + payout for reference. No in-app payment tracking; LeagueSafe
+//     owns that (it carries the money-transmitter licensing to custody a pot).
 //
-//   GET  ?season=          -> config + per-member paid status + progress
-//   POST ?action=set-paid  -> mark a member's entry paid/unpaid (self, or the collector)
-//   POST ?action=config    -> set collector/entry/deadline/payout (collector; or anyone if unset)
+//  2. Weekly game — runs on Venmo, PRE-FUNDED. Every member sends the collector
+//     (Jared) a season buy-in (`weekly_buyin`, default $90) at the start of the
+//     year; the collector banks it and Venmos each week's winner the weekly prize
+//     (`weekly_prize`, default $40, paid via /api/settlement). This endpoint
+//     tracks who has paid the buy-in and gives a one-tap Venmo link to the
+//     collector. The app never holds the money — it moves P2P to the collector.
+//
+//   GET  ?season=          -> season-pot info + weekly-fund config, roster, progress
+//   POST ?action=set-paid  -> mark a member's buy-in paid/unpaid (self, or collector)
+//   POST ?action=config    -> set url/amounts/collector/deadline (collector; or anyone if unset)
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
 import { currentNflWeek } from "../_shared/nfl.js";
 import { ensureExtras } from "../_shared/migrations.js";
 
 const DEFAULT_ENTRY = 100;
+const DEFAULT_BUYIN = 90;
+const DEFAULT_PRIZE = 40;
 const DEFAULT_PAYOUT = [
   { place: 1, amount: 500 },
   { place: 2, amount: 200 },
@@ -34,13 +40,16 @@ function seasonOf(env, url, body) {
 
 async function loadConfig(env, season) {
   const row = (await sql(env)`
-    SELECT season, entry_amount, collector_id, deadline, payout
+    SELECT season, entry_amount, collector_id, deadline, payout, leaguesafe_url, weekly_buyin, weekly_prize
     FROM pot_config WHERE season = ${season} LIMIT 1`)[0];
   return {
     entry_amount: row?.entry_amount != null ? Number(row.entry_amount) : DEFAULT_ENTRY,
     collector_id: row?.collector_id ?? null,
     deadline: row?.deadline ?? null,
     payout: Array.isArray(row?.payout) ? row.payout : DEFAULT_PAYOUT,
+    leaguesafe_url: row?.leaguesafe_url ?? null,
+    weekly_buyin: row?.weekly_buyin != null ? Number(row.weekly_buyin) : DEFAULT_BUYIN,
+    weekly_prize: row?.weekly_prize != null ? Number(row.weekly_prize) : DEFAULT_PRIZE,
     configured: !!row,
   };
 }
@@ -63,12 +72,13 @@ export async function onRequest({ request, env }) {
       const targetId = Number(body.member_id);
       const paid = !!body.paid;
       if (!targetId) return json({ error: "bad-body" }, { status: 400 });
-      // A member can always flip their OWN entry; the collector can flip anyone's.
+      // A member can always flip their OWN buy-in; the collector flips anyone's.
       if (memberId !== targetId && !isCollector) {
         return json({ error: "forbidden", detail: "only you or the pot collector can change this" }, { status: 403 });
       }
-      const okMember = (await sql(env)`SELECT 1 FROM members WHERE id = ${targetId} LIMIT 1`).length;
-      if (!okMember) return json({ error: "no-such-member" }, { status: 404 });
+      if (!(await sql(env)`SELECT 1 FROM members WHERE id = ${targetId} LIMIT 1`).length) {
+        return json({ error: "no-such-member" }, { status: 404 });
+      }
       const at = paid ? new Date().toISOString() : null;
       await sql(env)`
         INSERT INTO pot_entries (season, member_id, paid, paid_at)
@@ -81,11 +91,14 @@ export async function onRequest({ request, env }) {
       if (!isCollector && !unset) {
         return json({ error: "forbidden", detail: "only the pot collector can change the settings" }, { status: 403 });
       }
-      let entry = cfg.entry_amount;
-      if (body.entry_amount !== undefined) {
-        entry = Number(body.entry_amount);
-        if (!(entry >= 0 && entry <= 100000)) return json({ error: "bad-entry" }, { status: 400 });
-      }
+      const num = (v, cur) => {
+        if (v === undefined) return cur;
+        const n = Number(v);
+        return n >= 0 && n <= 1000000 ? n : cur;
+      };
+      const entry = num(body.entry_amount, cfg.entry_amount);
+      const buyin = num(body.weekly_buyin, cfg.weekly_buyin);
+      const prize = num(body.weekly_prize, cfg.weekly_prize);
       let collectorId = cfg.collector_id;
       if (body.collector_id !== undefined) {
         collectorId = body.collector_id == null ? null : Number(body.collector_id);
@@ -102,6 +115,13 @@ export async function onRequest({ request, env }) {
           deadline = d.toISOString();
         }
       }
+      let leaguesafeUrl = cfg.leaguesafe_url;
+      if (body.leaguesafe_url !== undefined) {
+        const u = String(body.leaguesafe_url || "").trim();
+        if (!u) leaguesafeUrl = null;
+        else if (/^https?:\/\/[^\s]+$/i.test(u)) leaguesafeUrl = u;
+        else return json({ error: "bad-url", detail: "must start with http(s)://" }, { status: 400 });
+      }
       let payout = cfg.payout;
       if (Array.isArray(body.payout)) {
         payout = body.payout
@@ -110,11 +130,12 @@ export async function onRequest({ request, env }) {
           .sort((a, b) => a.place - b.place);
       }
       await sql(env)`
-        INSERT INTO pot_config (season, entry_amount, collector_id, deadline, payout)
-        VALUES (${season}, ${entry}, ${collectorId}, ${deadline}, ${JSON.stringify(payout)}::jsonb)
+        INSERT INTO pot_config (season, entry_amount, collector_id, deadline, payout, leaguesafe_url, weekly_buyin, weekly_prize)
+        VALUES (${season}, ${entry}, ${collectorId}, ${deadline}, ${JSON.stringify(payout)}::jsonb, ${leaguesafeUrl}, ${buyin}, ${prize})
         ON CONFLICT (season) DO UPDATE SET
-          entry_amount = ${entry}, collector_id = ${collectorId},
-          deadline = ${deadline}, payout = ${JSON.stringify(payout)}::jsonb`;
+          entry_amount = ${entry}, collector_id = ${collectorId}, deadline = ${deadline},
+          payout = ${JSON.stringify(payout)}::jsonb, leaguesafe_url = ${leaguesafeUrl},
+          weekly_buyin = ${buyin}, weekly_prize = ${prize}`;
       return json({ ok: true });
     }
 
@@ -133,33 +154,37 @@ export async function onRequest({ request, env }) {
     const roster = members.map((m) => ({
       id: m.id,
       name: m.name,
-      venmo_handle: m.venmo_handle || null,
       paid: !!paidBy[m.id]?.paid,
       paid_at: paidBy[m.id]?.paid_at || null,
       is_collector: m.id === cfg.collector_id,
     }));
     const paidCount = roster.filter((r) => r.paid).length;
-    const potTotal = cfg.entry_amount * members.length;
-    const collected = cfg.entry_amount * paidCount;
+    const me = roster.find((r) => r.id === memberId);
     return json({
       season,
-      config: {
+      season_pot: {
         entry_amount: cfg.entry_amount,
-        collector_id: cfg.collector_id,
-        collector_name: collector?.name || null,
-        collector_venmo: collector?.venmo_handle || null,
-        deadline: cfg.deadline,
         payout: cfg.payout,
-        configured: cfg.configured,
+        leaguesafe_url: cfg.leaguesafe_url,
+        pot_total: cfg.entry_amount * members.length,
       },
-      me: { id: memberId, is_collector: cfg.collector_id === memberId },
-      roster,
-      progress: {
-        paid_count: paidCount,
-        member_count: members.length,
-        collected,
-        pot_total: potTotal,
+      weekly: {
+        buyin: cfg.weekly_buyin,
+        prize: cfg.weekly_prize,
+        deadline: cfg.deadline,
+        collector: collector
+          ? { id: collector.id, name: collector.name, venmo_handle: collector.venmo_handle || null }
+          : null,
+        roster,
+        progress: {
+          paid_count: paidCount,
+          member_count: members.length,
+          collected: cfg.weekly_buyin * paidCount,
+          total: cfg.weekly_buyin * members.length,
+        },
+        me: { id: memberId, is_collector: cfg.collector_id === memberId, paid: !!me?.paid },
       },
+      can_configure: cfg.collector_id === memberId || cfg.collector_id == null,
     });
   }
 

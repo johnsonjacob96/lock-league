@@ -1,19 +1,21 @@
-// /api/settlement — the weekly $5-to-the-winner ledger (Article 6a).
+// /api/settlement — the weekly payout ledger.
 //
-// The site never touches money: it computes who owes the weekly winner, tracks
-// paid/unpaid, and the client builds one-tap Venmo deep links from each member's
-// handle. The season pot ($100 entry, $500/$200/$100) stays on LeagueSafe.
+// The weekly game is PRE-FUNDED: every member sends the collector (Jared) a
+// season buy-in up front (tracked in /api/pot). Each week the collector Venmos
+// that week's winner the weekly prize. This endpoint computes the weekly winners
+// and tracks whether the collector has paid each one yet (`weekly_payouts`). The
+// site never touches money — it just says who the collector owes and builds the
+// one-tap Venmo link. The season pot ($100 entry) is held + paid by LeagueSafe.
 //
-//   GET  ?season=            -> ledger: weekly winners + dues + members' handles
+//   GET  ?season=            -> weekly winners + amount owed + paid status + handles
 //   POST ?action=set-venmo   -> caller sets their own Venmo handle
-//   POST ?action=mark-paid   -> mark a due paid/unpaid (payer or that week's winner)
+//   POST ?action=mark-paid   -> mark a week's payout paid/unpaid (collector or that winner)
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
 import { currentNflWeek } from "../_shared/nfl.js";
 import { ensureExtras } from "../_shared/migrations.js";
 
-const BET_TYPES = ["Favorite", "Dog", "Over", "Under", "Super Lock"];
-const WEEKLY_AMOUNT = 5;
+const DEFAULT_PRIZE = 40;
 
 // Weekly winner from graded picks: unique best W (fewest L breaks ties). Ties
 // stay open (no winner) — mirrors the client + grader logic exactly.
@@ -60,58 +62,47 @@ export async function onRequest({ request, env }) {
 
   if (request.method === "POST" && action === "mark-paid") {
     const body = await request.json().catch(() => ({}));
-    const { season, week } = body;
-    const targetId = Number(body.member_id);
+    const season = Number(body.season);
+    const week = Number(body.week);
     const paid = !!body.paid;
-    if (!season || !week || !targetId) return json({ error: "bad-body" }, { status: 400 });
-    const row = (await sql(env)`SELECT winner_id FROM weekly_dues WHERE season = ${season} AND week = ${week} LIMIT 1`)[0];
-    // Only the payer themselves or that week's winner can flip a due.
-    if (memberId !== targetId && memberId !== row?.winner_id) return json({ error: "forbidden" }, { status: 403 });
-    const res = await sql(env)`
-      UPDATE weekly_dues SET paid = ${paid}, paid_at = ${paid ? new Date().toISOString() : null}
-      WHERE season = ${season} AND week = ${week} AND member_id = ${targetId}
-      RETURNING member_id`;
-    if (!res.length) return json({ error: "no-such-due" }, { status: 404 });
-    return json({ ok: true, paid });
+    if (!season || !week) return json({ error: "bad-body" }, { status: 400 });
+    // Only the collector or that week's winner can flip a payout.
+    const cfg = (await sql(env)`SELECT collector_id FROM pot_config WHERE season = ${season} LIMIT 1`)[0];
+    const graded = await sql(env)`
+      SELECT p.member_id, m.name, p.week, p.result
+      FROM picks p JOIN members m ON m.id = p.member_id
+      WHERE p.season = ${season} AND p.week = ${week} AND p.result IS NOT NULL`;
+    const winner = computeWeeklyWinners(graded)[week];
+    if (!winner) return json({ error: "no-winner-yet" }, { status: 409 });
+    if (memberId !== cfg?.collector_id && memberId !== winner.member_id) {
+      return json({ error: "forbidden", detail: "only the collector or the winner can flip this" }, { status: 403 });
+    }
+    const at = paid ? new Date().toISOString() : null;
+    await sql(env)`
+      INSERT INTO weekly_payouts (season, week, paid, paid_at)
+      VALUES (${season}, ${week}, ${paid}, ${at})
+      ON CONFLICT (season, week) DO UPDATE SET paid = ${paid}, paid_at = ${at}`;
+    return json({ ok: true, week, paid });
   }
 
   if (request.method === "GET") {
     const season = Number(url.searchParams.get("season")) || currentNflWeek(new Date(), env).season || 2026;
-    const members = await sql(env)`SELECT id, name, venmo_handle FROM members ORDER BY name`;
+    const cfg = (await sql(env)`SELECT collector_id, weekly_prize FROM pot_config WHERE season = ${season} LIMIT 1`)[0];
+    const prize = cfg?.weekly_prize != null ? Number(cfg.weekly_prize) : DEFAULT_PRIZE;
+    const collectorId = cfg?.collector_id ?? null;
+
+    const [members, picks, payoutRows] = await Promise.all([
+      sql(env)`SELECT id, name, venmo_handle FROM members ORDER BY name`,
+      sql(env)`
+        SELECT p.member_id, m.name, p.week, p.result
+        FROM picks p JOIN members m ON m.id = p.member_id
+        WHERE p.season = ${season} AND p.result IS NOT NULL`,
+      sql(env)`SELECT week, paid, paid_at FROM weekly_payouts WHERE season = ${season}`,
+    ]);
     const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
-    const picks = await sql(env)`
-      SELECT p.member_id, m.name, p.week, p.result
-      FROM picks p JOIN members m ON m.id = p.member_id
-      WHERE p.season = ${season} AND p.result IS NOT NULL`;
     const winners = computeWeeklyWinners(picks);
-
-    const existing = await sql(env)`SELECT week, member_id, winner_id, amount, paid, paid_at FROM weekly_dues WHERE season = ${season}`;
-    const byWeek = {};
-    for (const d of existing) (byWeek[d.week] ||= []).push(d);
-
-    // Reconcile: create dues for a newly-decided week; if the winner flips before
-    // anyone has paid, rebuild that week's dues around the new winner.
-    for (const [wkStr, winner] of Object.entries(winners)) {
-      if (!winner) continue;
-      const week = Number(wkStr);
-      const rows = byWeek[week] || [];
-      const anyPaid = rows.some((r) => r.paid);
-      const staleWinner = rows.length && rows[0].winner_id !== winner.member_id;
-      if (rows.length && !(staleWinner && !anyPaid)) continue; // already settled and correct
-      if (staleWinner && !anyPaid) {
-        await sql(env)`DELETE FROM weekly_dues WHERE season = ${season} AND week = ${week}`;
-      }
-      const owers = members.filter((m) => m.id !== winner.member_id);
-      await Promise.all(owers.map((m) => sql(env)`
-        INSERT INTO weekly_dues (season, week, member_id, winner_id, amount, paid)
-        VALUES (${season}, ${week}, ${m.id}, ${winner.member_id}, ${WEEKLY_AMOUNT}, FALSE)
-        ON CONFLICT (season, week, member_id) DO NOTHING`));
-    }
-
-    // Re-read after reconciliation so the response reflects any inserts.
-    const dueRows = await sql(env)`SELECT week, member_id, winner_id, amount, paid, paid_at FROM weekly_dues WHERE season = ${season} ORDER BY week`;
-    const duesByWeek = {};
-    for (const d of dueRows) (duesByWeek[d.week] ||= []).push(d);
+    const paidByWeek = Object.fromEntries(payoutRows.map((r) => [r.week, r]));
+    const collector = collectorId ? memberById[collectorId] : null;
 
     const weeks = Object.keys(winners)
       .filter((w) => winners[w])
@@ -119,19 +110,29 @@ export async function onRequest({ request, env }) {
       .sort((a, b) => a - b)
       .map((week) => {
         const winner = winners[week];
-        const dues = (duesByWeek[week] || []).map((d) => ({
-          member_id: d.member_id, name: memberById[d.member_id]?.name || "?",
-          paid: d.paid, paid_at: d.paid_at,
-        })).sort((a, b) => a.name.localeCompare(b.name));
+        const pr = paidByWeek[week];
         return {
-          week, winner_id: winner.member_id, winner_name: winner.name,
-          winner_record: `${winner.w}-${winner.l}`, amount: WEEKLY_AMOUNT, dues,
+          week,
+          winner_id: winner.member_id,
+          winner_name: winner.name,
+          winner_record: `${winner.w}-${winner.l}`,
+          winner_venmo: memberById[winner.member_id]?.venmo_handle || null,
+          amount: prize,
+          paid: !!pr?.paid,
+          paid_at: pr?.paid_at || null,
         };
       });
 
     return json({
       season,
-      me: { id: memberId, name: memberById[memberId]?.name || null, venmo_handle: memberById[memberId]?.venmo_handle || null },
+      prize,
+      collector: collector ? { id: collector.id, name: collector.name, venmo_handle: collector.venmo_handle || null } : null,
+      me: {
+        id: memberId,
+        name: memberById[memberId]?.name || null,
+        venmo_handle: memberById[memberId]?.venmo_handle || null,
+        is_collector: memberId === collectorId,
+      },
       members: members.map((m) => ({ id: m.id, name: m.name, venmo_handle: m.venmo_handle || null })),
       weeks,
     });
