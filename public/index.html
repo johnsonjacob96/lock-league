@@ -551,6 +551,9 @@
   .slot .slot-move.better { color:#46e08a; }
   .slot .slot-move.worse { color:#f5a24a; }
   .k-fav{background:#46e08a} .k-dog{background:#38bdf8} .k-over{background:#f5a24a} .k-under{background:#22d3cf} .k-super{background:#f4cf5a}
+  .slot .lp-meta { display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
+  .slot .lp-book { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:#9aa4a2; border:1px solid #2c332f; border-radius:4px; padding:1px 5px; }
+  .slot .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#6f7877; }
 
   /* Segmented book toggle */
   .seg { display:inline-flex; padding:2px; background:#101315; border:1px solid #262a2d; border-radius:8px; }
@@ -773,7 +776,7 @@
     </button>
   </nav>
   <div class="p-4">
-    <button class="submit-picks-cta" id="sidebar-submit-picks">SUBMIT PICKS</button>
+    <button class="submit-picks-cta" id="sidebar-submit-picks">MAKE PICKS</button>
   </div>
   <div id="user-area" class="px-4 pb-4"></div>
 </aside>
@@ -2360,17 +2363,26 @@ function fmtLineForSide(side, line) {
   return `${n}`;                                // fav line (neg) or total
 }
 
-// The current live line for a locked pick, from this week's odds (same book if
-// still offered, else the board's primary book).
+// The best current number for a locked pick's side, taken across ALL books on
+// the board (the league lets you shop either book), so "better number available"
+// fires whenever FanDuel or DraftKings improves on what you locked.
 function currentLineFor(pick) {
   const games = state.thisWeekData?.games || [];
   const g = games.find(x => `${x.away}@${x.home}` === pick.game_key);
   if (!g) return null;
-  const book = g.books?.[pick.book] || g.books?.fanduel || g.books?.draftkings || Object.values(g.books || {})[0];
-  if (!book) return null;
-  if (pick.side === "fav" || pick.side === "dog") return book.spread?.line ?? null;
-  if (pick.side === "over" || pick.side === "under") return book.total?.point ?? null;
-  return null;
+  const lines = [];
+  for (const b of Object.values(g.books || {})) {
+    if ((pick.side === "fav" || pick.side === "dog") && b.spread?.line != null) lines.push(Number(b.spread.line));
+    if ((pick.side === "over" || pick.side === "under") && b.total?.point != null) lines.push(Number(b.total.point));
+  }
+  if (!lines.length) return null;
+  switch (pick.side) {
+    case "fav":   return Math.max(...lines); // least negative = fewest points to give
+    case "dog":   return Math.min(...lines); // most negative fav line = most points for the dog
+    case "over":  return Math.min(...lines); // lowest total = easiest over
+    case "under": return Math.max(...lines); // highest total = easiest under
+    default:      return null;
+  }
 }
 
 // Compare a locked pick's line to the current line. "better" = the locked line
@@ -2961,20 +2973,44 @@ async function renderMyPicks() {
   const season = 2026;
   const week = state.myPicksWeek || cur.week || 1;
   const existing = await loadMyPicks(season, week);
-  const draft = { ...existing, ...state.myPicksDraft };
 
-  const rows = BET_TYPES_ORDER.map(bt => {
-    const val = draft[bt]?.pick_text || "";
-    const isSuper = bt === "Super Lock";
-    return `
-      <div class="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-3 md:gap-5 md:items-center">
-        <div class="font-label-caps text-[11px] tracking-widest uppercase flex items-center gap-1.5 ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${isSuper ? '<span class="material-symbols-outlined text-[14px]" style="font-variation-settings:\'FILL\' 1">lock</span>Super Lock' : bt}</div>
-        <input class="pick-input" data-bet="${bt}" value="${escapeHtml(val)}" placeholder="${bt === 'Favorite' ? 'e.g., Chiefs -3 vs Bills' : bt === 'Dog' ? 'e.g., Bills +3 @ Chiefs' : bt === 'Over' ? 'e.g., Chiefs / Bills O48.5' : bt === 'Under' ? 'e.g., Chiefs / Bills U48.5' : 'Player prop / specialty bet'}">
+  // Fav / Dog / Over / Under are locked on the board (structured, line-validated
+  // server-side). This tab reviews them; it no longer accepts free-typed lines.
+  const GRADABLE = ["Favorite", "Dog", "Over", "Under"];
+  const lockedCount = GRADABLE.filter(bt => existing[bt] && existing[bt].pick_text).length;
+  const reviewRows = GRADABLE.map(bt => {
+    const meta = BET_META[bt];
+    const p = existing[bt];
+    if (!p || !p.pick_text) {
+      return `<div class="slot">
+        <span class="slot-key k-${meta.key}"></span>
+        <div class="min-w-0 flex-1">
+          <div class="slot-name">${bt}</div>
+          <div class="slot-empty">Not locked &middot; pick it on the board</div>
+        </div>
+      </div>`;
+    }
+    const mv = lineMove(p);
+    const moveHtml = mv ? `
+      <div class="slot-move ${mv.better ? "better" : "worse"}">
+        <span class="mv-caret">${mv.better ? "▲" : "▼"}</span>
+        <span>${mv.better ? "You beat the line" : "Better number available"} &middot; locked ${mv.lockedFmt}, now ${mv.curFmt}</span>
+      </div>` : "";
+    const mechips = `<div class="lp-meta">${p.book ? `<span class="lp-book">${bookLabel(p.book)}</span>` : ""}${p.locked_at ? `<span class="lp-ts">Locked ${fmtLockedAt(p.locked_at)}</span>` : ""}</div>`;
+    return `<div class="slot filled">
+      <span class="slot-key k-${meta.key}"></span>
+      <div class="min-w-0 flex-1">
+        <div class="slot-name" style="color:${meta.color}">${bt}</div>
+        <div class="slot-val truncate">${escapeHtml(p.pick_text)}</div>
+        ${mechips}
+        ${moveHtml}
       </div>
-    `;
+      <span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};font-variation-settings:'FILL' 1">check_circle</span>
+    </div>`;
   }).join("");
 
   const sl = existing["Super Lock"];
+  const slVal = sl?.pick_text || "";
   const slMarkHtml = sl ? `
     <section class="mt-10 glass-panel p-6 md:p-7 border-l-2 border-l-tertiary-fixed-dim">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -3007,13 +3043,33 @@ async function renderMyPicks() {
       </div>
     </section>
 
-    <section class="glass-panel p-6 md:p-8 space-y-5">
-      ${rows}
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 border-t border-outline-variant">
-        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase" id="lock-status">Cutoff · Sun 12:00 PM CT · Started games lock at kickoff</div>
+    <section class="glass-panel p-6 md:p-8">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-fixed" style="font-variation-settings:'FILL' 1">receipt_long</span>
+          <h3 class="font-headline-lg text-lg uppercase leading-none">Week ${week} Card</h3>
+        </div>
+        <span class="font-data-tabular text-[11px] text-on-surface-variant">${lockedCount} / 4 locked</span>
+      </div>
+      <div class="space-y-2.5">${reviewRows}</div>
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-5 mt-5 border-t border-outline-variant">
+        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase" id="lock-status">Fav · Dog · Over · Under are locked on the board</div>
+        <button class="btn-primary jump-board">Go To Board <span class="material-symbols-outlined text-sm align-middle ml-1">arrow_forward</span></button>
+      </div>
+    </section>
+
+    <section class="glass-panel p-6 md:p-8 mt-6">
+      <div class="flex items-center gap-1.5 mb-1">
+        <span class="material-symbols-outlined text-[16px] text-tertiary-fixed" style="font-variation-settings:'FILL' 1">lock</span>
+        <h3 class="font-label-caps text-[11px] tracking-widest uppercase text-tertiary-fixed">Super Lock</h3>
+      </div>
+      <p class="text-on-surface-variant text-[12px] mb-3 leading-snug">Your specialty / player-prop pick. Free-text, graded manually. Must be -120 or harder.</p>
+      <input class="pick-input" id="superlock-input" value="${escapeHtml(slVal)}" placeholder="Player prop / specialty bet">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 mt-4 border-t border-outline-variant">
+        <div class="font-label-caps text-[10px] tracking-widest text-on-surface-variant uppercase">Cutoff · Sun 12:00 PM CT</div>
         <div class="flex items-center gap-4">
           <span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed" id="save-msg">${escapeHtml(state.myPicksSaveMsg || "")}</span>
-          <button class="btn-primary" id="picks-save">Save Picks <span class="material-symbols-outlined text-sm align-middle ml-1">send</span></button>
+          <button class="btn-primary" id="superlock-save">Save Super Lock <span class="material-symbols-outlined text-sm align-middle ml-1">send</span></button>
         </div>
       </div>
     </section>
@@ -3039,34 +3095,35 @@ async function markSuperLock(result) {
   render();
 }
 
-async function submitMyPicks() {
-  const inputs = document.querySelectorAll(".pick-input");
-  const picks = [];
-  inputs.forEach(inp => {
-    const text = inp.value.trim();
-    if (text) picks.push({ bet_type: inp.dataset.bet, pick_text: text });
-  });
-  if (!picks.length) return;
-  // Same fallback as renderMyPicks - otherwise mid-season saves with no week
-  // navigation would silently post to week 1 (already locked).
+// Compact "Locked Tue 8:14 PM" stamp in Central time (the league's zone).
+function fmtLockedAt(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return d.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
+}
+
+// Only Super Lock is submitted here now; the four gradable bets are board-only.
+async function submitSuperLock() {
+  const inp = document.getElementById("superlock-input");
+  const text = (inp?.value || "").trim();
   const cur = currentNflWeekClient();
   const week = state.myPicksWeek || cur.week || 1;
   const season = 2026;
+  if (!text) { state.myPicksSaveMsg = "ENTER A SUPER LOCK FIRST"; render(); return; }
   try {
     const r = await fetch("/api/picks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ season, week, picks }),
+      body: JSON.stringify({ season, week, picks: [{ bet_type: "Super Lock", pick_text: text }] }),
     });
     const j = await r.json();
     if (!r.ok) {
       state.myPicksSaveMsg = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
-        : j.error === "game-started" ? "GAME STARTED · PICK LOCKED"
         : j.error === "super-lock-price" ? "SUPER LOCK MUST BE -120 OR HARDER"
         : "ERROR · " + j.error;
     } else {
-      state.myPicksSaveMsg = `SAVED · ${j.count} PICKS`;
+      state.myPicksSaveMsg = "SUPER LOCK SAVED";
     }
   } catch (e) { state.myPicksSaveMsg = "NETWORK ERROR"; }
   render();
@@ -3481,9 +3538,15 @@ async function render() {
       b.addEventListener("click", () => { state.view = "mypicks"; render(); });
     });
   } else if (state.view === "mypicks") {
+    // Load the live board first so the review can flag better numbers (line moves).
+    if (state.user && !state.thisWeekData) await loadOdds();
     root.innerHTML = await renderMyPicks();
-    const saveBtn = document.getElementById("picks-save");
-    if (saveBtn) saveBtn.onclick = submitMyPicks;
+    if (state.view !== "mypicks") return;
+    const slSave = document.getElementById("superlock-save");
+    if (slSave) slSave.onclick = submitSuperLock;
+    document.querySelectorAll(".jump-board").forEach(b => {
+      b.onclick = () => { state.view = "thisweek"; render(); };
+    });
     document.querySelectorAll(".sl-mark-btn").forEach(b => {
       b.onclick = () => markSuperLock(b.dataset.result);
     });
@@ -3576,10 +3639,10 @@ document.querySelectorAll(".nav-link[data-view]").forEach(btn => {
   });
 });
 
-// Sidebar submit picks shortcut
+// Sidebar make-picks shortcut → the board, where the four gradable bets are made.
 document.getElementById("sidebar-submit-picks").addEventListener("click", () => {
   if (!state.user) { openLogin(); return; }
-  state.view = "mypicks";
+  state.view = "thisweek";
   render();
 });
 
