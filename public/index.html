@@ -1885,6 +1885,30 @@ function renderMemberRow(r, i, season, movement) {
   `;
 }
 
+// Lifetime record per bet type, summed from each season's byType record,
+// cumulatively through the viewed season (matching the LIFETIME field's "career
+// through this season" meaning). The `overall` is summed from the authoritative
+// seasonRecord instead (the historical import's per-type breakdown is partial,
+// so it undercounts the real totals; 2026+ live data reconciles exactly).
+function lifetimeByType(name, throughSeason) {
+  const seasons = Object.keys(DATA.members[name] || {}).filter(s => Number(s) <= Number(throughSeason));
+  const byType = {};
+  for (const bt of BET_TYPES_ORDER) {
+    let w = 0, l = 0, t = 0;
+    for (const s of seasons) {
+      const rec = parseRecord(DATA.members[name][s]?.byType?.[bt]?.record);
+      w += rec.w; l += rec.l; t += rec.t;
+    }
+    byType[bt] = { w, l, t };
+  }
+  let W = 0, L = 0, T = 0;
+  for (const s of seasons) {
+    const rec = parseRecord(DATA.members[name][s]?.seasonRecord);
+    W += rec.w; L += rec.l; T += rec.t;
+  }
+  return { byType, overall: { w: W, l: L, t: T } };
+}
+
 function renderMemberDetail(r) {
   const md = r.md;
   const weekHeader = Array.from({ length: WEEK_COUNT }, (_, i) =>
@@ -1920,10 +1944,29 @@ function renderMemberDetail(r) {
           <div class="flex gap-1">${weekHeader}</div>
         </div>
         ${rows}
-        <div class="flex flex-wrap gap-6 mt-4 pt-3 border-t border-outline-variant font-data-tabular text-[11px]">
-          <div><span class="text-on-surface-variant tracking-widest mr-2">SEASON</span><strong class="text-on-surface">${escapeHtml(md?.seasonRecord || "-")}</strong></div>
-          <div><span class="text-on-surface-variant tracking-widest mr-2">LIFETIME</span><strong class="text-on-surface">${escapeHtml(md?.lifetimeRecord || "-")}</strong></div>
+        ${(() => {
+          const lt = lifetimeByType(r.name, state.season);
+          const o = lt.overall;
+          // Prefer the seeded career total; fall back to the computed sum only
+          // when it's missing (e.g. the live season), so historical numbers are
+          // never altered but the live season still shows a lifetime figure.
+          const lifetimeStr = md?.lifetimeRecord
+            ? recordHtmlFromString(md.lifetimeRecord)
+            : recordHtml(o);
+          const SHORT = { Favorite: "FAV", Dog: "DOG", Over: "OVER", Under: "UNDER", "Super Lock": "SL" };
+          const chips = BET_TYPES_ORDER.map(bt => {
+            const isSuper = bt === "Super Lock";
+            return `<span class="whitespace-nowrap"><span class="tracking-widest mr-1.5 ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${SHORT[bt]}</span>${recordHtml(lt.byType[bt])}</span>`;
+          }).join("");
+          return `
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 pt-3 border-t border-outline-variant font-data-tabular text-[11px]">
+          <div><span class="text-on-surface-variant tracking-widest mr-2">SEASON</span><strong class="text-on-surface">${recordHtmlFromString(md?.seasonRecord || "0-0")}</strong></div>
+          <div><span class="text-on-surface-variant tracking-widest mr-2">LIFETIME</span><strong class="text-on-surface">${lifetimeStr}</strong></div>
         </div>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 font-data-tabular text-[11px]">
+          <span class="text-on-surface-variant tracking-widest">LIFETIME BY TYPE</span>${chips}
+        </div>`;
+        })()}
       </div>
     </div>
   `;
