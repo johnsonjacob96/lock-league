@@ -611,6 +611,52 @@
   .stl-chip.paid { color:#46e08a; border-color:#26372c; }
   .stl-chip.me { outline:1px solid rgba(56,189,248,0.5); }
 
+  /* Season pot tracker */
+  .pot-card { display:flex; flex-direction:column; }
+  .pot-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .pot-total { font-family:'Oswald','Inter',sans-serif; font-weight:600; font-size:30px; line-height:1; color:#e6e8e8; margin-top:10px; letter-spacing:-0.01em; }
+  .pot-total-sub { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:400; letter-spacing:0.03em; color:#6f7877; margin-left:9px; }
+  .pot-payout { font-family:'JetBrains Mono',monospace; font-size:12px; color:#f4cf5a; margin-top:5px; letter-spacing:0.02em; }
+  .pot-deadline { font-family:'JetBrains Mono',monospace; font-size:11px; color:#9aa4a2; background:#14171a; border:1px solid #262b2a; padding:5px 9px; border-radius:7px; white-space:nowrap; }
+  .pot-deadline.over { color:#f5a24a; border-color:#3a2c1c; }
+  .pot-progress { margin-top:16px; }
+  .pot-bar { height:7px; border-radius:9999px; background:#171b1a; overflow:hidden; border:1px solid #222827; }
+  .pot-bar span { display:block; height:100%; background:linear-gradient(90deg,#1fd97b,#46e08a); border-radius:9999px; transition:width 0.4s ease; }
+  .pot-prog-l { font-family:'JetBrains Mono',monospace; font-size:11px; color:#9aa4a2; margin-top:7px; letter-spacing:0.02em; }
+  .pot-collector { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:16px; padding:11px 13px; background:#14171a; border:1px solid #222827; border-radius:9px; }
+  .pot-collector-l { font-family:'Inter',sans-serif; font-size:13px; color:#c7ccca; }
+  .pot-collector-l b { color:#e6e8e8; }
+  .pot-pay { display:inline-flex; align-items:center; gap:6px; background:#3d95ce; color:#fff; font-family:'Inter',sans-serif; font-weight:700; font-size:13px; padding:9px 15px; border-radius:8px; text-decoration:none; transition:filter 0.12s; }
+  .pot-pay:hover { filter:brightness(1.08); }
+  .pot-paid-tag { font-family:'JetBrains Mono',monospace; font-size:12px; color:#46e08a; }
+  .pot-note { font-family:'JetBrains Mono',monospace; font-size:11px; color:#6f7877; }
+  .pot-setup { margin-top:16px; padding:13px; background:#14171a; border:1px solid #222827; border-radius:9px; }
+  .pot-setup-t { font-family:'Inter',sans-serif; font-size:13px; color:#e6e8e8; font-weight:600; }
+  .pot-setup-row { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .pot-setup-h { font-family:'JetBrains Mono',monospace; font-size:10px; color:#6f7877; margin-top:9px; letter-spacing:0.02em; }
+  .pot-roster { margin-top:14px; display:flex; flex-direction:column; }
+  .pot-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid #1a1f1e; }
+  .pot-row:first-child { border-top:none; }
+  .pot-name { font-family:'Inter',sans-serif; font-size:14px; color:#d4d8d7; }
+  .pot-tag { font-family:'JetBrains Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.06em; color:#6f7877; border:1px solid #2a302f; padding:1px 5px; border-radius:5px; margin-left:5px; }
+  .pot-tag.you { color:#38bdf8; border-color:rgba(56,189,248,0.4); }
+  .pot-row-r { display:flex; align-items:center; gap:9px; }
+  .pot-chip { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 8px; border-radius:5px; background:#171b1a; border:1px solid #262b2a; color:#6f7877; }
+  .pot-chip.paid { color:#46e08a; border-color:#26372c; }
+  .pot-chip.unpaid { color:#8a9391; }
+  .pot-toggle { background:transparent; border:1px solid #29302f; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.04em; padding:5px 10px; border-radius:7px; cursor:pointer; transition:border-color 0.12s,color 0.12s; }
+  .pot-toggle:hover { border-color:#46e08a; color:#46e08a; }
+  .pot-settings { margin-top:14px; }
+  .pot-settings summary { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em; color:#9aa4a2; cursor:pointer; }
+  .pot-settings summary:hover { color:#e6e8e8; }
+  .pot-set-body { display:flex; flex-direction:column; gap:6px; margin-top:11px; max-width:280px; }
+  .pot-set-l { font-family:'JetBrains Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#6f7877; margin-top:5px; }
+  .pot-input, .pot-select { background:#101315; border:1px solid #262a2d; color:#e6e8e8; font-family:'Inter',sans-serif; font-size:13px; padding:8px 10px; border-radius:8px; }
+  .pot-input:focus, .pot-select:focus { outline:none; border-color:#46e08a; box-shadow:0 0 0 3px rgba(70,224,138,0.14); }
+  .pot-btn { align-self:flex-start; margin-top:9px; background:#46e08a; color:#0e1011; border:none; font-family:'Inter',sans-serif; font-weight:700; font-size:12px; padding:8px 14px; border-radius:8px; cursor:pointer; transition:filter 0.12s; }
+  .pot-btn:hover { filter:brightness(1.06); }
+  .pot-foot { font-family:'JetBrains Mono',monospace; font-size:10px; color:#5f6867; line-height:1.5; margin-top:15px; letter-spacing:0.01em; }
+
   /* Segmented book toggle */
   .seg { display:inline-flex; padding:2px; background:#101315; border:1px solid #262a2d; border-radius:8px; }
   .seg button { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:#9aa4a2; padding:4px 10px; border-radius:6px; background:transparent; border:none; cursor:pointer; font-weight:700; transition: color 0.12s, background 0.12s; }
@@ -973,6 +1019,7 @@ let state = {
   warRoom: null,
   serverConfig: null,
   settlement: null,
+  pot: null,
 };
 const MEMBERS_ALL = ["Brayden","Chase","Chris","Jack","Jacob","Jared","Mason","Tyler"];
 
@@ -1362,6 +1409,167 @@ async function loadSettlement() {
 function venmoPayLink(handle, amount, note) {
   if (!handle) return null;
   return `https://venmo.com/${encodeURIComponent(handle)}?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}`;
+}
+
+// ---- Season pot tracker (Article 11) ----------------------------------------
+// LeagueSafe-style dashboard for the $100 season entry: who's paid, collection
+// progress, payout structure, and a one-tap Venmo link to the collector. The
+// app has NO custody — money moves P2P to the collector's own Venmo. Real escrow
+// (holding + auto-paying the pot) needs a licensed money-transmitter rail, which
+// is exactly what LeagueSafe itself is; that stays off the app by design.
+async function loadPot() {
+  if (!state.user) { state.pot = null; return; }
+  try {
+    const r = await fetch("/api/pot", { credentials: "include" });
+    state.pot = r.ok ? await r.json() : { error: true };
+  } catch { state.pot = { error: true }; }
+}
+
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function potCardHtml() {
+  const p = state.pot;
+  const shell = (inner) => `<section class="glass-panel p-5 md:p-6 pot-card">${inner}</section>`;
+  if (!p) return shell(`<div class="pot-foot">Sign in to see the season pot.</div>`);
+  if (p.error) return shell(`<div class="pot-foot">Could not load the season pot. It refreshes on its own.</div>`);
+  const cfg = p.config, prog = p.progress;
+  const fmt = (n) => "$" + Number(n || 0).toLocaleString("en-US");
+  const payout = (cfg.payout || []).map((x) => `${ordinal(x.place)} ${fmt(x.amount)}`).join(" · ");
+  const pct = prog.member_count ? Math.round((100 * prog.paid_count) / prog.member_count) : 0;
+  const me = p.roster.find((r) => r.id === p.me.id);
+  const iAmCollector = !!p.me.is_collector;
+  const unset = cfg.collector_id == null;
+
+  let deadlineHtml = "";
+  if (cfg.deadline) {
+    const d = new Date(cfg.deadline);
+    const overdue = Date.now() > d.getTime();
+    const ds = d.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
+    deadlineHtml = `<span class="pot-deadline${overdue ? " over" : ""}">Entries due ${ds}${overdue ? " · past due" : ""}</span>`;
+  }
+
+  let collectorHtml;
+  if (unset) {
+    const opts = p.roster.map((r) => `<option value="${r.id}"${r.id === p.me.id ? " selected" : ""}>${escapeHtml(r.name)}</option>`).join("");
+    collectorHtml = `<div class="pot-setup">
+      <div class="pot-setup-t">Who's collecting the pot this season?</div>
+      <div class="pot-setup-row">
+        <select id="pot-collector-sel" class="pot-select">${opts}</select>
+        <button id="pot-collector-save" class="pot-btn">Set collector</button>
+      </div>
+      <div class="pot-setup-h">Entries go to this person's Venmo. The app only tracks who's paid.</div>
+    </div>`;
+  } else {
+    const payLink = me && !me.paid && cfg.collector_venmo
+      ? venmoPayLink(cfg.collector_venmo, cfg.entry_amount, `Lock League ${p.season} season entry`)
+      : null;
+    let right;
+    if (me && me.paid) right = `<span class="pot-paid-tag">You're in ✓</span>`;
+    else if (me && me.id === cfg.collector_id) right = `<span class="pot-note">You're the collector</span>`;
+    else if (payLink) right = `<a class="pot-pay" href="${payLink}" target="_blank" rel="noopener">Pay ${fmt(cfg.entry_amount)} entry on Venmo</a>`;
+    else right = `<span class="pot-note">${escapeHtml(cfg.collector_name || "The collector")} hasn't linked Venmo yet</span>`;
+    collectorHtml = `<div class="pot-collector">
+      <span class="pot-collector-l">Collected by <b>${escapeHtml(cfg.collector_name || "?")}</b>${cfg.collector_venmo ? ` · @${escapeHtml(cfg.collector_venmo)}` : ""}</span>
+      ${right}
+    </div>`;
+  }
+
+  const rows = p.roster.map((r) => {
+    const canToggle = iAmCollector || r.id === p.me.id;
+    const chip = r.paid ? `<span class="pot-chip paid">Paid</span>` : `<span class="pot-chip unpaid">Unpaid</span>`;
+    const toggle = canToggle
+      ? `<button class="pot-toggle" data-member="${r.id}" data-paid="${r.paid ? 1 : 0}">${r.paid ? "Undo" : "Mark paid"}</button>`
+      : "";
+    const tags = `${r.is_collector ? ` <span class="pot-tag">collector</span>` : ""}${r.id === p.me.id ? ` <span class="pot-tag you">you</span>` : ""}`;
+    return `<div class="pot-row${r.paid ? " is-paid" : ""}">
+      <span class="pot-name">${escapeHtml(r.name)}${tags}</span>
+      <span class="pot-row-r">${chip}${toggle}</span>
+    </div>`;
+  }).join("");
+
+  const settings = iAmCollector ? `<details class="pot-settings"><summary>Pot settings</summary>
+    <div class="pot-set-body">
+      <label class="pot-set-l">Entry amount ($)</label>
+      <input type="number" min="0" step="5" id="pot-entry" class="pot-input" value="${cfg.entry_amount}">
+      <label class="pot-set-l">Entry deadline</label>
+      <input type="date" id="pot-deadline" class="pot-input" value="${cfg.deadline ? new Date(cfg.deadline).toISOString().slice(0, 10) : ""}">
+      <label class="pot-set-l">Collector</label>
+      <select id="pot-collector-sel2" class="pot-select">${p.roster.map((r) => `<option value="${r.id}"${r.id === cfg.collector_id ? " selected" : ""}>${escapeHtml(r.name)}</option>`).join("")}</select>
+      <button id="pot-settings-save" class="pot-btn">Save settings</button>
+    </div></details>` : "";
+
+  return shell(`
+    <div class="pot-head">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-secondary-fixed-dim">savings</span>
+          <h3 class="font-label-caps text-[11px] tracking-widest uppercase text-on-surface-variant">Season Pot · Article 11</h3>
+        </div>
+        <div class="pot-total">${fmt(prog.pot_total)}<span class="pot-total-sub">pot · ${fmt(cfg.entry_amount)} entry</span></div>
+        ${payout ? `<div class="pot-payout">${payout}</div>` : ""}
+      </div>
+      ${deadlineHtml}
+    </div>
+    <div class="pot-progress">
+      <div class="pot-bar"><span style="width:${pct}%"></span></div>
+      <div class="pot-prog-l">${prog.paid_count}/${prog.member_count} paid · ${fmt(prog.collected)} of ${fmt(prog.pot_total)} collected</div>
+    </div>
+    ${collectorHtml}
+    <div class="pot-roster">${rows}</div>
+    ${settings}
+    <div class="pot-foot">The app never holds money. Entries move directly to the collector's Venmo; this is just the ledger. Real escrow (holding + paying out the pot) runs on LeagueSafe.</div>
+  `);
+}
+
+function bindPotCard() {
+  document.getElementById("pot-collector-save")?.addEventListener("click", () => {
+    const v = document.getElementById("pot-collector-sel")?.value;
+    if (v) savePotConfig({ collector_id: Number(v) });
+  });
+  document.getElementById("pot-settings-save")?.addEventListener("click", () => {
+    savePotConfig({
+      entry_amount: Number(document.getElementById("pot-entry")?.value),
+      deadline: document.getElementById("pot-deadline")?.value || null,
+      collector_id: Number(document.getElementById("pot-collector-sel2")?.value),
+    });
+  });
+  document.querySelectorAll(".pot-toggle").forEach((b) => b.addEventListener("click", () =>
+    markPotPaid(Number(b.dataset.member), b.dataset.paid !== "1")));
+}
+
+async function refreshPotCard() {
+  await loadPot();
+  if (state.view === "payments") {
+    const m = document.getElementById("pot-mount");
+    if (m) { m.innerHTML = potCardHtml(); bindPotCard(); }
+  }
+}
+
+async function markPotPaid(memberId, paid) {
+  try {
+    const r = await fetch("/api/pot?action=set-paid", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season: state.pot?.season, member_id: memberId, paid }),
+    });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); showToast((j.detail || "COULDN'T UPDATE").toUpperCase(), "err"); return; }
+    await refreshPotCard();
+  } catch { showToast("NETWORK ERROR", "err"); }
+}
+
+async function savePotConfig(patch) {
+  try {
+    const r = await fetch("/api/pot?action=config", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season: state.pot?.season, ...patch }),
+    });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); showToast((j.detail || "COULDN'T SAVE").toUpperCase(), "err"); return; }
+    await refreshPotCard();
+  } catch { showToast("NETWORK ERROR", "err"); }
 }
 
 function ledgerHtml(s, meId) {
@@ -3569,7 +3777,7 @@ async function renderPayments() {
         <div class="font-data-tabular text-primary-fixed text-sm tracking-widest uppercase">→ Sign In</div>
       </div>`;
   }
-  await loadSettlement();
+  await Promise.all([loadSettlement(), loadPot()]);
   const s = state.settlement;
   const hasWeeks = s && s.weeks && s.weeks.length;
   const empty = `
@@ -3581,18 +3789,15 @@ async function renderPayments() {
     </div>`;
   return `
     <section class="mb-stack-lg">
-      <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly · Article 6a</div>
+      <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly + Season Pot</div>
       <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">Payments</h1>
-      <p class="text-on-surface-variant text-sm mt-2.5 max-w-xl leading-relaxed">The $5-to-the-winner weekly flow. The site tracks who owes whom and gives you a one-tap Venmo link — it never holds money. The season pot runs on LeagueSafe.</p>
+      <p class="text-on-surface-variant text-sm mt-2.5 max-w-xl leading-relaxed">The weekly $5-to-the-winner flow and the season pot, both tracked here. The site never holds money — it gives you one-tap Venmo links and tracks who's paid.</p>
     </section>
-    ${hasWeeks ? settleCardHtml() : empty}
-    <section class="glass-panel p-5 md:p-6 mt-2">
-      <div class="flex items-center gap-2 mb-2">
-        <span class="material-symbols-outlined text-secondary-fixed-dim">savings</span>
-        <h3 class="font-label-caps text-[11px] tracking-widest uppercase text-on-surface-variant">Season Pot · LeagueSafe</h3>
-      </div>
-      <p class="text-on-surface-variant text-[13px] leading-relaxed">$100 entry per member (Article 11), paid via LeagueSafe. Regular-season payout: <b class="text-on-surface">1st $500 · 2nd $200 · 3rd $100</b>. LeagueSafe holds and distributes the pot — nothing to do here.</p>
-    </section>`;
+    <div id="pot-mount">${potCardHtml()}</div>
+    <section class="mb-stack-sm mt-6">
+      <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Weekly · Article 6a</div>
+    </section>
+    ${hasWeeks ? settleCardHtml() : empty}`;
 }
 
 // Poll live scores every 60s while This Week is open; re-render on change.
@@ -4031,6 +4236,7 @@ async function render() {
     root.innerHTML = await renderPayments();
     if (state.view !== "payments") return;
     bindSettleCard();
+    bindPotCard();
     const prompt = document.getElementById("signin-prompt");
     if (prompt) prompt.onclick = openLogin;
     document.querySelectorAll(".pay-openacct").forEach(b => b.onclick = openAccount);

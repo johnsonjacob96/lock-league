@@ -29,5 +29,23 @@ export async function ensureExtras(env) {
     paid_at    TIMESTAMPTZ,
     PRIMARY KEY (season, week, member_id)
   )`;
+  // Season pot tracker (Article 11: $100 entry, $500/$200/$100 payout). The app
+  // never custodies money — this only TRACKS who has paid the season entry so the
+  // pot has a LeagueSafe-style dashboard. Money still moves P2P to the collector's
+  // own Venmo (real escrow needs a licensed money-transmitter rail = LeagueSafe).
+  await s`CREATE TABLE IF NOT EXISTS pot_config (
+    season       INT PRIMARY KEY,
+    entry_amount NUMERIC NOT NULL DEFAULT 100,
+    collector_id INT REFERENCES members(id),
+    deadline     TIMESTAMPTZ,
+    payout       JSONB
+  )`;
+  await s`CREATE TABLE IF NOT EXISTS pot_entries (
+    season    INT NOT NULL,
+    member_id INT NOT NULL REFERENCES members(id),
+    paid      BOOLEAN NOT NULL DEFAULT FALSE,
+    paid_at   TIMESTAMPTZ,
+    PRIMARY KEY (season, member_id)
+  )`;
   done = true;
 }
