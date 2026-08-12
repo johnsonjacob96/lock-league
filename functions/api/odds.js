@@ -95,9 +95,10 @@ async function fetchOddsApi(env) {
 // ── Source 2: ESPN scoreboard (free consensus line) ─────────────────────────
 const numOrNull = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 
-async function fetchEspn(env) {
-  const { season, week } = currentSeasonWeek(env);
-  const events = await espnScoreboardEvents(season, seasonTypeFor(env), week);
+// Normalize raw ESPN scoreboard events → the board's games[] shape. Exported so
+// the seed endpoint (fed ESPN events from a GitHub runner, which can reach ESPN
+// when the CF colo can't) reuses the exact same parsing.
+export function normalizeEspnEvents(events, env) {
   const games = [];
   for (const ev of events || []) {
     const comp = ev.competitions?.[0];
@@ -147,6 +148,13 @@ async function fetchEspn(env) {
     }
     games.push({ id: ev.id, kickoff: ev.date, home, away, books });
   }
+  return games;
+}
+
+async function fetchEspn(env) {
+  const { season, week } = currentSeasonWeek(env);
+  const events = await espnScoreboardEvents(season, seasonTypeFor(env), week);
+  const games = normalizeEspnEvents(events, env);
   if (!games.length) throw new Error("espn: no games");
   return { source: "espn", live: true, fetched_at: new Date().toISOString(), games };
 }
@@ -361,7 +369,14 @@ async function saveSnapshot(env, payload) {
 async function loadSnapshot(env) {
   try {
     const rows = await sql(env)`SELECT payload, fetched_at FROM odds_snapshot WHERE id = 1`;
-    if (rows.length) return { ...rows[0].payload, live: false, stale: true, snapshot_at: rows[0].fetched_at };
+    if (rows.length) {
+      const p = rows[0].payload;
+      // A deliberately-seeded board (e.g. preseason lines pushed from a GitHub
+      // runner because the Worker can't reach ESPN) is served as the real board,
+      // not flagged stale. A normal last-good snapshot serves stale.
+      if (p && p.seeded) return { ...p, live: true, stale: false, snapshot_at: rows[0].fetched_at };
+      return { ...p, live: false, stale: true, snapshot_at: rows[0].fetched_at };
+    }
   } catch { /* none yet */ }
   return null;
 }
@@ -581,4 +596,32 @@ export async function onRequestGet(context) {
     return json(payload, hdr("MISS-MOCK"));
   }
   return json({ source: "error", error: "all-sources-failed", live: false, games: [] }, { status: 502, headers: { "Cache-Control": "no-store" } });
+}
+
+// POST /api/odds?action=seed  (X-Cron-Secret) — push a board into the snapshot.
+// Used to seed preseason lines from a GitHub runner, because the CF Worker can't
+// reliably reach ESPN (site.api 403s, cdn returns empty). Body is either
+// { events: [...] } (raw ESPN scoreboard events, normalized here) or
+// { games: [...] } (already in board shape). Stored with seeded:true so it's
+// served as the real board. Nothing overwrites it during preseason test mode
+// (SharpAPI throws, live ESPN fails), so one seed persists.
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  if (url.searchParams.get("action") !== "seed") {
+    return json({ error: "unknown-action" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  }
+  if (!env.CRON_SECRET || request.headers.get("X-Cron-Secret") !== env.CRON_SECRET) {
+    return json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+  const body = await request.json().catch(() => ({}));
+  const games = Array.isArray(body.events) ? normalizeEspnEvents(body.events, env)
+    : (Array.isArray(body.games) ? body.games : null);
+  if (!games || !games.length) {
+    return json({ error: "no-games", detail: "need non-empty events[] or games[]" }, { status: 422, headers: { "Cache-Control": "no-store" } });
+  }
+  const payload = { source: body.source || "espn", live: true, seeded: true, fetched_at: new Date().toISOString(), games };
+  await saveSnapshot(env, payload);
+  cache = { ts: Date.now(), data: payload }; // warm this isolate's L1 immediately
+  return json({ ok: true, games: games.length, source: payload.source, first: games[0] }, { headers: { "Cache-Control": "no-store" } });
 }
