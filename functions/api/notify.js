@@ -5,13 +5,74 @@
 import { sql } from "../_shared/db.js";
 import { currentNflWeek, pickCutoff } from "../_shared/nfl.js";
 import { pushPersonalized, ensurePushTables } from "../_shared/push-notify.js";
-import { pushWeekResults } from "../_shared/grader.js";
+import { pushWeekResults, sameTeam } from "../_shared/grader.js";
+import { ensureExtras } from "../_shared/migrations.js";
 
 function json(body, init = {}) {
   return new Response(JSON.stringify(body), {
     status: init.status || 200,
     headers: { "Content-Type": "application/json", ...(init.headers || {}) },
   });
+}
+
+// ── Line-move alert helpers ──────────────────────────────────────────────────
+const MOVE_THRESHOLD = 0.5; // half a point in the picker's favor before we ping
+const bookLabel = (k) => ({ fanduel: "FanDuel", draftkings: "DraftKings", espn: "ESPN" })[k] || (k ? String(k).toUpperCase() : "");
+const nick = (s) => String(s || "").split(" ").pop();
+
+async function fetchBoard(request) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
+  try {
+    const r = await fetch(new URL("/api/odds", request.url), { signal: ctrl.signal });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return Array.isArray(j.games) ? j.games : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function findGame(games, key) {
+  if (!key) return null;
+  const [a, h] = String(key).split("@");
+  return games.find((g) => sameTeam(g.away, a) && sameTeam(g.home, h)) || null;
+}
+// Picker value of a line: higher is always better for whoever holds this side.
+function perspVal(side, line) {
+  const n = Number(line);
+  if (!Number.isFinite(n)) return null;
+  if (side === "fav") return n;        // -2.5 beats -4 (fewer points to give)
+  if (side === "dog") return -n;       // more negative fav line = more dog points
+  if (side === "over") return -n;      // lower total = easier over
+  if (side === "under") return n;      // higher total = easier under
+  return null;
+}
+// Best current number for a side across every book on the board.
+function bestCurrentLine(game, side) {
+  let best = null;
+  for (const [book, b] of Object.entries(game.books || {})) {
+    let line = null;
+    if ((side === "fav" || side === "dog") && b.spread?.line != null) line = Number(b.spread.line);
+    else if ((side === "over" || side === "under") && b.total?.point != null) line = Number(b.total.point);
+    if (line == null) continue;
+    const v = perspVal(side, line);
+    if (best == null || v > best.v) best = { line, book, v };
+  }
+  return best;
+}
+function fmtLineForSide(side, line) {
+  const n = Number(line);
+  if (!Number.isFinite(n)) return "";
+  return side === "dog" ? `+${Math.abs(n)}` : `${n}`;
+}
+function sideHint(game, side) {
+  if (side === "over" || side === "under") return `${nick(game.away)}/${nick(game.home)}`;
+  const sp = Object.values(game.books || {}).map((b) => b.spread).find(Boolean);
+  if (!sp) return "";
+  const other = sp.fav === game.home ? game.away : game.home;
+  return nick(side === "fav" ? sp.fav : other);
 }
 
 export async function onRequest({ request, env }) {
@@ -64,6 +125,61 @@ export async function onRequest({ request, env }) {
     }
     const res = await pushWeekResults(env, cur.season, cur.week);
     return json({ ok: true, week: cur.week, ...res });
+  }
+
+  if (type === "line-moves") {
+    // Ping members whose locked pick now has a better number on either book, so
+    // they can re-lock before the Sunday cutoff. Skips once picks are locked.
+    const cutoff = pickCutoff(cur.season, cur.week, env);
+    if (Date.now() >= cutoff.getTime()) return json({ ok: true, note: "past cutoff, picks locked" });
+    await ensureExtras(env);
+    const games = await fetchBoard(request);
+    if (!games) return json({ ok: true, note: "odds unavailable" });
+
+    const rows = await sql(env)`
+      SELECT p.id, p.member_id, m.name, p.bet_type, p.game_key, p.side, p.line, p.alert_line
+      FROM picks p JOIN members m ON m.id = p.member_id
+      WHERE p.season = ${cur.season} AND p.week = ${cur.week}
+        AND p.bet_type IN ('Favorite','Dog','Over','Under')
+        AND p.game_key IS NOT NULL AND p.line IS NOT NULL`;
+
+    const byMember = {}; // memberId -> [{ bet, hint, lockedFmt, bestFmt, book }]
+    const toMark = [];   // { id, line } — record what we alerted so we don't repeat
+    for (const p of rows) {
+      const g = findGame(games, p.game_key);
+      if (!g) continue;
+      const best = bestCurrentLine(g, p.side);
+      const lockedV = perspVal(p.side, p.line);
+      if (!best || lockedV == null) continue;
+      if (best.v - lockedV < MOVE_THRESHOLD) continue;             // not enough better than what you locked
+      if (p.alert_line != null) {
+        const alertV = perspVal(p.side, p.alert_line);
+        if (alertV != null && best.v - alertV < MOVE_THRESHOLD) continue; // already told you about this good a line
+      }
+      (byMember[p.member_id] ||= []).push({
+        bet: p.bet_type,
+        hint: sideHint(g, p.side),
+        lockedFmt: fmtLineForSide(p.side, p.line),
+        bestFmt: fmtLineForSide(p.side, best.line),
+        book: bookLabel(best.book),
+      });
+      toMark.push({ id: p.id, line: best.line });
+    }
+    if (!toMark.length) return json({ ok: true, week: cur.week, note: "no improvements" });
+
+    const timeStr = cutoff.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
+    const byMemberId = {};
+    for (const [mid, items] of Object.entries(byMember)) {
+      const title = items.length === 1
+        ? `Better ${items[0].bet} number available`
+        : `${items.length} of your picks have better numbers`;
+      const body = items.map((it) => `${it.hint} now ${it.bestFmt} on ${it.book} (you have ${it.lockedFmt})`).join(" · ")
+        + `. Re-lock before ${timeStr} CT Sunday.`;
+      byMemberId[mid] = { title, body, url: "/", tag: `ll-linemove-${cur.season}-${cur.week}` };
+    }
+    const res = await pushPersonalized(env, byMemberId);
+    await Promise.all(toMark.map((m) => sql(env)`UPDATE picks SET alert_line = ${m.line} WHERE id = ${m.id}`));
+    return json({ ok: true, week: cur.week, alerted: Object.keys(byMemberId).length, picks: toMark.length, ...res });
   }
 
   return json({ error: "unknown-type" }, { status: 400 });

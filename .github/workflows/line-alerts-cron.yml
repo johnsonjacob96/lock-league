@@ -1,0 +1,29 @@
+name: Line-Move Alerts (cron)
+
+# Pushes members whose locked pick now has a better number on FanDuel or
+# DraftKings, so they can re-lock before the Sunday-noon-CT cutoff. Fires
+# Web Push via /api/notify?type=line-moves. The endpoint self-guards: it no-ops
+# off-season, once picks are locked, or when odds are unavailable, and dedupes
+# so a line only alerts again after it improves another half point.
+on:
+  schedule:
+    - cron: "0 16 * * *"   # ~11am CT daily — catch morning line moves
+    - cron: "0 23 * * *"   # ~6pm CT daily  — catch evening line moves
+  workflow_dispatch: {}
+
+jobs:
+  line-moves:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire /api/notify?type=line-moves
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "SITE_URL and CRON_SECRET secrets must be set"; exit 1
+          fi
+          curl -fsS -X POST \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            "$SITE_URL/api/notify?type=line-moves" | tee response.json
+          echo

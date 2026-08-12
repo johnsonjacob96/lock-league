@@ -3,6 +3,7 @@ import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
 import { pickCutoff, BET_TYPES, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, sameTeam } from "../_shared/grader.js";
+import { ensureExtras } from "../_shared/migrations.js";
 
 // ESPN scoreboard, cached briefly per warm isolate — used to reject picks on
 // games that have already kicked off.
@@ -233,22 +234,25 @@ export async function onRequest({ request, env }) {
       return json({ error: "game-started", ...started }, { status: 423 });
     }
     const lockedAt = new Date().toISOString();
+    await ensureExtras(env); // alert_line column used below
     const s = sql(env);
     // Distinct bet_types per member → upserts are independent; run in parallel.
+    // Re-locking clears alert_line so line-move alerts restart from the new line.
     await Promise.all(picks.map(p => s`
-        INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at)
+        INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at, alert_line)
         VALUES (${memberId}, ${season}, ${week}, ${p.bet_type}, ${p.pick_text},
                 ${p.game_key || null}, ${p.side || null}, ${p.line ?? null},
-                ${p.book || null}, ${p.price ?? null}, ${lockedAt})
+                ${p.book || null}, ${p.price ?? null}, ${lockedAt}, NULL)
         ON CONFLICT (member_id, season, week, bet_type)
         DO UPDATE SET
-          pick_text = EXCLUDED.pick_text,
-          game_key  = EXCLUDED.game_key,
-          side      = EXCLUDED.side,
-          line      = EXCLUDED.line,
-          book      = EXCLUDED.book,
-          price     = EXCLUDED.price,
-          locked_at = EXCLUDED.locked_at`));
+          pick_text  = EXCLUDED.pick_text,
+          game_key   = EXCLUDED.game_key,
+          side       = EXCLUDED.side,
+          line       = EXCLUDED.line,
+          book       = EXCLUDED.book,
+          price      = EXCLUDED.price,
+          locked_at  = EXCLUDED.locked_at,
+          alert_line = NULL`));
     return json({ ok: true, count: picks.length });
   }
 
