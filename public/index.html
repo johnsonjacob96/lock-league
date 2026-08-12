@@ -3889,14 +3889,20 @@ function renderWarRoom() {
     return head("") + `<div class="wr-empty">The season has not kicked off yet. The War Room lights up on game day.</div></div>`;
   }
   if (!wr.revealed) {
-    return head("") + `<div class="wr-empty">Cards reveal at the Sunday noon-CT lock. Come back when the games start and watch every pick cash or bust in real time.</div></div>`;
+    let when = "when the first game kicks off";
+    if (wr.firstKickoff) {
+      const dt = new Date(wr.firstKickoff);
+      const s = dt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
+      when = `${s} CT, when the first game kicks off`;
+    }
+    return head("") + `<div class="wr-empty">The War Room lights up ${when}. Each card reveals the moment its game starts, then watch every pick cash or bust in real time.</div></div>`;
   }
   const anyPending = (wr.members || []).some((m) => m.live.pending > 0);
   const liveTag = wr.anyLive
     ? `<span class="wr-livetag"><span class="live-dot"></span>LIVE</span>`
     : `<span class="wr-livetag idle"><span class="idle-dot"></span>${anyPending ? "PREGAME" : "FINAL"}</span>`;
   const actions = `<div class="wr-actions">${liveTag}<button id="wr-refresh" class="wr-refresh" title="Refresh"><span class="material-symbols-outlined text-sm">refresh</span></button></div>`;
-  if (!wr.members || !wr.members.length) return head(actions) + `<div class="wr-empty">No picks are in for this week yet.</div></div>`;
+  if (!wr.members || !wr.members.length) return head(actions) + `<div class="wr-empty">No cards are locked yet. Each member's picks reveal here the moment their game kicks off.</div></div>`;
   const rows = wr.members.map((m, i) => {
     const rec = `${m.live.W}-${m.live.L}${m.live.P ? "-" + m.live.P : ""}`;
     const pend = m.live.pending ? `<span class="wr-pend">${m.live.pending} open</span>` : "";

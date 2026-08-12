@@ -84,14 +84,12 @@ export async function onRequest({ request, env, waitUntil }) {
   const cur = currentNflWeek(new Date(), env);
   if (!cur.week) return json({ season: cur.season, week: null, status: cur.status, revealed: false, members: [] });
 
+  const now = Date.now();
   const cutoff = pickCutoff(cur.season, cur.week, env);
-  const revealed = Date.now() >= cutoff.getTime();
-  if (!revealed) {
-    return json({ season: cur.season, week: cur.week, revealed: false, cutoff: cutoff.toISOString() });
-  }
+  const globalRevealed = now >= cutoff.getTime();
 
   const key = `${cur.season}:${cur.week}`;
-  if (cache.data && cache.key === key && Date.now() - cache.ts < TTL_MS) {
+  if (cache.data && cache.key === key && now - cache.ts < TTL_MS) {
     return json({ ...cache.data, cached: true });
   }
 
@@ -110,8 +108,32 @@ export async function onRequest({ request, env, waitUntil }) {
     return events.find((e) => sameTeam(e.away, a) && sameTeam(e.home, h)) || null;
   };
 
+  // The War Room lights up the instant the week's FIRST game kicks off (Thursday
+  // night TNF), not at the Sunday-noon weekly cutoff. Each member's pick is
+  // revealed the moment ITS game starts — the same instant that pick locks (see
+  // picks.js findStartedGame, ev.kickoff <= now) — so a revealed pick can never
+  // be changed, and picks on games that haven't kicked off stay hidden. Once the
+  // Sunday cutoff passes, every pick is public regardless of game state.
+  const started = (ev) =>
+    !!ev && ((ev.kickoff && new Date(ev.kickoff).getTime() <= now) || ev.state === "in" || ev.state === "post");
+  const revealed = globalRevealed || events.some(started);
+  if (!revealed) {
+    const nextKick = events
+      .map((e) => (e.kickoff ? new Date(e.kickoff).getTime() : 0))
+      .filter((t) => t > now)
+      .sort((a, b) => a - b)[0];
+    const data = { season: cur.season, week: cur.week, revealed: false,
+      cutoff: cutoff.toISOString(), firstKickoff: nextKick ? new Date(nextKick).toISOString() : null };
+    cache = { ts: now, key, data };
+    return json(data);
+  }
+  // Per-game reveal gate: show a pick only once its game has kicked off (or the
+  // weekly cutoff has passed). Super Locks with no game tie only reveal at cutoff.
+  const pickRevealed = (p) => globalRevealed || started(findEv(p.game_key));
+
   const byMember = new Map();
   for (const p of picks) {
+    if (!pickRevealed(p)) continue;
     let m = byMember.get(p.member_id);
     if (!m) {
       m = { member_id: p.member_id, name: p.name, picks: [], live: { W: 0, L: 0, P: 0, pending: 0 } };
@@ -161,7 +183,7 @@ export async function onRequest({ request, env, waitUntil }) {
   }
 
   let consensus = [];
-  try { consensus = computeConsensus(picks, findEv); } catch { consensus = []; }
+  try { consensus = computeConsensus(picks.filter(pickRevealed), findEv); } catch { consensus = []; }
 
   const data = { season: cur.season, week: cur.week, revealed: true, fetched_at: new Date().toISOString(), anyLive, members, recap, consensus };
   cache = { ts: Date.now(), key, data };
