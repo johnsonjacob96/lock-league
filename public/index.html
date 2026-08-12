@@ -2932,7 +2932,7 @@ function superLockEditorHtml() {
     <div class="flex items-center gap-1.5 mb-2 flex-wrap">
       <span class="material-symbols-outlined text-[15px] text-tertiary-fixed" style="font-variation-settings:'FILL' 1">lock</span>
       <span class="font-label-caps text-[10px] tracking-widest uppercase text-tertiary-fixed">Super Lock</span>
-      <span class="font-data-tabular text-[9.5px] text-on-surface-variant">prop · -120 or longer</span>
+      <span class="font-data-tabular text-[9.5px] text-on-surface-variant">line or prop · -120 or longer</span>
     </div>`;
   const msg = `<span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed block mt-2" id="mycard-sl-msg"></span>`;
   if (p && (p.pick_text || p.text) && !slEditing) return header + slLockedHtml(p) + msg;
@@ -2983,23 +2983,88 @@ function slCustomHtml(p) {
     <div class="sl-hint mt-2">Graded by hand (Hit/Miss/Push). Use this for anything the books don't post as a prop.</div>`;
 }
 
+function slCurrentGame() {
+  return ((state.thisWeekData && state.thisWeekData.games) || []).find(g => `${g.away}@${g.home}` === slGameKey) || null;
+}
+// Best-priced side of a game LINE (spread/total) across FD+DK, mirroring the
+// board's Fav/Dog/Over/Under buttons. Returns the side + line + text the server
+// re-derives against, or null if the game doesn't offer that market.
+function slGameLineSide(g, bet) {
+  const books = g.books || {};
+  const cands = [];
+  for (const bk of ["fanduel", "draftkings"]) {
+    const b = books[bk]; if (!b) continue;
+    if (bet === "Favorite" && b.spread) cands.push({ book: bk, side: "fav", line: b.spread.line, price: b.spread.favPrice, text: `${b.spread.fav} ${b.spread.line}`, label: `${slShort(b.spread.fav)} ${b.spread.line}` });
+    else if (bet === "Dog" && b.spread) { const dog = b.spread.fav === g.home ? g.away : g.home; const dl = Math.abs(b.spread.line); cands.push({ book: bk, side: "dog", line: b.spread.line, price: b.spread.dogPrice, text: `${dog} +${dl}`, label: `${slShort(dog)} +${dl}` }); }
+    else if (bet === "Over" && b.total) cands.push({ book: bk, side: "over", line: b.total.point, price: b.total.overPrice, text: `${g.away} / ${g.home} O${b.total.point}`, label: `Over ${b.total.point}` });
+    else if (bet === "Under" && b.total) cands.push({ book: bk, side: "under", line: b.total.point, price: b.total.underPrice, text: `${g.away} / ${g.home} U${b.total.point}`, label: `Under ${b.total.point}` });
+  }
+  if (!cands.length) return null;
+  cands.sort((a, b) => (b.price ?? -1e9) - (a.price ?? -1e9)); // best payout first, same as props
+  return cands[0];
+}
+const BET_FOR_SIDE = { fav: "Favorite", dog: "Dog", over: "Over", under: "Under" };
+
 function slBoardPickerHtml() {
   const games = slGamesList();
   const gameOpts = `<option value="">Select a game…</option>` +
     games.map(g => `<option value="${escapeHtml(g.key)}" ${g.key === slGameKey ? "selected" : ""}>${escapeHtml(g.label)}</option>`).join("");
   let body;
-  if (!slGameKey) body = `<div class="sl-hint mt-2">Pick a game to load its player props.</div>`;
-  else if (slLoading) body = `<div class="sl-hint mt-2">Loading props…</div>`;
-  else if (!slMarkets || !slMarkets.length) body = `<div class="sl-hint warn mt-2">No player props posted for this game yet. Books usually post them 1–2 days before kickoff — check back closer to game time, or use Custom to enter one by hand.</div>`;
+  if (!slGameKey) body = `<div class="sl-hint mt-2">Pick a game to load its lines and props.</div>`;
+  else if (slLoading) body = `<div class="sl-hint mt-2">Loading lines…</div>`;
   else body = slMarketPickerHtml();
   return `<select class="sl-select" id="sl-game">${gameOpts}</select>${body}`;
 }
 
+// Sub-picker for a game-line Super Lock (spread or total): two side buttons +
+// a lock button, reusing the prop picker's .sl-sides styling.
+function slGameLineSubHtml(g, kind) {
+  const sides = kind === "spread" ? ["fav", "dog"] : ["over", "under"];
+  const btns = sides.map(sd => {
+    const info = slGameLineSide(g, BET_FOR_SIDE[sd]);
+    if (!info) return "";
+    return `<button class="sl-side-btn ${slDraft.side === sd ? "active" : ""}" data-slside="${sd}">
+      <span class="sl-side-lab">${escapeHtml(info.label)}</span>
+      <span class="sl-side-price">${fmtPrice(info.price)}${info.book ? " · " + bookLabel(info.book) : ""}</span></button>`;
+  }).join("");
+  let out = `<div class="sl-sides mt-2">${btns}</div>`;
+  if (sides.includes(slDraft.side)) {
+    const info = slGameLineSide(g, BET_FOR_SIDE[slDraft.side]);
+    if (info) {
+      const meets = info.price != null && Number(info.price) >= -120;
+      const warn = (info.price != null && !meets)
+        ? `<div class="sl-hint warn mt-1">${fmtPrice(info.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
+        : (info.price == null ? `<div class="sl-hint warn mt-1">No price available for this side.</div>` : "");
+      const dis = meets ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
+      out += `<button class="btn-primary w-full mt-2" id="sl-lock-line" ${dis}>Lock ${escapeHtml(info.label)} · ${fmtPrice(info.price)}</button>${warn}`;
+    }
+  }
+  return out;
+}
+
 function slMarketPickerHtml() {
-  const marketOpts = `<option value="">Select a prop…</option>` +
-    slMarkets.map(m => `<option value="${m.market}" ${m.market === slDraft.market ? "selected" : ""}>${escapeHtml(m.label)}</option>`).join("");
-  let sub = "";
-  const m = slMarkets.find(x => x.market === slDraft.market);
+  const g = slCurrentGame();
+  const hasSpread = g && ["fanduel", "draftkings"].some(bk => g.books?.[bk]?.spread);
+  const hasTotal = g && ["fanduel", "draftkings"].some(bk => g.books?.[bk]?.total);
+  const props = slMarkets || [];
+  let marketOpts = `<option value="">Select a line or prop…</option>`;
+  if (hasSpread) marketOpts += `<option value="__spread__" ${slDraft.market === "__spread__" ? "selected" : ""}>Game spread</option>`;
+  if (hasTotal) marketOpts += `<option value="__total__" ${slDraft.market === "__total__" ? "selected" : ""}>Game total (O/U)</option>`;
+  marketOpts += props.map(m => `<option value="${m.market}" ${m.market === slDraft.market ? "selected" : ""}>${escapeHtml(m.label)}</option>`).join("");
+  const propHint = (!props.length && (hasSpread || hasTotal))
+    ? `<div class="sl-hint mt-2">Player props aren't posted for this game yet — game lines are ready now; props fill in 1–2 days before kickoff.</div>` : "";
+
+  // Game-line branch.
+  if (slDraft.market === "__spread__" || slDraft.market === "__total__") {
+    const sub = g ? slGameLineSubHtml(g, slDraft.market === "__spread__" ? "spread" : "total") : "";
+    return `<select class="sl-select mt-2" id="sl-market">${marketOpts}</select>${sub}`;
+  }
+  if (!props.length && !hasSpread && !hasTotal) {
+    return `<div class="sl-hint warn mt-2">No lines or props posted for this game yet. Check back closer to kickoff, or use Custom to enter one by hand.</div>`;
+  }
+
+  let sub = propHint;
+  const m = props.find(x => x.market === slDraft.market);
   if (m) {
     const playerOpts = `<option value="">Select player…</option>` + m.players.map(pl => {
       const lbl = m.kind === "yes"
@@ -3099,6 +3164,8 @@ function bindSuperLockEditor() {
   root.querySelectorAll(".sl-side-btn").forEach(b => b.onclick = () => { slDraft.side = b.dataset.slside; refreshSuperLockEditor(); });
   const lock = document.getElementById("sl-lock");
   if (lock && !lock.disabled) lock.onclick = () => lockStructuredProp();
+  const lockLine = document.getElementById("sl-lock-line");
+  if (lockLine && !lockLine.disabled) lockLine.onclick = () => lockGameLine();
 }
 function refreshSuperLockEditor() {
   const el = document.getElementById("my-card-sl");
@@ -3149,6 +3216,38 @@ async function lockStructuredProp() {
       return;
     }
     currentMyPicks["Super Lock"] = { pick_text: propTextClient(prop, m), prop, book: best.book, price: best.price, locked_at: new Date().toISOString() };
+    slEditing = false; slDraft = { market: "", player: "", side: "" };
+    showToast("SUPER LOCK LOCKED");
+    refreshMyCard();
+    refreshSuperLockEditor();
+  } catch { if (msg) msg.textContent = "NETWORK ERROR"; }
+}
+async function lockGameLine() {
+  const g = slCurrentGame();
+  const bet = BET_FOR_SIDE[slDraft.side];
+  if (!g || !bet) return;
+  const info = slGameLineSide(g, bet);
+  if (!info) return;
+  const line_pick = { game_key: slGameKey, bet, side: info.side, book: info.book, line: info.line, price: info.price, pick_text: info.text };
+  const msg = document.getElementById("mycard-sl-msg");
+  try {
+    const r = await fetch("/api/picks", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ season: 2026, week: myCardWeek(), picks: [{ bet_type: "Super Lock", line_pick }] }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      if (msg) msg.textContent = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
+        : j.error === "super-lock-price" ? "ODDS MUST BE -120 OR LONGER"
+        : j.error === "line-not-offered" ? "THAT LINE IS NO LONGER OFFERED"
+        : j.error === "game-not-on-board" ? "GAME NOT ON THE BOARD"
+        : j.error === "game-started" ? "GAME ALREADY STARTED"
+        : "ERROR · " + (j.error || "");
+      return;
+    }
+    const meta = { kind: bet === "Over" || bet === "Under" ? "total" : "spread", bet, side: info.side, line: info.line, book: info.book, price: info.price, game_key: slGameKey };
+    currentMyPicks["Super Lock"] = { pick_text: info.text, prop: meta, book: info.book, price: info.price, locked_at: new Date().toISOString() };
     slEditing = false; slDraft = { market: "", player: "", side: "" };
     showToast("SUPER LOCK LOCKED");
     refreshMyCard();

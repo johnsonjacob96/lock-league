@@ -264,6 +264,13 @@ export async function onRequest({ request, env }) {
           if (!p.prop.player || typeof p.prop.player !== "string") return json({ error: "missing-prop-player" }, { status: 400 });
           if (!p.prop.game_key || typeof p.prop.game_key !== "string") return json({ error: "missing-game", bet_type: p.bet_type }, { status: 400 });
           p.game_key = p.prop.game_key; // ties it to the game (started-game guard + auto-grade)
+        } else if (p.line_pick) {
+          // Game-line Super Lock: a spread/total off the live board (auto-grades
+          // just like a Favorite/Dog/Over/Under, only filed under Super Lock).
+          if (!SIDE_FOR[p.line_pick.bet]) return json({ error: "bad-line-bet", bet: p.line_pick.bet }, { status: 400 });
+          if (SIDE_FOR[p.line_pick.bet] !== p.line_pick.side) return json({ error: "bad-side", bet_type: p.bet_type, side: p.line_pick.side, expected: SIDE_FOR[p.line_pick.bet] }, { status: 400 });
+          if (!p.line_pick.game_key || typeof p.line_pick.game_key !== "string") return json({ error: "missing-game", bet_type: p.bet_type }, { status: 400 });
+          p.game_key = p.line_pick.game_key; // ties it to the game (started-game guard + auto-grade)
         } else {
           // Free-text Super Lock (manual Hit/Miss/Push, honor system on price).
           if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
@@ -321,6 +328,33 @@ export async function onRequest({ request, env }) {
       }
       p.prop = { market: d.market, player: d.player, line: d.line, side: d.side, price: d.price, book: d.book, game_key: p.game_key };
       p.pick_text = d.pick_text; p.price = d.price; p.book = d.book;
+    }
+    // Game-line Super Lock: re-derive line/price/book/text from the live board
+    // exactly like a gradable bet (same anti-cheat), enforce the -120 lock rule,
+    // and stamp a prop_meta marker {kind, bet} so the grader scores it as a
+    // spread/total instead of a player prop.
+    const lineLocks = picks.filter((p) => p.bet_type === "Super Lock" && p.line_pick);
+    if (lineLocks.length) {
+      const games = await fetchLiveOdds(request);
+      for (const p of lineLocks) {
+        const lp = p.line_pick;
+        if (games) {
+          const g = findGame(games, lp.game_key);
+          if (!g) return json({ error: "game-not-on-board", game_key: lp.game_key, bet_type: "Super Lock" }, { status: 422 });
+          const d = deriveGradable(g, lp.bet, lp.side, lp.book);
+          if (!d) return json({ error: "line-not-offered", game_key: lp.game_key, bet_type: "Super Lock" }, { status: 422 });
+          p.line = d.line; p.price = d.price; p.book = d.book; p.pick_text = d.pick_text; p.side = lp.side;
+        } else {
+          // Degrade: trust the client's structured line but require it be well-formed.
+          if (!Number.isFinite(Number(lp.line))) return json({ error: "missing-line", bet_type: "Super Lock" }, { status: 400 });
+          if (!lp.pick_text || typeof lp.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: "Super Lock" }, { status: 400 });
+          p.line = Number(lp.line); p.side = lp.side; p.book = lp.book || null; p.price = lp.price ?? null; p.pick_text = lp.pick_text;
+        }
+        if (p.price != null && !(Number(p.price) >= -120)) {
+          return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: p.price }, { status: 400 });
+        }
+        p.prop = { kind: (lp.bet === "Over" || lp.bet === "Under") ? "total" : "spread", bet: lp.bet, side: p.side, line: p.line, book: p.book, price: p.price, game_key: p.game_key };
+      }
     }
     // A game that has kicked off can no longer be picked (TNF after kickoff,
     // international games that start before the Sunday noon cutoff, ...).

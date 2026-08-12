@@ -117,14 +117,21 @@ export async function gradeWeek(env, season, week) {
       const total = ev.home_score + ev.away_score;
       result = gradeTotal(p.side, Number(p.line), total);
     } else if (p.bet_type === "Super Lock") {
-      // Only structured Super Locks (prop_meta set) auto-grade; free-text ones
-      // stay manual (mark-super-lock action).
+      // Structured Super Locks auto-grade; free-text ones stay manual.
       const meta = typeof p.prop_meta === "string" ? safeJson(p.prop_meta) : p.prop_meta;
-      if (!meta || !meta.market) continue;
-      let box = boxCache.get(ev.id);
-      if (box === undefined) { box = await fetchBoxscore(ev.id); boxCache.set(ev.id, box); }
-      if (!box) continue; // couldn't fetch -> retry next run
-      result = gradeProp(meta, box); // may be null (player unmatched) -> leave for manual
+      if (!meta) continue; // free-text -> manual (mark-super-lock action)
+      if (meta.kind === "spread") {
+        if (ev.home_score == null || ev.away_score == null) continue;
+        result = resolveSpreadResult(p, ev); // a game-line Super Lock (a spread)
+      } else if (meta.kind === "total") {
+        if (ev.home_score == null || ev.away_score == null) continue;
+        result = gradeTotal(p.side, Number(p.line), ev.home_score + ev.away_score); // (a total)
+      } else if (meta.market) {
+        let box = boxCache.get(ev.id);
+        if (box === undefined) { box = await fetchBoxscore(ev.id); boxCache.set(ev.id, box); }
+        if (!box) continue; // couldn't fetch -> retry next run
+        result = gradeProp(meta, box); // player prop; null (player unmatched) -> manual
+      } else continue;
     }
     if (result) {
       await s`UPDATE picks SET result = ${result}, graded_at = NOW() WHERE id = ${p.id}`;

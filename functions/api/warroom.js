@@ -10,6 +10,8 @@ import { sql } from "../_shared/db.js";
 const TTL_MS = 40 * 1000;
 let cache = { ts: 0, key: "", data: null };
 
+const safeJson = (s) => { try { return typeof s === "string" ? JSON.parse(s) : s; } catch { return null; } };
+
 // Live standing of one pick against the (possibly in-progress) game.
 function livePickStatus(p, ev) {
   if (!ev) return { status: "pending", state: "pre" };
@@ -17,17 +19,21 @@ function livePickStatus(p, ev) {
   if (st === "pre" || ev.home_score == null || ev.away_score == null) {
     return { status: "pending", state: st, detail: ev.detail };
   }
-  if (p.bet_type === "Super Lock") {
-    // Player props / specialty: can't auto-grade, mark manual.
-    return { status: "manual", state: st, detail: ev.detail, final: st === "post" };
-  }
+  const map = { W: "win", L: "lose", P: "push" };
   let result = null;
   if (p.bet_type === "Favorite" || p.bet_type === "Dog") {
     result = resolveSpreadResult(p, ev);
   } else if (p.bet_type === "Over" || p.bet_type === "Under") {
     result = gradeTotal(p.side, Number(p.line), ev.home_score + ev.away_score);
+  } else if (p.bet_type === "Super Lock") {
+    // A game-line Super Lock (spread/total) grades live off the score, same as
+    // the gradable bets. Player-prop and free-text Super Locks need the box
+    // score / a manual mark, so they stay "manual" here.
+    const meta = safeJson(p.prop_meta);
+    if (meta && meta.kind === "spread") result = resolveSpreadResult(p, ev);
+    else if (meta && meta.kind === "total") result = gradeTotal(p.side, Number(p.line), ev.home_score + ev.away_score);
+    else return { status: "manual", state: st, detail: ev.detail, final: st === "post" };
   }
-  const map = { W: "win", L: "lose", P: "push" };
   return { status: result ? map[result] : "pending", state: st, final: st === "post", detail: ev.detail };
 }
 
@@ -95,7 +101,7 @@ export async function onRequest({ request, env, waitUntil }) {
 
   const [picks, events] = await Promise.all([
     sql(env)`
-      SELECT p.member_id, m.name, p.bet_type, p.pick_text, p.game_key, p.side, p.line, p.result
+      SELECT p.member_id, m.name, p.bet_type, p.pick_text, p.game_key, p.side, p.line, p.result, p.prop_meta
       FROM picks p JOIN members m ON m.id = p.member_id
       WHERE p.season = ${cur.season} AND p.week = ${cur.week}
       ORDER BY m.name`,
