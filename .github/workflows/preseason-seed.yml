@@ -11,7 +11,10 @@ name: preseason-seed
 
 on:
   schedule:
-    - cron: "7,37 * 12-16 8 *"   # every 30 min, Aug 12-16 UTC (off the :00/:30 marks)
+    # Every 30 min, Aug 12-14 UTC — covers pick window + Thursday-night finals +
+    # Friday review, then self-stops before the Saturday flip-back to Week 1
+    # (so it can't re-seed preseason over the real board). Off the :00/:30 marks.
+    - cron: "7,37 * 12-14 8 *"
   workflow_dispatch: {}
 
 jobs:
