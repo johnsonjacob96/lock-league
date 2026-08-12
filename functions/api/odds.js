@@ -300,14 +300,14 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
 
 // SharpAPI is cursor-paginated (~50 rows/page); a full FD+DK spread+total week
 // is ~3 pages. Follow pagination.has_more, capped so a runaway can't loop.
-export async function fetchSharpRaw(env, maxPages = 8) { // exported for tests
+export async function fetchSharpRaw(env, maxPages = 8, overrides = null) { // exported for tests
   const base = "https://api.sharpapi.io/api/v1/odds";
-  const q = { league: "nfl", sportsbook: "fanduel,draftkings", market: "spread,total", limit: "500" };
+  const q = { league: "nfl", sportsbook: "fanduel,draftkings", market: "spread,total", limit: "500", ...(overrides || {}) };
   const all = [];
   let cursor = null;
   for (let page = 0; page < maxPages; page++) {
     const url = new URL(base);
-    for (const [k, v] of Object.entries(q)) url.searchParams.set(k, v);
+    for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== null) url.searchParams.set(k, v);
     if (cursor) url.searchParams.set("cursor", cursor);
     const r = await fetch(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } });
     if (!r.ok) throw new Error(`sharpapi ${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -421,6 +421,42 @@ export async function onRequestGet(context) {
     try {
       const raw = await fetchSharpRaw(env);
       return json({ count: raw.length, sample: raw.slice(0, 8), parsedGames: normalizeSharp(raw).slice(0, 2) }, { headers: { "Cache-Control": "no-store" } });
+    } catch (e) {
+      return json({ error: String(e && e.message || e) }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    }
+  }
+
+  // Debug: probe SharpAPI's player-prop coverage + row schema so we can build the
+  // structured Super Lock. Flexible so we can try market strings without a redeploy:
+  //   ?debug=props                 -> ask for market=player_props
+  //   ?debug=props&market=<value>  -> override the market param
+  //   ?debug=props&nomarket=1      -> omit the market filter entirely (get all)
+  if (url.searchParams.get("debug") === "props") {
+    if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    try {
+      const overrides = url.searchParams.get("nomarket") === "1"
+        ? { market: undefined }
+        : { market: url.searchParams.get("market") || "player_props" };
+      const raw = await fetchSharpRaw(env, 3, overrides);
+      // Summarize what came back: distinct market fields + which rows are props.
+      const marketVals = {}, typeVals = {};
+      let propCount = 0;
+      const propSamples = [];
+      for (const r of raw) {
+        const mk = String(r.market ?? "");
+        const mt = String(r.market_type ?? "");
+        if (mk) marketVals[mk] = (marketVals[mk] || 0) + 1;
+        if (mt) typeVals[mt] = (typeVals[mt] || 0) + 1;
+        if (r.is_player_prop === true || /player|prop/i.test(mt) || /player|prop/i.test(mk)) {
+          propCount++;
+          if (propSamples.length < 10) propSamples.push(r);
+        }
+      }
+      return json({
+        requested: overrides, count: raw.length, propCount,
+        distinctMarket: marketVals, distinctMarketType: typeVals,
+        propSamples, firstRows: raw.slice(0, 3),
+      }, { headers: { "Cache-Control": "no-store" } });
     } catch (e) {
       return json({ error: String(e && e.message || e) }, { status: 502, headers: { "Cache-Control": "no-store" } });
     }
