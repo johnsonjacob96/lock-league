@@ -235,6 +235,18 @@
   .week-cell.P { background: rgba(244, 207, 90, 0.14); color: #f4cf5a; border-color: rgba(244, 207, 90, 0.35); }
   .week-cell:hover { transform: scale(1.18); z-index: 5; position: relative; }
 
+  /* Member-detail popout footer (season / lifetime / lifetime-by-type) */
+  .md-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 28px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #1e2422; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .md-bt-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .md-foot .md-lab, .md-bt-foot .md-lab { color: #6f7877; text-transform: uppercase; letter-spacing: 0.12em; font-size: 10px; }
+  .md-foot .md-lab { margin-right: 8px; }
+  .md-stat { display: inline-flex; align-items: baseline; }
+  .md-val { color: #e6e8e8; font-weight: 600; }
+  .md-bt-list { display: inline-flex; flex-wrap: wrap; gap: 6px 16px; }
+  .md-bt { white-space: nowrap; }
+  .md-bt .md-bt-lab { color: #8a9391; letter-spacing: 0.08em; margin-right: 7px; font-size: 10px; }
+  .md-bt.super .md-bt-lab { color: #f4cf5a; }
+
   /* Tooltip */
   .tooltip {
     position: fixed;
@@ -1060,7 +1072,7 @@ function ensureLive2026() {
   if (!live2026Promise) {
     live2026Promise = fetch("/api/picks?season=2026", { credentials: "include" })
       .then(r => (r.ok ? r.json() : { picks: [] }))
-      .then(j => { mergeLiveSeason(j.picks || []); DATA_VERSION++; })
+      .then(j => { mergeLiveSeason(j.picks || []); normalizeRecords(DATA); DATA_VERSION++; })
       .catch(() => {});
   }
   return live2026Promise;
@@ -1116,6 +1128,38 @@ function mergeLiveSeason(rows) {
     DATA.members[name]["2026"] = { seasonRecord: `${W}-${L}${P ? "-" + P : ""}`, byType };
   }
   DATA.seasons["2026"] = { members: names, weeklyWinners, live: true };
+}
+
+// Every pick is made under a bet type, so sum(byType) must equal the season
+// record. The historical import shipped stale byType `record` summaries (and a
+// couple of stale lifetime totals) that under-count the actual weekly picks, so
+// derive every record straight from those picks: each bet type's record from its
+// own picks, the season record from their sum, and the lifetime record as the
+// running total. Idempotent — safe to re-run once the live season merges in.
+function normalizeRecords(data) {
+  if (!data || !data.members) return;
+  for (const name of Object.keys(data.members)) {
+    let cw = 0, cl = 0, ct = 0;
+    for (const season of Object.keys(data.members[name]).sort()) {
+      const md = data.members[name][season];
+      if (!md || !md.byType) continue;
+      let sw = 0, sl = 0, st = 0;
+      for (const bt of BET_TYPES_ORDER) {
+        const info = md.byType[bt];
+        if (!info) continue;
+        let w = 0, l = 0, t = 0;
+        for (const k of Object.keys(info.picks || {})) {
+          const rr = info.picks[k] && info.picks[k].result;
+          if (rr === "W") w++; else if (rr === "L") l++; else if (rr === "P") t++;
+        }
+        info.record = `${w}-${l}${t ? "-" + t : ""}`;
+        sw += w; sl += l; st += t;
+      }
+      md.seasonRecord = `${sw}-${sl}${st ? "-" + st : ""}`;
+      cw += sw; cl += sl; ct += st;
+      md.lifetimeRecord = `${cw}-${cl}${ct ? "-" + ct : ""}`;
+    }
+  }
 }
 
 function initials(name) {
@@ -1885,11 +1929,10 @@ function renderMemberRow(r, i, season, movement) {
   `;
 }
 
-// Lifetime record per bet type, summed from each season's byType record,
-// cumulatively through the viewed season (matching the LIFETIME field's "career
-// through this season" meaning). The `overall` is summed from the authoritative
-// seasonRecord instead (the historical import's per-type breakdown is partial,
-// so it undercounts the real totals; 2026+ live data reconciles exactly).
+// Lifetime record per bet type, summed from each season's (normalized) byType
+// record cumulatively through the viewed season — matching the LIFETIME field's
+// "career through this season" meaning. Records are picks-derived, so these sum
+// exactly to the LIFETIME total.
 function lifetimeByType(name, throughSeason) {
   const seasons = Object.keys(DATA.members[name] || {}).filter(s => Number(s) <= Number(throughSeason));
   const byType = {};
@@ -1901,12 +1944,7 @@ function lifetimeByType(name, throughSeason) {
     }
     byType[bt] = { w, l, t };
   }
-  let W = 0, L = 0, T = 0;
-  for (const s of seasons) {
-    const rec = parseRecord(DATA.members[name][s]?.seasonRecord);
-    W += rec.w; L += rec.l; T += rec.t;
-  }
-  return { byType, overall: { w: W, l: L, t: T } };
+  return byType;
 }
 
 function renderMemberDetail(r) {
@@ -1945,26 +1983,19 @@ function renderMemberDetail(r) {
         </div>
         ${rows}
         ${(() => {
-          const lt = lifetimeByType(r.name, state.season);
-          const o = lt.overall;
-          // Prefer the seeded career total; fall back to the computed sum only
-          // when it's missing (e.g. the live season), so historical numbers are
-          // never altered but the live season still shows a lifetime figure.
-          const lifetimeStr = md?.lifetimeRecord
-            ? recordHtmlFromString(md.lifetimeRecord)
-            : recordHtml(o);
+          const byType = lifetimeByType(r.name, state.season);
           const SHORT = { Favorite: "FAV", Dog: "DOG", Over: "OVER", Under: "UNDER", "Super Lock": "SL" };
-          const chips = BET_TYPES_ORDER.map(bt => {
-            const isSuper = bt === "Super Lock";
-            return `<span class="whitespace-nowrap"><span class="tracking-widest mr-1.5 ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${SHORT[bt]}</span>${recordHtml(lt.byType[bt])}</span>`;
-          }).join("");
+          const chips = BET_TYPES_ORDER.map(bt =>
+            `<span class="md-bt${bt === "Super Lock" ? " super" : ""}"><span class="md-bt-lab">${SHORT[bt]}</span>${recordHtml(byType[bt])}</span>`
+          ).join("");
           return `
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 pt-3 border-t border-outline-variant font-data-tabular text-[11px]">
-          <div><span class="text-on-surface-variant tracking-widest mr-2">SEASON</span><strong class="text-on-surface">${recordHtmlFromString(md?.seasonRecord || "0-0")}</strong></div>
-          <div><span class="text-on-surface-variant tracking-widest mr-2">LIFETIME</span><strong class="text-on-surface">${lifetimeStr}</strong></div>
+        <div class="md-foot">
+          <span class="md-stat"><span class="md-lab">Season</span><span class="md-val">${recordHtmlFromString(md?.seasonRecord || "0-0")}</span></span>
+          <span class="md-stat"><span class="md-lab">Lifetime</span><span class="md-val">${recordHtmlFromString(md?.lifetimeRecord || "0-0")}</span></span>
         </div>
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 font-data-tabular text-[11px]">
-          <span class="text-on-surface-variant tracking-widest">LIFETIME BY TYPE</span>${chips}
+        <div class="md-bt-foot">
+          <span class="md-lab">Lifetime by type</span>
+          <span class="md-bt-list">${chips}</span>
         </div>`;
         })()}
       </div>
@@ -4547,6 +4578,7 @@ registerServiceWorker(); // fire-and-forget; needed for push subscriptions
   state.user = me;
   state.serverConfig = cfg;
   DATA = await r.json();
+  normalizeRecords(DATA); // derive all records from picks so sum(byType) === season
   // Once the live season has kicked off, land on it by default.
   if (seasonsVisible().includes("2026")) state.season = "2026";
   render();
