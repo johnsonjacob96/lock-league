@@ -87,14 +87,17 @@ export async function onRequest({ request, env }) {
 
   if (type === "reminder") {
     const cutoff = pickCutoff(cur.season, cur.week, env);
-    // Fire only inside the ~1-hour-before-lock window. GitHub cron is fixed-UTC
-    // and can't follow DST, but the noon-CT lock shifts (17:00 UTC in CDT, 18:00
-    // in CST). So remind-cron schedules BOTH 16:00 and 17:00 UTC every Sunday and
-    // this window admits exactly the one that's ~1h out — 16:00 during CDT (11am
-    // CDT), 17:00 during CST (11am CST) — while the off-week cron lands ~2h out
-    // and no-ops. Also blocks firing weeks early if a week has no live cutoff yet.
-    // ?force=1 bypasses the window (manual testing / ad-hoc re-fire).
-    if (url.searchParams.get("force") !== "1") {
+    // ?dryrun=1 computes recipients but sends nothing — used to verify the
+    // (Cloudflare-cron) automated path fires on schedule without buzzing phones.
+    const dryrun = url.searchParams.get("dryrun") === "1";
+    // Fire only inside the ~1-hour-before-lock window. Cron is fixed-UTC and can't
+    // follow DST, but the noon-CT lock shifts (17:00 UTC in CDT, 18:00 in CST). So
+    // the scheduler fires BOTH 16:00 and 17:00 UTC every Sunday and this window
+    // admits exactly the one that's ~1h out — 16:00 during CDT (11am CDT), 17:00
+    // during CST (11am CST) — while the off-week fire lands ~2h out and no-ops.
+    // Also blocks firing weeks early if a week has no live cutoff yet.
+    // ?force=1 (or dryrun) bypasses the window (manual testing / ad-hoc re-fire).
+    if (!dryrun && url.searchParams.get("force") !== "1") {
       const minsToLock = (cutoff.getTime() - Date.now()) / 60000;
       if (!(minsToLock > 0 && minsToLock <= 75)) {
         return json({ ok: true, note: "outside reminder window", minsToLock: Math.round(minsToLock) });
@@ -128,6 +131,9 @@ export async function onRequest({ request, env }) {
         url: "/",
         tag: `ll-reminder-${cur.season}-${cur.week}`,
       };
+    }
+    if (dryrun) {
+      return json({ ok: true, dryrun: true, week: cur.week, wouldRemind: behind.map((b) => b.name) });
     }
     const res = await pushPersonalized(env, byMemberId);
     return json({ ok: true, week: cur.week, reminded: behind.map((b) => b.name), ...res });
