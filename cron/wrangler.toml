@@ -14,8 +14,9 @@ name = "lock-league-cron"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
+# Cloudflare's cron parser rejects "0" for Sunday; use the named day.
 [triggers]
-crons = ["0 16 * * 0", "0 17 * * 0"]
+crons = ["0 16 * * SUN", "0 17 * * SUN"]
 
 [vars]
 SITE_URL = "https://lock-league.pages.dev"
