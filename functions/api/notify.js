@@ -98,14 +98,20 @@ export async function onRequest({ request, env }) {
     const timeStr = cutoff.toLocaleTimeString("en-US", {
       hour: "numeric", minute: "2-digit", timeZone: "America/Chicago",
     });
+    // Weekday of the lock, derived from the cutoff (Central), so the copy is
+    // correct whenever the deadline isn't a Sunday — e.g. the preseason test
+    // locks on Thursday. Reverts to "Sunday" automatically in the regular season.
+    const dayStr = cutoff.toLocaleDateString("en-US", {
+      weekday: "long", timeZone: "America/Chicago",
+    });
     const byMemberId = {};
     for (const r of behind) {
       const left = 5 - r.picks;
       byMemberId[r.id] = {
         title: `Week ${cur.week}: ${left} pick${left === 1 ? "" : "s"} to go`,
         body: r.picks === 0
-          ? `You have not locked any picks yet. Lock closes at ${timeStr} CT Sunday.`
-          : `You are ${r.picks} of 5 in. ${left} left before ${timeStr} CT Sunday.`,
+          ? `You have not locked any picks yet. Lock closes at ${timeStr} CT ${dayStr}.`
+          : `You are ${r.picks} of 5 in. ${left} left before ${timeStr} CT ${dayStr}.`,
         url: "/",
         tag: `ll-reminder-${cur.season}-${cur.week}`,
       };
