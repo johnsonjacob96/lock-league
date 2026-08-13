@@ -29,5 +29,5 @@ jobs:
           fi
           curl -fsS -X POST \
             -H "X-Cron-Secret: $CRON_SECRET" \
-            "$SITE_URL/api/notify?type=reminder" | tee resp.json
+            "$SITE_URL/api/notify?type=reminder&force=1" | tee resp.json
           echo

@@ -31,5 +31,5 @@ jobs:
           fi
           curl -fsS -X POST \
             -H "X-Cron-Secret: $CRON_SECRET" \
-            "$SITE_URL/api/notify?type=${TYPE}&reset=${RESET}" | tee resp.json
+            "$SITE_URL/api/notify?type=${TYPE}&reset=${RESET}&force=1" | tee resp.json
           echo

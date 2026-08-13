@@ -1,11 +1,17 @@
 name: Pick Reminder (cron)
 
-# Nudges members who have not locked all 5 picks, before the Sunday-noon-CT
+# Nudges members who have not locked all 5 picks, ~1 hour before the Sunday-noon-CT
 # lock. Fires Web Push via /api/notify?type=reminder.
+#
+# Both times run every Sunday; the endpoint's window guard (fires only when the
+# lock is <=75 min out) admits exactly the one that is ~1h before the DST-aware
+# noon-CT lock and no-ops the other:
+#   - CDT (Sept-Oct): lock=17:00 UTC -> 16:00 UTC fires (11am CDT), 17:00 no-ops.
+#   - CST (Nov on):   lock=18:00 UTC -> 17:00 UTC fires (11am CST), 16:00 no-ops.
 on:
   schedule:
-    - cron: "0 15 * * 0"   # Sun 15:00 UTC (~9am CT) — a few hours before lock
-    - cron: "0 16 * * 0"   # Sun 16:00 UTC (~10am CT) — second, gentler nudge
+    - cron: "0 16 * * 0"   # Sun 16:00 UTC — 11am CDT (1h before lock, early season)
+    - cron: "0 17 * * 0"   # Sun 17:00 UTC — 11am CST (1h before lock, after Nov 1)
   workflow_dispatch: {}
 
 jobs:
