@@ -1,0 +1,33 @@
+name: Kickoff Reminder (one-time preseason test)
+
+# ONE-TIME: fire the pick reminder ~1 hour before tonight's 6:00pm CT kickoff
+# (Thu Aug 13 2026 — earliest games DET@CIN / GB@PIT at 23:00 UTC). Scheduled a
+# few minutes early to absorb GitHub's usual cron lag so it lands ~5:00pm CT.
+# Hard-guarded to the 2026-08-13 UTC date, so even if this file outlives the
+# Saturday cleanup it can NEVER misfire on a future Aug 13. Delete with the
+# other preseason-test workflows after the flip-back.
+on:
+  schedule:
+    - cron: "55 21 13 8 *"   # Thu Aug 13 2026, 21:55 UTC (~4:55pm CT) — ~1h pre-kickoff
+  workflow_dispatch: {}       # manual re-fire / backup if the scheduled run is dropped
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire /api/notify?type=reminder (guarded to 2026-08-13)
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          TODAY=$(date -u +%F)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$TODAY" != "2026-08-13" ]; then
+            echo "Scheduled run but today is $TODAY, not 2026-08-13 — no-op."; exit 0
+          fi
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "SITE_URL and CRON_SECRET secrets must be set"; exit 1
+          fi
+          curl -fsS -X POST \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            "$SITE_URL/api/notify?type=reminder" | tee resp.json
+          echo
