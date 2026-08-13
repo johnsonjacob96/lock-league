@@ -492,6 +492,12 @@
   .side-nav-link .material-symbols-outlined { color: #6f7877; font-size: 22px; transition: color 0.15s; }
   .side-nav-link:hover .material-symbols-outlined { color: #9aa4a2; }
   .side-nav-link.active .material-symbols-outlined { color: #46e08a; }
+  /* LeagueSafe external link: money-green so it reads as the pot, not a view */
+  .ls-nav { color: #46e08a; text-decoration: none; }
+  .ls-nav .material-symbols-outlined { color: #1fd97b; }
+  .ls-nav:hover { color: #7ff0b4; background: rgba(31, 217, 123, 0.10); }
+  .ls-nav:hover .material-symbols-outlined { color: #46e08a; }
+  .ls-nav .ls-ext { font-size: 15px; margin-left: auto; opacity: 0.65; }
 
   /* Bottom mobile nav */
   .bottom-nav-link {
@@ -905,6 +911,11 @@
       <span class="material-symbols-outlined">gavel</span>
       <span>RULES</span>
     </button>
+    <a id="leaguesafe-link" class="side-nav-link ls-nav" href="#" target="_blank" rel="noopener" style="display:none">
+      <span class="material-symbols-outlined">savings</span>
+      <span>LEAGUESAFE</span>
+      <span class="material-symbols-outlined ls-ext">open_in_new</span>
+    </a>
   </nav>
   <div class="p-4">
     <button class="submit-picks-cta" id="sidebar-submit-picks">MAKE PICKS</button>
@@ -1470,6 +1481,16 @@ async function loadPot() {
   } catch { state.pot = { error: true }; }
 }
 
+// Show the persistent sidebar LeagueSafe link the moment a URL is configured,
+// so members can jump to the pot from any view — not just the Payments tab.
+function updateLeagueSafeNav() {
+  const link = document.getElementById("leaguesafe-link");
+  if (!link) return;
+  const url = state.user ? state.pot?.season_pot?.leaguesafe_url : null;
+  if (url) { link.href = url; link.style.display = ""; }
+  else link.style.display = "none";
+}
+
 function ordinal(n) {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
@@ -1616,6 +1637,7 @@ async function refreshPotCard() {
   // Config changes (banker, prize) also affect the weekly-payouts card, so
   // refresh both mounts together.
   await Promise.all([loadPot(), loadSettlement()]);
+  updateLeagueSafeNav(); // reflect a just-saved (or cleared) LeagueSafe URL in the sidebar
   if (state.view === "payments") {
     const pm = document.getElementById("pot-mount");
     if (pm) { pm.innerHTML = potCardHtml(); bindPotCard(); }
@@ -4354,6 +4376,13 @@ async function render() {
   renderTickerWeekSelect();
   renderTicker();
   renderUserArea();
+  // Load the pot config once after sign-in so the persistent LeagueSafe link can
+  // appear from any view, not only after visiting Payments.
+  if (state.user && state.pot == null && !render._potKick) {
+    render._potKick = true;
+    loadPot().then(() => { render._potKick = false; updateLeagueSafeNav(); }).catch(() => { render._potKick = false; });
+  }
+  updateLeagueSafeNav();
   if (state.view === "standings") {
     root.innerHTML = renderStandings();
     attachStandingsHandlers();
