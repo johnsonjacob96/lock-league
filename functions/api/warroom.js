@@ -153,6 +153,11 @@ export async function onRequest({ request, env, waitUntil }) {
     else if (p.result === "P") s = { status: "push", final: true, state: "post" };
     else s = livePickStatus(p, ev);
 
+    // Only surface a running score once the game is actually live/final. ESPN
+    // toggles a scheduled game's competitor score between "0" and null, which
+    // otherwise made the War Room scoreline flicker between "0-0" and the kickoff
+    // time (populate-then-clear). Pregame picks carry kickoff for a stable label.
+    const gameLive = !!ev && (ev.state === "in" || ev.state === "post");
     m.picks.push({
       bet_type: p.bet_type,
       pick_text: p.pick_text,
@@ -160,7 +165,8 @@ export async function onRequest({ request, env, waitUntil }) {
       final: !!s.final,
       state: s.state || null,
       detail: s.detail || (ev && ev.detail) || null,
-      score: ev && ev.away_score != null
+      kickoff: ev && ev.kickoff ? ev.kickoff : null,
+      score: gameLive && ev.away_score != null
         ? { away: ev.away, home: ev.home, away_score: ev.away_score, home_score: ev.home_score }
         : null,
     });

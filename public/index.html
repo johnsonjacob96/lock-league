@@ -2333,6 +2333,11 @@ function teamLogoUrl(name) {
 function teamShort(name) {
   return teamAbbr(name).toUpperCase();
 }
+// Mascot / nickname = last word of the display name ("Las Vegas Raiders" -> "Raiders").
+function teamNick(name) {
+  const w = String(name || "").trim().split(/\s+/);
+  return w[w.length - 1] || String(name || "");
+}
 // Render only the team logo (no overlaid text). On image error, swap in the abbreviation.
 function teamLogoMark(name, sizeClasses, fallbackTextClasses) {
   const abbr = teamShort(name);
@@ -4176,6 +4181,10 @@ const WR_STATUS = {
 };
 function shortPickText(t) {
   if (!t) return "";
+  // Over/Under (game total): "Arizona Cardinals / Las Vegas Raiders O45.5" ->
+  // "Cardinals / Raiders O45.5" — mascots only so it fits the card.
+  const ou = t.match(/^(.+?)\s*\/\s*(.+?)\s+([OU][\d.]+)$/);
+  if (ou) return `${teamNick(ou[1])} / ${teamNick(ou[2])} ${ou[3]}`;
   const m = t.match(/^(.+?)\s+([-+]\d.*)$/); // team + spread -> last word of team + spread
   if (m) { const w = m[1].trim().split(/\s+/); return w[w.length - 1] + " " + m[2]; }
   return t.length > 24 ? t.slice(0, 23) + "…" : t;
@@ -4184,9 +4193,17 @@ function wrChip(p) {
   const meta = BET_META[p.bet_type] || {};
   const cls = WR_STATUS[p.status] || WR_STATUS.pending;
   const live = p.state === "in" && !p.final;
-  const scoreTxt = p.score
-    ? `${teamAbbr(p.score.away)} ${p.score.away_score}-${p.score.home_score} ${teamAbbr(p.score.home)}`
-    : (p.detail || "");
+  // All-caps abbreviations (ARI 0-0 LV). Before the game is live, show a stable
+  // kickoff time instead of a phantom 0-0 that flickers as ESPN toggles the
+  // scheduled-game score between "0" and null.
+  let scoreTxt;
+  if (p.score) {
+    scoreTxt = `${teamShort(p.score.away)} ${p.score.away_score}-${p.score.home_score} ${teamShort(p.score.home)}`;
+  } else if (p.kickoff) {
+    scoreTxt = `${fmtKickoffDay(p.kickoff)} ${fmtKickoffTime(p.kickoff)}`;
+  } else {
+    scoreTxt = p.detail || "";
+  }
   return `
     <div class="wr-chip ${cls} ${live ? "is-live" : ""} ${p.final ? "is-final" : ""}">
       <span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(p.bet_type)}</span>
