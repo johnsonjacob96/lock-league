@@ -805,15 +805,28 @@
   .wr-chip { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #0e1011; border: 1px solid #23292a; border-left: 3px solid #6b7472; }
   .wr-chip .wr-bt { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
   .wr-chip .wr-pick { font-family: 'Inter', sans-serif; font-size: 13px; color: #e6e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .wr-chip .wr-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9aa4a2; white-space: nowrap; }
+  .wr-chip .wr-sub { display: inline-flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9aa4a2; white-space: nowrap; }
   .wr-chip.st-win { border-left-color: #46e08a; }
   .wr-chip.st-win .wr-pick { color: #eafff3; }
   .wr-chip.st-lose { border-left-color: #ef4444; opacity: 0.8; }
   .wr-chip.st-push { border-left-color: #f4cf5a; }
   .wr-chip.st-manual { border-left-color: #c9a0ff; }
   .wr-chip.st-pending { border-left-color: #3a423f; }
-  .wr-chip.is-live { box-shadow: inset 0 0 0 1px rgba(70, 224, 138, 0.18); }
-  .wr-chip.is-live .wr-sub { color: #46e08a; }
+  /* LIVE: outlined + a rail glow and a pulsing LIVE pill — reads as "in progress". */
+  .wr-chip.is-live { box-shadow: inset 0 0 0 1px rgba(70, 224, 138, 0.28); }
+  .wr-chip.is-live.st-lose { opacity: 1; } /* a live-losing pick can still flip; don't dim it */
+  .wr-chip.is-live .wr-sub { color: #c7cdcb; }
+  .wr-livepill { display: inline-flex; align-items: center; gap: 4px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em; color: #46e08a; border: 1px solid rgba(70, 224, 138, 0.42); border-radius: 4px; padding: 1px 5px 0; }
+  .wr-livedot { width: 5px; height: 5px; border-radius: 50%; background: #46e08a; box-shadow: 0 0 5px rgba(70, 224, 138, 0.9); animation: wrLiveDot 1.15s ease-in-out infinite; }
+  @keyframes wrLiveDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.65); } }
+  /* SETTLED: filled + a result glyph — reads as "done, graded". Won pops, lost recedes. */
+  .wr-chip.is-settled.st-win { background: linear-gradient(90deg, rgba(70, 224, 138, 0.17), rgba(70, 224, 138, 0.03)); }
+  .wr-chip.is-settled.st-lose { background: rgba(239, 68, 68, 0.06); opacity: 0.6; }
+  .wr-chip.is-settled.st-push { background: rgba(244, 207, 90, 0.09); }
+  .wr-mark { font-weight: 700; font-size: 12px; line-height: 1; }
+  .wr-mark.win { color: #46e08a; }
+  .wr-mark.lose { color: #ef4444; }
+  .wr-mark.push { color: #f4cf5a; }
   .wr-empty { color: #9aa4a2; font-family: 'Inter', sans-serif; font-size: 14px; padding: 26px 4px; max-width: 40rem; line-height: 1.5; }
   /* Picks tab: week navigator + past-week history */
   .pk-weeknav { display: inline-flex; align-items: center; gap: 8px; background: #14171a; border: 1px solid #29302f; border-radius: 10px; padding: 4px; }
@@ -4207,11 +4220,21 @@ function wrChip(p) {
   } else {
     scoreTxt = p.detail || "";
   }
+  // Make live-vs-settled scannable: a finished, graded pick gets a filled chip
+  // (see CSS) + a result glyph; a still-playing pick gets a pulsing LIVE pill.
+  const settled = p.final && (p.status === "win" || p.status === "lose" || p.status === "push");
+  let mark = "";
+  if (settled) {
+    const g = p.status === "win" ? "✓" : p.status === "lose" ? "✗" : "P";
+    mark = `<span class="wr-mark ${p.status}">${g}</span>`;
+  } else if (live) {
+    mark = `<span class="wr-livepill"><span class="wr-livedot"></span>LIVE</span>`;
+  }
   return `
-    <div class="wr-chip ${cls} ${live ? "is-live" : ""} ${p.final ? "is-final" : ""}">
+    <div class="wr-chip ${cls} ${live ? "is-live" : ""} ${settled ? "is-settled" : ""} ${p.final ? "is-final" : ""}">
       <span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(p.bet_type)}</span>
       <span class="wr-pick">${escapeHtml(shortPickText(p.pick_text))}</span>
-      <span class="wr-sub">${escapeHtml(scoreTxt)}</span>
+      <span class="wr-sub">${escapeHtml(scoreTxt)}${mark}</span>
     </div>`;
 }
 function renderRecapCard(wr) {
