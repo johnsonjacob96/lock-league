@@ -41,50 +41,6 @@ function livePickStatus(p, ev) {
   return { status: result ? map[result] : "pending", state: st, final: st === "post", detail: ev.detail };
 }
 
-// Aggregate the league's lean per game (counts only, never who-picked-what).
-// Favorite/Dog collapse onto the two sides of each spread via the team parsed
-// from pick_text (same convention the grader uses); Over/Under tally per game.
-// Exported for unit testing (Pages ignores non-handler exports at runtime).
-export function computeConsensus(picks, evLookup) {
-  const games = new Map();
-  const teamOf = (p, ev) => {
-    const m = (p.pick_text || "").match(/^(.+?)\s+[-+]\d/);
-    if (!m) return null;
-    const picked = m[1].trim();
-    if (ev) {
-      if (sameTeam(picked, ev.home)) return ev.home;
-      if (sameTeam(picked, ev.away)) return ev.away;
-    }
-    return picked;
-  };
-  for (const p of picks) {
-    if (!p.game_key) continue;
-    const ev = evLookup ? evLookup(p.game_key) : null;
-    const [awayKey, homeKey] = String(p.game_key).split("@");
-    let g = games.get(p.game_key);
-    if (!g) {
-      g = { game_key: p.game_key, away: ev?.away || awayKey, home: ev?.home || homeKey,
-            teams: new Map(), over: 0, under: 0, line: null };
-      games.set(p.game_key, g);
-    }
-    if (p.bet_type === "Favorite" || p.bet_type === "Dog") {
-      const team = teamOf(p, ev);
-      if (team) g.teams.set(team, (g.teams.get(team) || 0) + 1);
-    } else if (p.bet_type === "Over") { g.over++; if (g.line == null && p.line != null) g.line = Number(p.line); }
-    else if (p.bet_type === "Under") { g.under++; if (g.line == null && p.line != null) g.line = Number(p.line); }
-  }
-  return [...games.values()].map((g) => {
-    const spread = [...g.teams.entries()].map(([team, count]) => ({ team, count })).sort((a, b) => b.count - a.count);
-    const spreadN = spread.reduce((s, x) => s + x.count, 0);
-    const totalN = g.over + g.under;
-    return {
-      game_key: g.game_key, away: g.away, home: g.home, spread,
-      total: totalN ? { over: g.over, under: g.under, line: g.line } : null,
-      n: spreadN + totalN,
-    };
-  }).filter((g) => g.n >= 2).sort((a, b) => b.n - a.n);
-}
-
 export async function onRequest({ request, env, waitUntil }) {
   const memberId = await verifyCookie(env, request.headers.get("cookie"));
   if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
@@ -229,10 +185,7 @@ export async function onRequest({ request, env, waitUntil }) {
     recap = { complete: true, winner, tie, perfect };
   }
 
-  let consensus = [];
-  try { consensus = computeConsensus(picks.filter(pickRevealed), findEv); } catch { consensus = []; }
-
-  const data = { season: cur.season, week: cur.week, revealed: true, fetched_at: new Date().toISOString(), anyLive, members, recap, consensus };
+  const data = { season: cur.season, week: cur.week, revealed: true, fetched_at: new Date().toISOString(), anyLive, members, recap };
   cache = { ts: Date.now(), key, data };
   return json(data);
 }

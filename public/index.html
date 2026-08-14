@@ -750,23 +750,6 @@
   .mv.up { color: #46e08a; }
   .mv.down { color: #ef4444; }
 
-  /* League consensus (War Room, post-lock): how the room leaned per game */
-  .cons-wrap { margin-bottom: 18px; }
-  .cons-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-  .cons-title { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #e6e8e8; }
-  .cons-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6f7877; letter-spacing: 0.03em; }
-  .cons-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 10px; }
-  .cons-game { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px 14px; }
-  .cons-match { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; color: #e6e8e8; margin-bottom: 8px; }
-  .cons-at { color: #6f7877; font-weight: 400; }
-  .cons-market { display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 9px; margin-top: 7px; }
-  .cons-lbl { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.06em; color: #9aa4a2; text-transform: uppercase; white-space: nowrap; }
-  .cons-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
-  .cons-fill { display: block; height: 100%; background: rgba(56,189,248,0.55); border-radius: 999px; }
-  .cons-split { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9aa4a2; white-space: nowrap; text-transform: uppercase; }
-  .cons-split .lead { color: #e6e8e8; font-weight: 600; }
-  .cons-dot { color: #46504f; margin: 0 5px; }
-
   /* Notifications toggle (account modal) */
   .notif-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 2px 0 18px; }
   .notif-label { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #e6e8e8; }
@@ -4337,33 +4320,6 @@ async function shareRecap() {
   try { await navigator.clipboard.writeText(text); showToast("RECAP COPIED"); }
   catch { showToast("COULD NOT COPY", "err"); }
 }
-function consBar(pct) {
-  return `<div class="cons-bar"><span class="cons-fill" style="width:${Math.round(pct)}%"></span></div>`;
-}
-// Post-lock "how the room leaned" summary. Aggregate only (no attribution).
-function renderConsensus(wr) {
-  const c = wr && wr.consensus;
-  if (!c || !c.length) return "";
-  const games = c.map((g) => {
-    let markets = "";
-    if (g.spread && g.spread.length) {
-      const total = g.spread.reduce((s, x) => s + x.count, 0) || 1;
-      const lead = g.spread[0].count;
-      const split = g.spread
-        .map((s, i) => `<span class="${i === 0 ? "lead" : ""}">${escapeHtml(teamAbbr(s.team))} ${s.count}</span>`)
-        .join(`<span class="cons-dot">·</span>`);
-      markets += `<div class="cons-market"><span class="cons-lbl">ATS</span>${consBar(lead / total * 100)}<span class="cons-split">${split}</span></div>`;
-    }
-    if (g.total) {
-      const t = g.total, tot = (t.over + t.under) || 1, overLead = t.over >= t.under;
-      const line = t.line != null ? ` ${t.line}` : "";
-      markets += `<div class="cons-market"><span class="cons-lbl">O/U${line}</span>${consBar(Math.max(t.over, t.under) / tot * 100)}` +
-        `<span class="cons-split"><span class="${overLead ? "lead" : ""}">O ${t.over}</span><span class="cons-dot">·</span><span class="${!overLead ? "lead" : ""}">U ${t.under}</span></span></div>`;
-    }
-    return `<div class="cons-game"><div class="cons-match">${escapeHtml(teamAbbr(g.away))} <span class="cons-at">@</span> ${escapeHtml(teamAbbr(g.home))}</div>${markets}</div>`;
-  }).join("");
-  return `<div class="cons-wrap"><div class="cons-head"><span class="cons-title">League Consensus</span><span class="cons-sub">how the room leaned this week</span></div><div class="cons-grid">${games}</div></div>`;
-}
 function renderWarRoomSkeleton() {
   return `<div class="wr-wrap"><div class="wr-topbar"><div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Live board</div></div></div>
     <div class="wr-empty">Loading the live board...</div></div>`;
@@ -4425,7 +4381,7 @@ function renderWarRoom() {
         <div class="wr-picks">${orderedPicks.map(wrChip).join("")}</div>
       </div>`;
   }).join("");
-  return head(actions) + renderRecapCard(wr) + renderConsensus(wr) + `<div class="wr-grid">${rows}</div></div>`;
+  return head(actions) + renderRecapCard(wr) + `<div class="wr-grid">${rows}</div></div>`;
 }
 
 function updatePreseasonBanner() {
