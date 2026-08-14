@@ -4349,6 +4349,12 @@ function renderWarRoom() {
       ? `<span class="wr-rec is-proj">${rec}<span class="wr-rectag">proj</span></span>`
       : `<span class="wr-rec">${rec}</span>`;
     const pend = L.pending ? `<span class="wr-pend">${L.pending} open</span>` : "";
+    // Always show the card in the canonical bet-type order (Fav/Dog/Over/Under/
+    // Super Lock), not the DB/kickoff order the picks arrive in.
+    const orderedPicks = m.picks.slice().sort((a, b) => {
+      const ia = BET_TYPES_ORDER.indexOf(a.bet_type), ib = BET_TYPES_ORDER.indexOf(b.bet_type);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
     return `
       <div class="wr-card">
         <div class="wr-head">
@@ -4356,7 +4362,7 @@ function renderWarRoom() {
           <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
           <span class="wr-recwrap">${recHtml}${pend}</span>
         </div>
-        <div class="wr-picks">${m.picks.map(wrChip).join("")}</div>
+        <div class="wr-picks">${orderedPicks.map(wrChip).join("")}</div>
       </div>`;
   }).join("");
   return head(actions) + renderRecapCard(wr) + renderConsensus(wr) + `<div class="wr-grid">${rows}</div></div>`;
