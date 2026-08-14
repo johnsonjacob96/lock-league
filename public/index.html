@@ -2863,6 +2863,18 @@ function scoreFor(g) {
 
 const ODDS_CLIENT_TTL_MS = 40 * 1000; // re-fetch on view revisit after this
 const ODDS_POLL_MS = 60 * 1000;       // live line refresh while the board is open
+// Monday (MNF) games can't be picked in this league, so they never appear on the
+// board or in any picker. Weekday is computed in Central (the league's timezone)
+// so an MNF kickoff — which falls on Tuesday in UTC — is correctly read as Monday.
+function isMondayKickoff(iso) {
+  if (!iso) return false;
+  return new Date(iso).toLocaleDateString("en-US", { weekday: "short", timeZone: "America/Chicago" }) === "Mon";
+}
+function dropMondayGames(data) {
+  if (data && Array.isArray(data.games)) data.games = data.games.filter((g) => !isMondayKickoff(g.kickoff));
+  return data;
+}
+
 async function loadOdds(force = false) {
   // Serve from memory briefly; never cache a failure - the next visit to the
   // view retries instead of showing a stale error until reload. A forced load
@@ -2873,7 +2885,7 @@ async function loadOdds(force = false) {
   try {
     const r = await fetch("/api/odds" + (force ? "?fresh=1" : ""), { credentials: "include" });
     if (!r.ok) throw new Error("HTTP " + r.status);
-    state.thisWeekData = await r.json();
+    state.thisWeekData = dropMondayGames(await r.json());
     state.thisWeekFetchedAt = Date.now();
   } catch (e) {
     if (!state.thisWeekData || state.thisWeekData.source === "error") {
@@ -4095,6 +4107,7 @@ function shownBookFor(gameKey, g) {
 }
 
 function applyLiveOdds(prev, next) {
+  dropMondayGames(next); // MNF games are never pickable — keep them off the board
   state.thisWeekData = next;
   state.thisWeekFetchedAt = Date.now();
   updateBoardStatus(next);
@@ -4238,23 +4251,21 @@ function shortPickText(t) {
 function wrChip(p) {
   const meta = BET_META[p.bet_type] || {};
   const btEl = `<span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(p.bet_type)}</span>`;
-  // Every card shows all five bet-type slots. A slot the member never filled is a
-  // placeholder: an automatic loss once picks lock ("missing"), still submittable
-  // before the deadline ("open"), or submitted-but-hidden until kickoff ("locked").
+  // Every card shows all five bet-type slots. A slot without a revealed pick is a
+  // placeholder: pre-lock it "reveals at lock" (a pick shows the moment ITS game
+  // kicks off, so Thursday games appear early; the rest wait) via kind "hidden";
+  // once picks lock, an unfilled slot is an automatic loss (kind "missing").
   if (p.kind === "missing") {
     return `<div class="wr-chip st-lose is-settled is-missing">
       ${btEl}<span class="wr-pick wr-nopick">No pick</span>
       <span class="wr-sub">LOSS<span class="wr-mark lose">✗</span></span></div>`;
   }
-  if (p.kind === "locked") {
+  if (p.kind === "hidden") {
+    // Pre-lock: game not started yet, or empty. Identical either way so it never
+    // leaks whether/what a member picked for a game that hasn't kicked off.
     return `<div class="wr-chip is-empty">
-      ${btEl}<span class="wr-pick wr-nopick">Locked in</span>
+      ${btEl}<span class="wr-pick wr-nopick">Reveals at lock</span>
       <span class="wr-sub">HIDDEN</span></div>`;
-  }
-  if (p.kind === "open") {
-    return `<div class="wr-chip is-empty">
-      ${btEl}<span class="wr-pick wr-nopick">No pick yet</span>
-      <span class="wr-sub">—</span></div>`;
   }
   const cls = WR_STATUS[p.status] || WR_STATUS.pending;
   const live = p.state === "in" && !p.final;

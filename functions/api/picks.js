@@ -142,6 +142,24 @@ async function findStartedGame(picks, season, week, seasontype = 2, env = null) 
   return null;
 }
 
+// Returns the offending pick if any submitted game is a Monday (MNF) game — those
+// aren't allowed in this league. Weekday is read in Central (an MNF kickoff falls
+// on Tuesday in UTC, so a naive UTC check would miss it). The board never offers
+// them, so this is a backstop against a hand-crafted request. Uses the cached
+// scoreboard (shared with findStartedGame within the request).
+async function findMondayGame(picks, season, week, seasontype = 2, env = null) {
+  const keyed = picks.filter(p => p.game_key);
+  if (!keyed.length) return null;
+  const events = await scoreboardFor(season, week, seasontype, env);
+  for (const p of keyed) {
+    const [away, home] = String(p.game_key).split("@");
+    const ev = events.find(e => sameTeam(e.away, away) && sameTeam(e.home, home));
+    const day = ev?.kickoff && new Date(ev.kickoff).toLocaleDateString("en-US", { weekday: "short", timeZone: "America/Chicago" });
+    if (day === "Mon") return { game_key: p.game_key, kickoff: ev.kickoff };
+  }
+  return null;
+}
+
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const action = (url.searchParams.get("action") || "").toLowerCase();
@@ -361,6 +379,11 @@ export async function onRequest({ request, env }) {
     const started = await findStartedGame(picks, season, week, seasonTypeFor(env), env);
     if (started) {
       return json({ error: "game-started", ...started }, { status: 423 });
+    }
+    // Monday (MNF) games can't be picked in this league.
+    const monday = await findMondayGame(picks, season, week, seasonTypeFor(env), env);
+    if (monday) {
+      return json({ error: "monday-not-allowed", ...monday }, { status: 422 });
     }
     const lockedAt = new Date().toISOString();
     await ensureExtras(env); // alert_line column used below

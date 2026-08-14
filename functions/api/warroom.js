@@ -194,17 +194,19 @@ export async function onRequest({ request, env, waitUntil }) {
         else if (s.status === "lose") { m.live.L++; if (s.final) m.live.fL++; }
         else if (s.status === "push") { m.live.P++; if (s.final) m.live.fP++; }
         else m.live.pending++;
-      } else if (p) {
-        // Submitted, but its game hasn't kicked off yet (pre-cutoff): the pick is
-        // locked in and stays hidden until kickoff. Not counted, not a blank.
-        m.picks.push({ bet_type: bt, kind: "locked" });
       } else if (globalRevealed) {
         // Picks are locked and this slot was never filled -> an automatic loss.
+        // (If a pick existed here it would be revealed above, since the lock
+        // reveals everything, so reaching this branch means the slot is empty.)
         m.picks.push({ bet_type: bt, kind: "missing", status: "lose", final: true });
         m.live.L++; m.live.fL++;
       } else {
-        // Still submittable before the deadline -> blank/open, not a loss yet.
-        m.picks.push({ bet_type: bt, kind: "open" });
+        // Before the Sunday lock: this pick's game hasn't kicked off yet (a pick
+        // shows the instant ITS game starts, so Thursday picks appear while the
+        // rest wait), OR the slot is empty. Both render an identical placeholder,
+        // so the board never leaks whether/what a member picked for a game that
+        // hasn't started, and nothing is counted as a loss yet.
+        m.picks.push({ bet_type: bt, kind: "hidden" });
       }
     }
     byMember.set(mem.id, m);
