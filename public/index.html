@@ -796,8 +796,11 @@
   .wr-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .wr-rank { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6b7472; width: 22px; }
   .wr-name { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 18px; text-transform: uppercase; letter-spacing: 0.01em; flex: 1; }
+  .wr-recwrap { display: inline-flex; align-items: baseline; gap: 7px; }
   .wr-rec { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #e6e8e8; font-weight: 600; }
-  .wr-pend { font-size: 10px; color: #9aa4a2; letter-spacing: 0.08em; text-transform: uppercase; margin-left: 4px; }
+  .wr-rec.is-proj { color: #cdd3d1; }
+  .wr-rectag { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #f5a24a; border: 1px solid rgba(245, 162, 74, 0.45); border-radius: 4px; padding: 1px 4px 0; margin-left: 6px; position: relative; top: -1px; }
+  .wr-pend { font-size: 10px; color: #9aa4a2; letter-spacing: 0.08em; text-transform: uppercase; }
   .wr-picks { display: flex; flex-direction: column; gap: 6px; }
   .wr-chip { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: #0e1011; border: 1px solid #23292a; border-left: 3px solid #6b7472; }
   .wr-chip .wr-bt { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
@@ -4314,14 +4317,21 @@ function renderWarRoom() {
   const actions = `<div class="wr-actions">${liveTag}<button id="wr-refresh" class="wr-refresh" title="Refresh"><span class="material-symbols-outlined text-sm">refresh</span></button></div>`;
   if (!wr.members || !wr.members.length) return head(actions) + `<div class="wr-empty">No cards are locked yet. Each member's picks reveal here the moment their game kicks off.</div></div>`;
   const rows = wr.members.map((m, i) => {
-    const rec = `${m.live.W}-${m.live.L}${m.live.P ? "-" + m.live.P : ""}`;
-    const pend = m.live.pending ? `<span class="wr-pend">${m.live.pending} open</span>` : "";
+    const L = m.live;
+    const rec = `${L.W}-${L.L}${L.P ? "-" + L.P : ""}`;
+    // A result is "projected" while its game is still live: the record can still
+    // move. Once every counted game is final, the record is settled (no tag).
+    const liveDecided = (L.W - (L.fW || 0)) + (L.L - (L.fL || 0)) + (L.P - (L.fP || 0));
+    const recHtml = liveDecided > 0
+      ? `<span class="wr-rec is-proj">${rec}<span class="wr-rectag">proj</span></span>`
+      : `<span class="wr-rec">${rec}</span>`;
+    const pend = L.pending ? `<span class="wr-pend">${L.pending} open</span>` : "";
     return `
       <div class="wr-card">
         <div class="wr-head">
           <span class="wr-rank">${String(i + 1).padStart(2, "0")}</span>
           <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
-          <span class="wr-rec">${rec}${pend ? " " + pend : ""}</span>
+          <span class="wr-recwrap">${recHtml}${pend}</span>
         </div>
         <div class="wr-picks">${m.picks.map(wrChip).join("")}</div>
       </div>`;

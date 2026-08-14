@@ -142,7 +142,10 @@ export async function onRequest({ request, env, waitUntil }) {
     if (!pickRevealed(p)) continue;
     let m = byMember.get(p.member_id);
     if (!m) {
-      m = { member_id: p.member_id, name: p.name, picks: [], live: { W: 0, L: 0, P: 0, pending: 0 } };
+      // W/L/P = projected record (final + still-live results). fW/fL/fP = the
+      // portion that's actually final, so the UI can flag a record as PROJ while
+      // any counted game is still in progress.
+      m = { member_id: p.member_id, name: p.name, picks: [], live: { W: 0, L: 0, P: 0, fW: 0, fL: 0, fP: 0, pending: 0 } };
       byMember.set(p.member_id, m);
     }
     const ev = findEv(p.game_key);
@@ -171,9 +174,9 @@ export async function onRequest({ request, env, waitUntil }) {
         : null,
     });
 
-    if (s.status === "win") m.live.W++;
-    else if (s.status === "lose") m.live.L++;
-    else if (s.status === "push") m.live.P++;
+    if (s.status === "win") { m.live.W++; if (s.final) m.live.fW++; }
+    else if (s.status === "lose") { m.live.L++; if (s.final) m.live.fL++; }
+    else if (s.status === "push") { m.live.P++; if (s.final) m.live.fP++; }
     else m.live.pending++;
   }
 
