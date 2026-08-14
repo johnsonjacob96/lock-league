@@ -18,16 +18,35 @@ export function sameTeam(a, b) {
   return na === nb || na.includes(nb) || nb.includes(na);
 }
 
+// Last-good scoreboard cache, per isolate, keyed by season:week:seasontype.
+// ESPN's hosts intermittently throttle the CF colo (site.api 403s, cdn returns
+// empty bodies). Without this, a single failed poll blanked the War Room's
+// scores and flipped it out of "live" ("dropping scores / isn't live"), because
+// warroom.js swallows a throw into an empty scoreboard. Two jobs: (a) collapse
+// the burst of fetches one request triggers — the board plus the waitUntil
+// maybeGrade — into a single upstream hit; (b) serve the last scoreboard we
+// successfully fetched through a transient failure. Stale live scores beat a
+// blank board, and the seed / next good fetch refreshes it.
+const _sbCache = new Map();
+const SB_TTL_MS = 25 * 1000;
+
 export async function fetchScoreboard(season, week, seasontype = 2, env = null) {
-  let events = null;
+  const cacheKey = `${season}:${week}:${seasontype}`;
+  const cached = _sbCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < SB_TTL_MS) return cached.events;
+
+  let raw = null;
   try {
-    events = await espnScoreboardEvents(season, seasontype, week);
+    raw = await espnScoreboardEvents(season, seasontype, week);
   } catch (e) {
-    // Worker can't reach ESPN — fall back to the GitHub-seeded scoreboard.
-    if (env) events = await loadScoreboardSeed(env, season, week, seasontype);
-    if (!events) throw e;
+    // ESPN unreachable from the colo. Prefer the last good scoreboard this
+    // isolate already fetched (freshest), then the GitHub-seeded snapshot, and
+    // only then give up — so a throttle blip can't blank a live board.
+    if (cached) return cached.events;
+    if (env) raw = await loadScoreboardSeed(env, season, week, seasontype);
+    if (!raw) throw e;
   }
-  return (events || []).map((ev) => {
+  const events = (raw || []).map((ev) => {
     const comp = ev.competitions?.[0];
     const competitors = comp?.competitors || [];
     const home = competitors.find((c) => c.homeAway === "home");
@@ -45,6 +64,9 @@ export async function fetchScoreboard(season, week, seasontype = 2, env = null) 
       detail: ev.status?.type?.shortDetail || "", // e.g. "Q3 5:24" / "Final"
     };
   });
+  // Never let an empty result become the "last good" — keep any prior good one.
+  if (events.length) _sbCache.set(cacheKey, { ts: Date.now(), events });
+  return events;
 }
 
 // Fetch one game's ESPN box score (player stat lines) for prop grading.

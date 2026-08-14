@@ -108,6 +108,14 @@ export async function onRequest({ request, env, waitUntil }) {
     fetchScoreboard(cur.season, cur.week, seasonTypeFor(env), env).catch(() => []),
   ]);
 
+  // If the scoreboard came back empty (ESPN threw AND there was no cache/seed to
+  // fall back on — a cold isolate during a colo throttle), don't overwrite a
+  // previously-good board with a blank, scores-dropped, not-live one. Serve the
+  // last good board; the next poll refreshes it once the scoreboard is back.
+  if (!events.length && cache.data && cache.key === key && cache.data.revealed) {
+    return json({ ...cache.data, cached: true, stale: true });
+  }
+
   const findEv = (gameKey) => {
     if (!gameKey) return null;
     const [a, h] = gameKey.split("@");
