@@ -181,7 +181,7 @@
   }
   .marquee-track:hover { animation-play-state: paused; }
   .tk-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 20px; height: 100%; border-right: 1px solid #212725; }
-  .tk-wk { color: #6f7877; font-size: 10px; letter-spacing: 0.12em; }
+  .tk-wk { color: #868f8c; font-size: 10px; letter-spacing: 0.12em; }
   .tk-name { color: #e6e8e8; font-weight: 600; font-size: 11px; }
   .tk-type { font-size: 10px; letter-spacing: 0.08em; padding: 2px 6px; border: 1px solid #2c332f; border-radius: 4px; }
   .tk-type.fav { color: #46e08a; border-color: rgba(70,224,138,0.30); }
@@ -205,10 +205,13 @@
   }
 
   /* Heat strip cells (Standings overview) */
-  .heat-cell { width: 0.75rem; height: 1.25rem; border-radius: 2px; background: #272b2e; transition: transform 0.1s; }
-  .heat-cell.W { background: #46e08a; }
-  .heat-cell.L { background: #ef4444; }
-  .heat-cell.P { background: #f4cf5a; }
+  .heat-cell { width: 0.75rem; height: 1.25rem; border-radius: 2px; background: #272b2e; transition: transform 0.1s;
+    display: inline-flex; align-items: center; justify-content: center;
+    font: 700 7px/1 'JetBrains Mono', monospace; color: transparent; }
+  /* Non-color cue: a W/L/P glyph so win/loss reads without relying on red-vs-green */
+  .heat-cell.W { background: #46e08a; color: rgba(6,22,13,0.80); }
+  .heat-cell.L { background: #ef4444; color: rgba(30,6,6,0.85); }
+  .heat-cell.P { background: #f4cf5a; color: rgba(32,24,0,0.85); }
   .heat-cell:hover { transform: scaleY(1.3); }
 
   /* Compact heat dots (shown under member name below lg) */
@@ -227,18 +230,21 @@
     cursor: pointer;
     font-size: 10px;
     font-family: 'JetBrains Mono', monospace;
-    color: #6f7877;
+    color: #868f8c;
     transition: transform 0.1s, border-color 0.1s;
   }
   .week-cell.W { background: rgba(70, 224, 138, 0.16); color: #46e08a; border-color: rgba(70, 224, 138, 0.35); }
   .week-cell.L { background: rgba(239, 68, 68, 0.16); color: #ef4444; border-color: rgba(239, 68, 68, 0.35); }
   .week-cell.P { background: rgba(244, 207, 90, 0.14); color: #f4cf5a; border-color: rgba(244, 207, 90, 0.35); }
   .week-cell:hover { transform: scale(1.18); z-index: 5; position: relative; }
+  /* Keyboard focus rings for the click-to-expand row and the pick cells */
+  .member-row:focus-visible { outline: 2px solid #46e08a; outline-offset: -2px; }
+  .week-cell:focus-visible { outline: 2px solid #9aa4a2; outline-offset: 1px; transform: scale(1.18); z-index: 5; position: relative; }
 
   /* Member-detail popout footer (season / lifetime / lifetime-by-type) */
   .md-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 28px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #1e2422; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
   .md-bt-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-  .md-foot .md-lab, .md-bt-foot .md-lab { color: #6f7877; text-transform: uppercase; letter-spacing: 0.12em; font-size: 10px; }
+  .md-foot .md-lab, .md-bt-foot .md-lab { color: #868f8c; text-transform: uppercase; letter-spacing: 0.12em; font-size: 10px; }
   .md-foot .md-lab { margin-right: 8px; }
   .md-stat { display: inline-flex; align-items: baseline; }
   .md-val { color: #e6e8e8; font-weight: 600; }
@@ -345,7 +351,7 @@
   .pick-btn .pb-label { font-size: 9px; letter-spacing: 0.13em; color: #9aa4a2; text-transform: uppercase; font-family: 'Inter', sans-serif; font-weight: 700; }
   .pick-btn .pb-value { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--accent); font-weight: 600; line-height: 1.1; }
   .pick-btn.picked .pb-value { font-weight: 700; }
-  .pick-btn .pb-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6f7877; }
+  .pick-btn .pb-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #868f8c; }
 
   /* Pick input (Super Lock entry) */
   .pick-input {
@@ -489,7 +495,7 @@
   .side-nav-link:hover { color: #e6e8e8; background: #191c1e; }
   .side-nav-link.active { background: rgba(31, 217, 123, 0.12); color: #46e08a; box-shadow: inset 3px 0 0 #1fd97b; }
   .side-nav-link.active .material-symbols-outlined { font-variation-settings: 'FILL' 1; }
-  .side-nav-link .material-symbols-outlined { color: #6f7877; font-size: 22px; transition: color 0.15s; }
+  .side-nav-link .material-symbols-outlined { color: #868f8c; font-size: 22px; transition: color 0.15s; }
   .side-nav-link:hover .material-symbols-outlined { color: #9aa4a2; }
   .side-nav-link.active .material-symbols-outlined { color: #46e08a; }
 
@@ -591,7 +597,7 @@
   .k-fav{background:#46e08a} .k-dog{background:#38bdf8} .k-over{background:#f5a24a} .k-under{background:#22d3cf} .k-super{background:#f4cf5a}
   .slot .lp-meta, .sl-locked .lp-meta { display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
   .slot .lp-book, .sl-locked .lp-book { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:#9aa4a2; border:1px solid #2c332f; border-radius:4px; padding:1px 5px; }
-  .slot .lp-ts, .sl-locked .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#6f7877; }
+  .slot .lp-ts, .sl-locked .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#868f8c; }
 
   /* Weekly settlement ($5 to the winner) */
   .stl-you { font-family:'Inter',sans-serif; font-size:14px; color:#d4d8d7; line-height:1.4; }
@@ -604,7 +610,7 @@
   .stl-mark, .stl-undo { background:transparent; border:1px solid #29302f; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.04em; padding:8px 12px; border-radius:8px; cursor:pointer; transition:border-color 0.12s,color 0.12s; }
   .stl-mark:hover, .stl-undo:hover { border-color:#46e08a; color:#46e08a; }
   .stl-undo { padding:2px 8px; margin-left:4px; }
-  .stl-nohandle { font-family:'JetBrains Mono',monospace; font-size:11px; color:#6f7877; }
+  .stl-nohandle { font-family:'JetBrains Mono',monospace; font-size:11px; color:#868f8c; }
   .stl-payers { display:flex; flex-wrap:wrap; gap:7px; margin-top:11px; }
   .stl-payer { display:inline-flex; align-items:center; gap:6px; background:#14171a; border:1px solid #262b2a; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:11px; padding:5px 10px; border-radius:7px; cursor:pointer; transition:border-color 0.12s,color 0.12s; }
   .stl-payer .stl-dot { width:7px; height:7px; border-radius:50%; background:#4a5250; flex-shrink:0; }
@@ -619,7 +625,7 @@
   .stl-wk-head { display:flex; justify-content:space-between; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#9aa4a2; }
   .stl-wk-winner { color:#c7ccca; }
   .stl-wk-dues { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
-  .stl-chip { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 7px; border-radius:5px; background:#171b1a; border:1px solid #262b2a; color:#6f7877; }
+  .stl-chip { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 7px; border-radius:5px; background:#171b1a; border:1px solid #262b2a; color:#868f8c; }
   .stl-chip.paid { color:#46e08a; border-color:#26372c; }
   .stl-chip.me { outline:1px solid rgba(56,189,248,0.5); }
 
@@ -627,7 +633,7 @@
   .pot-card { display:flex; flex-direction:column; }
   .pot-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
   .pot-total { font-family:'Oswald','Inter',sans-serif; font-weight:600; font-size:30px; line-height:1; color:#e6e8e8; margin-top:10px; letter-spacing:-0.01em; }
-  .pot-total-sub { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:400; letter-spacing:0.03em; color:#6f7877; margin-left:9px; }
+  .pot-total-sub { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:400; letter-spacing:0.03em; color:#868f8c; margin-left:9px; }
   .pot-payout { font-family:'JetBrains Mono',monospace; font-size:12px; color:#f4cf5a; margin-top:5px; letter-spacing:0.02em; }
   .pot-deadline { font-family:'JetBrains Mono',monospace; font-size:11px; color:#9aa4a2; background:#14171a; border:1px solid #262b2a; padding:5px 9px; border-radius:7px; white-space:nowrap; }
   .pot-deadline.over { color:#f5a24a; border-color:#3a2c1c; }
@@ -642,19 +648,19 @@
   .pot-pay:hover { filter:brightness(1.08); }
   .pot-pay.ls { background:#1fd97b; color:#0e1011; }
   .pot-paid-tag { font-family:'JetBrains Mono',monospace; font-size:12px; color:#46e08a; }
-  .pot-note { font-family:'JetBrains Mono',monospace; font-size:11px; color:#6f7877; }
+  .pot-note { font-family:'JetBrains Mono',monospace; font-size:11px; color:#868f8c; }
   .pot-setup { margin-top:16px; padding:13px; background:#14171a; border:1px solid #222827; border-radius:9px; }
   .pot-setup-t { font-family:'Inter',sans-serif; font-size:13px; color:#e6e8e8; font-weight:600; }
   .pot-setup-row { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
-  .pot-setup-h { font-family:'JetBrains Mono',monospace; font-size:10px; color:#6f7877; margin-top:9px; letter-spacing:0.02em; }
+  .pot-setup-h { font-family:'JetBrains Mono',monospace; font-size:10px; color:#868f8c; margin-top:9px; letter-spacing:0.02em; }
   .pot-roster { margin-top:14px; display:flex; flex-direction:column; }
   .pot-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid #1a1f1e; }
   .pot-row:first-child { border-top:none; }
   .pot-name { font-family:'Inter',sans-serif; font-size:14px; color:#d4d8d7; }
-  .pot-tag { font-family:'JetBrains Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.06em; color:#6f7877; border:1px solid #2a302f; padding:1px 5px; border-radius:5px; margin-left:5px; }
+  .pot-tag { font-family:'JetBrains Mono',monospace; font-size:9px; text-transform:uppercase; letter-spacing:0.06em; color:#868f8c; border:1px solid #2a302f; padding:1px 5px; border-radius:5px; margin-left:5px; }
   .pot-tag.you { color:#38bdf8; border-color:rgba(56,189,248,0.4); }
   .pot-row-r { display:flex; align-items:center; gap:9px; }
-  .pot-chip { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 8px; border-radius:5px; background:#171b1a; border:1px solid #262b2a; color:#6f7877; }
+  .pot-chip { font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 8px; border-radius:5px; background:#171b1a; border:1px solid #262b2a; color:#868f8c; }
   .pot-chip.paid { color:#46e08a; border-color:#26372c; }
   .pot-chip.unpaid { color:#8a9391; }
   .pot-toggle { background:transparent; border:1px solid #29302f; color:#9aa4a2; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.04em; padding:5px 10px; border-radius:7px; cursor:pointer; transition:border-color 0.12s,color 0.12s; }
@@ -663,7 +669,7 @@
   .pot-settings summary { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em; color:#9aa4a2; cursor:pointer; }
   .pot-settings summary:hover { color:#e6e8e8; }
   .pot-set-body { display:flex; flex-direction:column; gap:6px; margin-top:11px; max-width:280px; }
-  .pot-set-l { font-family:'JetBrains Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#6f7877; margin-top:5px; }
+  .pot-set-l { font-family:'JetBrains Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:#868f8c; margin-top:5px; }
   .pot-input, .pot-select { background:#101315; border:1px solid #262a2d; color:#e6e8e8; font-family:'Inter',sans-serif; font-size:13px; padding:8px 10px; border-radius:8px; }
   .pot-input:focus, .pot-select:focus { outline:none; border-color:#46e08a; box-shadow:0 0 0 3px rgba(70,224,138,0.14); }
   .pot-btn { align-self:flex-start; margin-top:9px; background:#46e08a; color:#0e1011; border:none; font-family:'Inter',sans-serif; font-weight:700; font-size:12px; padding:8px 14px; border-radius:8px; cursor:pointer; transition:filter 0.12s; }
@@ -702,7 +708,7 @@
   .sp-count { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .sp-count-num { font-size: 40px; line-height: 1; color: #46e08a; }
   .sp-count-unit { font-size: 11px; letter-spacing: 0.16em; color: #9aa4a2; }
-  .sp-count-sub { margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; color: #6f7877; }
+  .sp-count-sub { margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; color: #868f8c; }
   .sp-tag { align-self: center; font-size: 10px; letter-spacing: 0.16em; color: #04220f; background: #1fd97b; padding: 4px 9px; border-radius: 5px; }
   .sp-ready { display: flex; align-items: center; gap: 7px; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #46e08a; }
   .sp-ready .material-symbols-outlined { font-size: 20px; }
@@ -726,7 +732,7 @@
   .sp-hint { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #9aa4a2; display: flex; align-items: center; gap: 5px; text-align: right; }
   .sp-hint b { color: #e6e8e8; font-weight: 600; }
   .sp-hint .sp-ic { font-size: 15px; vertical-align: middle; }
-  .sp-hint.sp-muted { color: #6f7877; }
+  .sp-hint.sp-muted { color: #868f8c; }
   @media (max-width: 640px) {
     .sp-count-num { font-size: 32px; }
     .sp-step { flex-wrap: wrap; }
@@ -771,7 +777,7 @@
   .wr-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .wr-livetag { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; color: #46e08a; text-transform: uppercase; }
   .wr-livetag.idle { color: #9aa4a2; }
-  .wr-refresh { background: none; border: 1px solid #29302f; border-radius: 8px; color: #9aa4a2; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+  .wr-refresh { background: none; border: 1px solid #29302f; border-radius: 8px; color: #9aa4a2; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
   .wr-refresh:hover { color: #46e08a; border-color: #46504f; }
   .wr-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
   @media (min-width: 900px) { .wr-grid { grid-template-columns: 1fr 1fr; } }
@@ -1382,7 +1388,10 @@ function renderTickerWeekSelect() {
 
 function syncNavActive() {
   document.querySelectorAll(".nav-link").forEach(b => {
-    b.classList.toggle("active", b.dataset.view === state.view);
+    const on = b.dataset.view === state.view;
+    b.classList.toggle("active", on);
+    if (on) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
   });
 }
 
@@ -1925,11 +1934,17 @@ function renderMemberRow(r, i, season, movement) {
     if (losses > wins) return "L";
     return "P";
   });
-  const heat = heatCls.map(c => `<div class="heat-cell ${c}"></div>`).join("");
-  const heatMini = heatCls.map(c => `<div class="heat-dot ${c}"></div>`).join("");
+  const HEAT_LBL = { W: "winning week", L: "losing week", P: "even week" };
+  const heat = heatCls.map((c, wi) => {
+    if (!c) return `<div class="heat-cell" aria-hidden="true"></div>`;
+    return `<div class="heat-cell ${c}" role="img" aria-label="Week ${wi + 1} ${HEAT_LBL[c]}" title="Wk ${String(wi + 1).padStart(2, "0")} · ${HEAT_LBL[c]}">${c}</div>`;
+  }).join("");
+  const heatMini = heatCls.map((c, wi) => c
+    ? `<div class="heat-dot ${c}" role="img" aria-label="Week ${wi + 1} ${HEAT_LBL[c]}"></div>`
+    : `<div class="heat-dot" aria-hidden="true"></div>`).join("");
 
   return `
-    <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : mine ? "row-you" : ""}" data-name="${escapeHtml(r.name)}">
+    <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : mine ? "row-you" : ""}" data-name="${escapeHtml(r.name)}" tabindex="0" role="button" aria-expanded="${isExp}" aria-label="${escapeHtml(r.name)}, rank ${i + 1}, record ${r.seasonRec.w} and ${r.seasonRec.l}. Show weekly breakdown.">
       <td class="px-4 md:px-6 py-5 font-bold ${isTop ? "text-primary-fixed" : mine ? "rank-you" : "text-on-surface-variant"}"><span class="inline-flex items-center gap-1.5">${i + 1}${move}</span></td>
       <td class="px-4 md:px-6 py-5">
         <div class="flex items-center gap-2">
@@ -1983,14 +1998,17 @@ function renderMemberDetail(r) {
   const rows = BET_TYPES_ORDER.map(bt => {
     const info = md?.byType?.[bt];
     if (!info) return "";
+    const isSuper = bt === "Super Lock";
+    const RES_LBL = { W: "win", L: "loss", P: "push" };
     const cells = Array.from({ length: WEEK_COUNT }, (_, i) => {
       const wk = i + 1;
       const pick = info.picks?.[wk];
-      const cls = pick?.result || "";
-      const safe = (pick?.text || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-      return `<div class="week-cell ${cls}" data-week="${wk}" data-bet="${bt}" data-text="${safe}" data-result="${pick?.result || ""}">${pick?.result || ""}</div>`;
+      if (!pick) return `<div class="week-cell" aria-hidden="true"></div>`;
+      const cls = pick.result || "";
+      const safe = (pick.text || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      const alab = `${isSuper ? "Super Lock" : bt}, week ${wk}: ${safe || "no pick"}, ${RES_LBL[pick.result] || "not graded"}`;
+      return `<div class="week-cell ${cls}" tabindex="0" aria-label="${alab}" data-week="${wk}" data-bet="${bt}" data-text="${safe}" data-result="${pick.result || ""}">${pick.result || ""}</div>`;
     }).join("");
-    const isSuper = bt === "Super Lock";
     return `
       <div class="flex items-center gap-4 py-1.5">
         <div class="w-24 font-label-caps text-[11px] uppercase ${isSuper ? "text-tertiary-fixed" : "text-on-surface-variant"}">${isSuper ? "Super Lock" : bt}</div>
@@ -4351,9 +4369,9 @@ function renderWarRoom() {
   }
   const anyPending = (wr.members || []).some((m) => m.live.pending > 0);
   const liveTag = wr.anyLive
-    ? `<span class="wr-livetag"><span class="live-dot"></span>LIVE</span>`
-    : `<span class="wr-livetag idle"><span class="idle-dot"></span>${anyPending ? "PREGAME" : "FINAL"}</span>`;
-  const actions = `<div class="wr-actions">${liveTag}<button id="wr-refresh" class="wr-refresh" title="Refresh"><span class="material-symbols-outlined text-sm">refresh</span></button></div>`;
+    ? `<span class="wr-livetag" role="status" aria-live="polite"><span class="live-dot"></span>LIVE</span>`
+    : `<span class="wr-livetag idle" role="status" aria-live="polite"><span class="idle-dot"></span>${anyPending ? "PREGAME" : "FINAL"}</span>`;
+  const actions = `<div class="wr-actions">${liveTag}<button id="wr-refresh" class="wr-refresh" aria-label="Refresh war room" title="Refresh"><span class="material-symbols-outlined text-sm">refresh</span></button></div>`;
   if (!wr.members || !wr.members.length) return head(actions) + `<div class="wr-empty">No cards are locked yet. Each member's picks reveal here the moment their game kicks off.</div></div>`;
   const rows = wr.members.map((m, i) => {
     const L = m.live;
@@ -4505,10 +4523,15 @@ async function render() {
 
 function attachStandingsHandlers() {
   document.querySelectorAll(".member-row").forEach(row => {
-    row.addEventListener("click", () => {
+    const toggle = () => {
       const name = row.dataset.name;
       state.expanded = state.expanded === name ? null : name;
       render();
+    };
+    row.addEventListener("click", toggle);
+    // Keyboard: the row is role=button, so Enter/Space must activate it.
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
     });
   });
   const tt = document.getElementById("tooltip");
@@ -4530,6 +4553,17 @@ function attachStandingsHandlers() {
       if (tt._pin) return;
       if (fillTooltip(cell)) tt.classList.add("show");
     });
+    // Keyboard focus shows the same tooltip (aria-label already carries the info).
+    cell.addEventListener("focus", () => {
+      if (!fillTooltip(cell)) return;
+      tt.classList.add("show");
+      const cr = cell.getBoundingClientRect(), r = tt.getBoundingClientRect();
+      let x = cr.left, y = cr.bottom + 8;
+      if (x + r.width > window.innerWidth - 8) x = window.innerWidth - r.width - 8;
+      if (y + r.height > window.innerHeight - 8) y = cr.top - r.height - 8;
+      tt.style.left = Math.max(8, x) + "px"; tt.style.top = Math.max(8, y) + "px";
+    });
+    cell.addEventListener("blur", () => { if (tt._pin !== cell) tt.classList.remove("show"); });
     cell.addEventListener("mousemove", (e) => {
       if (tt._pin) return;
       const pad = 14;
@@ -4563,6 +4597,23 @@ function attachStandingsHandlers() {
     attachStandingsHandlers._dismissBound = true;
   }
 }
+
+// Material Symbols render their name as ligature text, which screen readers
+// otherwise announce ("leaderboard STANDINGS"). They're decorative — the visible
+// label or the button's aria-label carries the meaning — so hide every icon glyph.
+// Sweep the static markup now and watch for icons added by later re-renders.
+(function hideDecorativeIcons() {
+  const hide = (root) => root.querySelectorAll?.(".material-symbols-outlined:not([aria-hidden])")
+    .forEach(el => el.setAttribute("aria-hidden", "true"));
+  hide(document);
+  new MutationObserver((muts) => {
+    for (const m of muts) for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      if (n.classList?.contains("material-symbols-outlined")) n.setAttribute("aria-hidden", "true");
+      hide(n);
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+})();
 
 // Nav click handlers
 document.querySelectorAll(".nav-link[data-view]").forEach(btn => {
