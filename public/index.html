@@ -1106,7 +1106,31 @@ function mergeLiveSeason(rows) {
     const bt = m[p.bet_type] || (m[p.bet_type] = {});
     bt[p.week] = { text: p.pick_text || "", result: p.result || "" };
   }
-  const names = Object.keys(byMember).length ? Object.keys(byMember).sort() : MEMBERS_ALL.slice();
+  const names = [...new Set([...MEMBERS_ALL, ...Object.keys(byMember)])].sort();
+
+  // An unfilled bet type is an automatic loss once that week's picks lock. Inject
+  // a synthetic loss for every (member, bet type) with no pick in a locked week
+  // the league actually contested, so all downstream records — weekly winners,
+  // standings, lifetime — count it uniformly (they all derive from these picks).
+  // A week locks at its cutoff: only weeks before the current one, or the current
+  // one once its cutoff has passed, are locked, so future weeks aren't penalized.
+  const cur = currentNflWeekClient();
+  const curLocked = !!(state.serverConfig && state.serverConfig.cutoff && Date.now() >= Date.parse(state.serverConfig.cutoff));
+  const isLocked = (wk) => !!cur.week && (wk < cur.week || (wk === cur.week && curLocked));
+  const contested = new Set();
+  for (const nm of Object.keys(byMember))
+    for (const bt of BET_TYPES_ORDER)
+      for (const wk of Object.keys(byMember[nm][bt] || {})) contested.add(Number(wk));
+  for (const wk of contested) {
+    if (!isLocked(wk)) continue;
+    for (const name of names) {
+      const m = byMember[name] || (byMember[name] = {});
+      for (const bt of BET_TYPES_ORDER) {
+        const slot = m[bt] || (m[bt] = {});
+        if (!slot[wk]) slot[wk] = { text: "", result: "L", missing: true };
+      }
+    }
+  }
 
   // Provisional weekly winners: unique best W (fewest L breaks ties) among
   // graded picks. Ties stay open - no winner shown for that week.
@@ -3425,11 +3449,13 @@ function histChip(bt, p) {
   const res = p && p.result;
   const status = res === "W" ? "win" : res === "L" ? "lose" : res === "P" ? "push"
     : (bt === "Super Lock" && p && !(p.prop_meta || p.prop) ? "manual" : "pending");
-  const txt = p && (p.pick_text || p.text) ? shortPickText(p.pick_text || p.text) : "—";
-  const sub = res || (p ? "" : "no pick");
-  return `<div class="wr-chip ${WR_STATUS[status] || WR_STATUS.pending}">
+  // An unfilled slot that locked (missing) is a loss — label it clearly.
+  const missing = p && p.missing;
+  const txt = missing ? "No pick" : (p && (p.pick_text || p.text) ? shortPickText(p.pick_text || p.text) : "—");
+  const sub = missing ? "LOSS" : (res || (p ? "" : "no pick"));
+  return `<div class="wr-chip ${WR_STATUS[status] || WR_STATUS.pending} ${missing ? "is-missing" : ""}">
     <span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(bt)}</span>
-    <span class="wr-pick">${escapeHtml(txt)}</span>
+    <span class="wr-pick ${missing ? "wr-nopick" : ""}">${escapeHtml(txt)}</span>
     <span class="wr-sub">${escapeHtml(sub)}</span>
   </div>`;
 }
