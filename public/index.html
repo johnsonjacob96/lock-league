@@ -827,6 +827,10 @@
   .wr-mark.win { color: #46e08a; }
   .wr-mark.lose { color: #ef4444; }
   .wr-mark.push { color: #f4cf5a; }
+  /* Placeholder slots so every card shows all five bet types. */
+  .wr-chip.is-missing .wr-sub { color: #ef4444; font-weight: 700; letter-spacing: 0.1em; }
+  .wr-chip.is-empty { border-left-color: #333b3a; border-style: dashed; background: repeating-linear-gradient(135deg, rgba(255,255,255,0.012) 0 6px, transparent 6px 12px); opacity: 0.72; }
+  .wr-nopick { font-style: italic; color: #6b7472; }
   .wr-empty { color: #9aa4a2; font-family: 'Inter', sans-serif; font-size: 14px; padding: 26px 4px; max-width: 40rem; line-height: 1.5; }
   /* Picks tab: week navigator + past-week history */
   .pk-weeknav { display: inline-flex; align-items: center; gap: 8px; background: #14171a; border: 1px solid #29302f; border-radius: 10px; padding: 4px; }
@@ -4207,6 +4211,25 @@ function shortPickText(t) {
 }
 function wrChip(p) {
   const meta = BET_META[p.bet_type] || {};
+  const btEl = `<span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(p.bet_type)}</span>`;
+  // Every card shows all five bet-type slots. A slot the member never filled is a
+  // placeholder: an automatic loss once picks lock ("missing"), still submittable
+  // before the deadline ("open"), or submitted-but-hidden until kickoff ("locked").
+  if (p.kind === "missing") {
+    return `<div class="wr-chip st-lose is-settled is-missing">
+      ${btEl}<span class="wr-pick wr-nopick">No pick</span>
+      <span class="wr-sub">LOSS<span class="wr-mark lose">✗</span></span></div>`;
+  }
+  if (p.kind === "locked") {
+    return `<div class="wr-chip is-empty">
+      ${btEl}<span class="wr-pick wr-nopick">Locked in</span>
+      <span class="wr-sub">HIDDEN</span></div>`;
+  }
+  if (p.kind === "open") {
+    return `<div class="wr-chip is-empty">
+      ${btEl}<span class="wr-pick wr-nopick">No pick yet</span>
+      <span class="wr-sub">—</span></div>`;
+  }
   const cls = WR_STATUS[p.status] || WR_STATUS.pending;
   const live = p.state === "in" && !p.final;
   // All-caps abbreviations (ARI 0-0 LV). Before the game is live, show a stable
@@ -4232,7 +4255,7 @@ function wrChip(p) {
   }
   return `
     <div class="wr-chip ${cls} ${live ? "is-live" : ""} ${settled ? "is-settled" : ""} ${p.final ? "is-final" : ""}">
-      <span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(p.bet_type)}</span>
+      ${btEl}
       <span class="wr-pick">${escapeHtml(shortPickText(p.pick_text))}</span>
       <span class="wr-sub">${escapeHtml(scoreTxt)}${mark}</span>
     </div>`;

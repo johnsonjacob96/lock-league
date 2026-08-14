@@ -10,6 +10,10 @@ import { sql } from "../_shared/db.js";
 const TTL_MS = 40 * 1000;
 let cache = { ts: 0, key: "", data: null };
 
+// A full card is one pick of each type. Cards always render all five slots in
+// this order; a slot a member never filled is an automatic loss once picks lock.
+const BET_TYPES_ORDER = ["Favorite", "Dog", "Over", "Under", "Super Lock"];
+
 const safeJson = (s) => { try { return typeof s === "string" ? JSON.parse(s) : s; } catch { return null; } };
 
 // Live standing of one pick against the (possibly in-progress) game.
@@ -99,13 +103,14 @@ export async function onRequest({ request, env, waitUntil }) {
     return json({ ...cache.data, cached: true });
   }
 
-  const [picks, events] = await Promise.all([
+  const [picks, events, roster] = await Promise.all([
     sql(env)`
       SELECT p.member_id, m.name, p.bet_type, p.pick_text, p.game_key, p.side, p.line, p.result, p.prop_meta
       FROM picks p JOIN members m ON m.id = p.member_id
       WHERE p.season = ${cur.season} AND p.week = ${cur.week}
       ORDER BY m.name`,
     fetchScoreboard(cur.season, cur.week, seasonTypeFor(env), env).catch(() => []),
+    sql(env)`SELECT id, name FROM members ORDER BY name`,
   ]);
 
   // If the scoreboard came back empty (ESPN threw AND there was no cache/seed to
@@ -145,47 +150,64 @@ export async function onRequest({ request, env, waitUntil }) {
   // weekly cutoff has passed). Super Locks with no game tie only reveal at cutoff.
   const pickRevealed = (p) => globalRevealed || started(findEv(p.game_key));
 
-  const byMember = new Map();
+  // Index every submitted pick by member + bet type, so each card can render all
+  // five slots (a blank where a member didn't pick) in the canonical order.
+  const submitted = new Map(); // member_id -> { [bet_type]: pickRow }
   for (const p of picks) {
-    if (!pickRevealed(p)) continue;
-    let m = byMember.get(p.member_id);
-    if (!m) {
-      // W/L/P = projected record (final + still-live results). fW/fL/fP = the
-      // portion that's actually final, so the UI can flag a record as PROJ while
-      // any counted game is still in progress.
-      m = { member_id: p.member_id, name: p.name, picks: [], live: { W: 0, L: 0, P: 0, fW: 0, fL: 0, fP: 0, pending: 0 } };
-      byMember.set(p.member_id, m);
+    let e = submitted.get(p.member_id);
+    if (!e) { e = {}; submitted.set(p.member_id, e); }
+    e[p.bet_type] = p;
+  }
+
+  const byMember = new Map();
+  for (const mem of roster) {
+    // W/L/P = projected record (final + still-live results). fW/fL/fP = the
+    // portion that's actually final, so the UI can flag a record as PROJ while
+    // any counted game is still in progress.
+    const m = { member_id: mem.id, name: mem.name, picks: [],
+      live: { W: 0, L: 0, P: 0, fW: 0, fL: 0, fP: 0, pending: 0 } };
+    const byType = submitted.get(mem.id) || {};
+    for (const bt of BET_TYPES_ORDER) {
+      const p = byType[bt];
+      if (p && pickRevealed(p)) {
+        const ev = findEv(p.game_key);
+        // Trust a stored result if already graded; otherwise compute live.
+        let s;
+        if (p.result === "W") s = { status: "win", final: true, state: "post" };
+        else if (p.result === "L") s = { status: "lose", final: true, state: "post" };
+        else if (p.result === "P") s = { status: "push", final: true, state: "post" };
+        else s = livePickStatus(p, ev);
+        // Only surface a running score once the game is actually live/final. ESPN
+        // toggles a scheduled game's competitor score between "0" and null, which
+        // otherwise made the scoreline flicker between "0-0" and the kickoff time.
+        const gameLive = !!ev && (ev.state === "in" || ev.state === "post");
+        m.picks.push({
+          bet_type: bt, kind: "pick", pick_text: p.pick_text,
+          status: s.status, final: !!s.final, state: s.state || null,
+          detail: s.detail || (ev && ev.detail) || null,
+          kickoff: ev && ev.kickoff ? ev.kickoff : null,
+          score: gameLive && ev.away_score != null
+            ? { away: ev.away, home: ev.home, away_score: ev.away_score, home_score: ev.home_score }
+            : null,
+        });
+        if (s.status === "win") { m.live.W++; if (s.final) m.live.fW++; }
+        else if (s.status === "lose") { m.live.L++; if (s.final) m.live.fL++; }
+        else if (s.status === "push") { m.live.P++; if (s.final) m.live.fP++; }
+        else m.live.pending++;
+      } else if (p) {
+        // Submitted, but its game hasn't kicked off yet (pre-cutoff): the pick is
+        // locked in and stays hidden until kickoff. Not counted, not a blank.
+        m.picks.push({ bet_type: bt, kind: "locked" });
+      } else if (globalRevealed) {
+        // Picks are locked and this slot was never filled -> an automatic loss.
+        m.picks.push({ bet_type: bt, kind: "missing", status: "lose", final: true });
+        m.live.L++; m.live.fL++;
+      } else {
+        // Still submittable before the deadline -> blank/open, not a loss yet.
+        m.picks.push({ bet_type: bt, kind: "open" });
+      }
     }
-    const ev = findEv(p.game_key);
-    // Trust a stored result if already graded; otherwise compute live.
-    let s;
-    if (p.result === "W") s = { status: "win", final: true, state: "post" };
-    else if (p.result === "L") s = { status: "lose", final: true, state: "post" };
-    else if (p.result === "P") s = { status: "push", final: true, state: "post" };
-    else s = livePickStatus(p, ev);
-
-    // Only surface a running score once the game is actually live/final. ESPN
-    // toggles a scheduled game's competitor score between "0" and null, which
-    // otherwise made the War Room scoreline flicker between "0-0" and the kickoff
-    // time (populate-then-clear). Pregame picks carry kickoff for a stable label.
-    const gameLive = !!ev && (ev.state === "in" || ev.state === "post");
-    m.picks.push({
-      bet_type: p.bet_type,
-      pick_text: p.pick_text,
-      status: s.status,
-      final: !!s.final,
-      state: s.state || null,
-      detail: s.detail || (ev && ev.detail) || null,
-      kickoff: ev && ev.kickoff ? ev.kickoff : null,
-      score: gameLive && ev.away_score != null
-        ? { away: ev.away, home: ev.home, away_score: ev.away_score, home_score: ev.home_score }
-        : null,
-    });
-
-    if (s.status === "win") { m.live.W++; if (s.final) m.live.fW++; }
-    else if (s.status === "lose") { m.live.L++; if (s.final) m.live.fL++; }
-    else if (s.status === "push") { m.live.P++; if (s.final) m.live.fP++; }
-    else m.live.pending++;
+    byMember.set(mem.id, m);
   }
 
   const members = [...byMember.values()].sort(
