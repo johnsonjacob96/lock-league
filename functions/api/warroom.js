@@ -139,6 +139,7 @@ export async function onRequest({ request, env, waitUntil }) {
         const gameLive = !!ev && (ev.state === "in" || ev.state === "post");
         m.picks.push({
           bet_type: bt, kind: "pick", pick_text: p.pick_text,
+          game_key: p.game_key || null, // lets the client open the live game drill-down
           status: s.status, final: !!s.final, state: s.state || null,
           detail: s.detail || (ev && ev.detail) || null,
           kickoff: ev && ev.kickoff ? ev.kickoff : null,

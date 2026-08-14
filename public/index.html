@@ -821,6 +821,36 @@
   .wr-chip.is-empty { border-left-color: #333b3a; border-style: dashed; background: repeating-linear-gradient(135deg, rgba(255,255,255,0.012) 0 6px, transparent 6px 12px); opacity: 0.72; }
   .wr-nopick { font-style: italic; color: #6b7472; }
   .wr-empty { color: #9aa4a2; font-family: 'Inter', sans-serif; font-size: 14px; padding: 26px 4px; max-width: 40rem; line-height: 1.5; }
+
+  /* War Room pick -> live game drill-down (lazy, one open at a time) */
+  button.wr-chip { width: 100%; font: inherit; text-align: left; }
+  .wr-chip.expandable { cursor: pointer; }
+  .wr-chip.expandable:hover { border-color: #33403a; background: #12161a; }
+  .wr-chip.expandable:focus-visible { outline: 2px solid #46e08a; outline-offset: 1px; }
+  .wr-chev { margin-left: 5px; color: #6b7472; font-size: 9px; display: inline-block; transition: transform 0.15s; }
+  .wr-chip[aria-expanded="true"] .wr-chev { transform: rotate(180deg); color: #9aa4a2; }
+  .wr-detail { margin: -2px 0 8px; padding: 12px 14px; background: #0b0d0e; border: 1px solid #23292a; border-radius: 10px; }
+  .wrg-loading { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #868f8c; letter-spacing: 0.04em; padding: 4px 0; }
+  .wrg-empty { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #868f8c; }
+  .wrg-score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+  .wrg-team { display: flex; align-items: center; gap: 9px; }
+  .wrg-team.home { justify-content: flex-end; }
+  .wrg-abbr { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.04em; color: #cfd4d3; }
+  .wrg-pts { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 22px; color: #f2f4f3; font-variant-numeric: tabular-nums; }
+  .wrg-status { text-align: center; }
+  .wrg-pill { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  .wrg-pill.live { color: #46e08a; background: rgba(70,224,138,0.12); }
+  .wrg-pill.final { color: #9aa4a2; background: rgba(255,255,255,0.05); }
+  .wrg-pill.pre { color: #9aa4a2; background: rgba(255,255,255,0.04); }
+  .wrg-sit { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #868f8c; margin-top: 5px; }
+  .wrg-track { margin-top: 10px; padding-top: 9px; border-top: 1px solid #1a1f20; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #c7cdcb; letter-spacing: 0.02em; }
+  .wrg-leaders { margin-top: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; }
+  .wrg-lteam { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: #6b7472; text-transform: uppercase; margin-bottom: 5px; }
+  .wrg-lrow { display: grid; grid-template-columns: 32px 1fr auto; align-items: baseline; gap: 8px; padding: 2px 0; }
+  .wrg-cat { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; letter-spacing: 0.06em; color: #6b7472; }
+  .wrg-name { font-family: 'Inter', sans-serif; font-size: 11px; color: #e6e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wrg-line { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9aa4a2; white-space: nowrap; }
+  @media (max-width: 640px) { .wrg-leaders { grid-template-columns: 1fr; gap: 8px; } }
   /* Picks tab: week navigator + past-week history */
   .pk-weeknav { display: inline-flex; align-items: center; gap: 8px; background: #14171a; border: 1px solid #29302f; border-radius: 10px; padding: 4px; }
   .pk-wk-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 7px; background: transparent; border: none; color: #c7cdcb; cursor: pointer; transition: all .12s; }
@@ -1039,6 +1069,8 @@ let state = {
   picksWeek: null,      // Picks tab: selected week (defaults to current on entry)
   picksHistory: null,   // { week, picks } for a past-week view
   warRoom: null,
+  wrExpanded: null,     // War Room: which pick's live game drill-down is open ("<member_id>:<bet_type>")
+  wrExpandedKey: null,  // its game_key, so the poll can refresh the open game
   serverConfig: null,
   settlement: null,
   pot: null,
@@ -4226,6 +4258,8 @@ function startWarRoomPoll() {
     const before = JSON.stringify(state.warRoom || null);
     await loadWarRoom();
     if (state.view === "warroom" && JSON.stringify(state.warRoom || null) !== before) rerenderWarRoom();
+    // Keep an open game drill-down fresh (refetch past its 20s cache).
+    if (state.view === "warroom" && state.wrExpandedKey) loadWrGame(state.wrExpandedKey, { force: true });
   }, 45000);
 }
 function attachWarRoomHandlers() {
@@ -4235,6 +4269,17 @@ function attachWarRoomHandlers() {
   if (signin) signin.onclick = openLogin;
   const share = document.getElementById("wr-share");
   if (share) share.onclick = shareRecap;
+  // Expandable pick chips (native <button>, so Enter/Space work for free).
+  document.querySelectorAll(".wr-chip.expandable").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const id = chip.dataset.exp, key = chip.dataset.key;
+      const opening = state.wrExpanded !== id;
+      state.wrExpanded = opening ? id : null;
+      state.wrExpandedKey = opening ? key : null;
+      rerenderWarRoom();
+      if (opening) loadWrGame(key);
+    });
+  });
 }
 const WR_STATUS = {
   win: "st-win", lose: "st-lose", push: "st-push", manual: "st-manual", pending: "st-pending",
@@ -4249,7 +4294,7 @@ function shortPickText(t) {
   if (m) { const w = m[1].trim().split(/\s+/); return w[w.length - 1] + " " + m[2]; }
   return t.length > 24 ? t.slice(0, 23) + "…" : t;
 }
-function wrChip(p) {
+function wrChip(p, ctx) {
   const meta = BET_META[p.bet_type] || {};
   const btEl = `<span class="wr-bt" style="color:${meta.color || "#9aa4a2"}">${btShort(p.bet_type)}</span>`;
   // Every card shows all five bet-type slots. A slot without a revealed pick is a
@@ -4291,12 +4336,104 @@ function wrChip(p) {
   } else if (live) {
     mark = `<span class="wr-livepill"><span class="wr-livedot"></span>LIVE</span>`;
   }
-  return `
-    <div class="wr-chip ${cls} ${live ? "is-live" : ""} ${settled ? "is-settled" : ""} ${p.final ? "is-final" : ""}">
-      ${btEl}
+  // A revealed pick tied to a game opens a live drill-down (score/clock + player
+  // stats). Free-text Super Locks with no game_key stay static.
+  const canExpand = !!(ctx && p.game_key);
+  const expId = canExpand ? `${ctx.member_id}:${p.bet_type}` : null;
+  const isExp = expId && state.wrExpanded === expId;
+  const chev = canExpand ? `<span class="wr-chev" aria-hidden="true">▾</span>` : "";
+  const stateCls = `${cls} ${live ? "is-live" : ""} ${settled ? "is-settled" : ""} ${p.final ? "is-final" : ""}`;
+  const inner = `${btEl}
       <span class="wr-pick">${escapeHtml(shortPickText(p.pick_text))}</span>
-      <span class="wr-sub">${escapeHtml(scoreTxt)}${mark}</span>
-    </div>`;
+      <span class="wr-sub">${escapeHtml(scoreTxt)}${mark}${chev}</span>`;
+  if (canExpand) {
+    return `<button type="button" class="wr-chip ${stateCls} expandable" data-exp="${expId}" data-key="${escapeHtml(p.game_key)}" aria-expanded="${isExp ? "true" : "false"}">${inner}</button>`;
+  }
+  return `<div class="wr-chip ${stateCls}">${inner}</div>`;
+}
+
+// --- War Room live game drill-down (lazy-loaded via /api/game) ---
+const wrGameCache = {};    // game_key -> { ts, data }
+const wrGameInflight = {}; // game_key -> bool
+async function loadWrGame(key, { force = false } = {}) {
+  if (!key) return;
+  const c = wrGameCache[key];
+  if (!force && c && Date.now() - c.ts < 20000) return; // fresh; current render already shows it
+  if (wrGameInflight[key]) return;
+  wrGameInflight[key] = true;
+  try {
+    const r = await fetch(`/api/game?key=${encodeURIComponent(key)}`, { credentials: "include" });
+    wrGameCache[key] = { ts: Date.now(), data: r.ok ? await r.json() : { found: false } };
+  } catch {
+    wrGameCache[key] = { ts: Date.now(), data: { found: false } };
+  } finally {
+    wrGameInflight[key] = false;
+  }
+  if (state.view === "warroom") rerenderWarRoom();
+}
+// How the member's pick is tracking against the live score (context, not grading).
+function wrPickTrack(p, d) {
+  if (!d || !d.away || d.away.score == null || d.home.score == null) return "";
+  const a = d.away.score, h = d.home.score, txt = p.pick_text || "", bt = p.bet_type;
+  try {
+    if (bt === "Over" || bt === "Under") {
+      const m = txt.match(/([OU])\s*([\d.]+)/i);
+      const line = m ? parseFloat(m[2]) : NaN;
+      const total = a + h;
+      if (Number.isNaN(line)) return `${total} total points`;
+      const diff = Math.round((total - line) * 10) / 10;
+      if (bt === "Over") return diff >= 0 ? `${total} pts — Over ${line} cashed (+${diff})` : `${total} pts — Over ${line} needs ${Math.abs(diff)} more`;
+      return diff <= 0 ? `${total} pts — Under ${line} good by ${Math.abs(diff)}` : `${total} pts — Under ${line} down by ${diff}`;
+    }
+    if (bt === "Favorite" || bt === "Dog") {
+      const m = txt.match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?)/);
+      if (!m) return "";
+      const team = m[1].trim(), line = parseFloat(m[2]);
+      const pickedHome = sameTeamName(team, d.home.name), pickedAway = sameTeamName(team, d.away.name);
+      if (pickedHome === pickedAway) return "";
+      const margin = pickedHome ? h - a : a - h;
+      const cover = Math.round((margin + line) * 10) / 10; // line carries its own sign
+      const swing = `${teamNick(team)} ${margin >= 0 ? "up" : "down"} ${Math.abs(margin)}`;
+      if (cover > 0) return `${swing} — covering by ${cover}`;
+      if (cover < 0) return `${swing} — short by ${Math.abs(cover)}`;
+      return `${swing} — on the number`;
+    }
+  } catch { /* fall through */ }
+  return "";
+}
+function wrGamePanel(p) {
+  const key = p.game_key;
+  const c = key && wrGameCache[key];
+  if (!c) return `<div class="wr-detail"><div class="wrg-loading">Loading live game…</div></div>`;
+  const d = c.data;
+  if (!d || !d.found) return `<div class="wr-detail"><div class="wrg-empty">Live detail isn't available for this game yet.</div></div>`;
+  const aAbbr = teamShort(d.away.name), hAbbr = teamShort(d.home.name);
+  const live = d.state === "in", post = d.state === "post";
+  const aS = d.away.score == null ? "–" : d.away.score, hS = d.home.score == null ? "–" : d.home.score;
+  const pill = live ? `<span class="wrg-pill live">${escapeHtml(d.detail || "LIVE")}</span>`
+    : post ? `<span class="wrg-pill final">Final</span>`
+    : `<span class="wrg-pill pre">${d.kickoff ? escapeHtml(`${fmtKickoffDay(d.kickoff)} ${fmtKickoffTime(d.kickoff)}`) : "Scheduled"}</span>`;
+  const atom = `${aAbbr} ${aS}, ${hAbbr} ${hS}${live && d.detail ? `, ${d.detail}` : post ? ", final" : ""}`;
+  const sit = live && d.situation ? `<div class="wrg-sit">${escapeHtml(d.situation)}</div>` : "";
+  const track = wrPickTrack(p, d);
+  const trackEl = track ? `<div class="wrg-track">${escapeHtml(track)}</div>` : "";
+  const cols = (d.leaders || []).slice(0, 2).map((g) => `
+      <div class="wrg-lcol">
+        <div class="wrg-lteam">${escapeHtml(g.team || "")}</div>
+        ${(g.rows || []).map((r) => `<div class="wrg-lrow"><span class="wrg-cat">${escapeHtml(r.cat)}</span><span class="wrg-name">${escapeHtml(r.name)}</span><span class="wrg-line">${escapeHtml(r.line)}</span></div>`).join("")}
+      </div>`).join("");
+  const leadersEl = cols
+    ? `<div class="wrg-leaders">${cols}</div>`
+    : (live || post ? `<div class="wrg-empty" style="margin-top:10px">Player stats not posted yet.</div>` : "");
+  return `<div class="wr-detail">
+    <div class="wrg-score" role="status" aria-atomic="true" aria-label="${escapeHtml(atom)}">
+      <div class="wrg-team away"><span class="wrg-abbr">${escapeHtml(aAbbr)}</span><span class="wrg-pts">${aS}</span></div>
+      <div class="wrg-status">${pill}${sit}</div>
+      <div class="wrg-team home"><span class="wrg-pts">${hS}</span><span class="wrg-abbr">${escapeHtml(hAbbr)}</span></div>
+    </div>
+    ${trackEl}
+    ${leadersEl}
+  </div>`;
 }
 function renderRecapCard(wr) {
   const r = wr.recap;
@@ -4389,6 +4526,13 @@ function renderWarRoom() {
       const ia = BET_TYPES_ORDER.indexOf(a.bet_type), ib = BET_TYPES_ORDER.indexOf(b.bet_type);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
+    // Live game drill-down for whichever pick on this card is expanded (one open
+    // board-wide). Rendered full-width under the chips so it never distorts them.
+    let detail = "";
+    if (state.wrExpanded && state.wrExpanded.startsWith(`${m.member_id}:`)) {
+      const ep = orderedPicks.find((p) => `${m.member_id}:${p.bet_type}` === state.wrExpanded);
+      if (ep && ep.game_key) detail = wrGamePanel(ep);
+    }
     return `
       <div class="wr-card">
         <div class="wr-head">
@@ -4396,7 +4540,8 @@ function renderWarRoom() {
           <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
           <span class="wr-recwrap">${recHtml}${pend}</span>
         </div>
-        <div class="wr-picks">${orderedPicks.map(wrChip).join("")}</div>
+        <div class="wr-picks">${orderedPicks.map((p) => wrChip(p, m)).join("")}</div>
+        ${detail}
       </div>`;
   }).join("");
   return head(actions) + renderRecapCard(wr) + `<div class="wr-grid">${rows}</div></div>`;

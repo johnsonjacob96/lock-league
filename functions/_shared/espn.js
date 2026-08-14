@@ -47,6 +47,22 @@ export async function espnScoreboardEvents(season, seasontype, week) {
   throw new Error("espn: no events");
 }
 
+// Full game summary (leaders, boxscore, situation) for one game. Tries the site
+// summary host then the cdn game host. Returns the summary/gamepackage object or
+// null. Used by /api/game for the War Room pick drill-down (player stat leaders).
+export async function espnSummary(eventId) {
+  if (!eventId) return null;
+  const urls = [`${SITE}/summary?event=${eventId}`, `${CDN}/game?xhr=1&gameId=${eventId}`];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const u of urls) {
+      const d = await getJson(u);
+      const gp = d && (d.gamepackageJSON || d);
+      if (gp && (gp.leaders || gp.boxscore)) return gp;
+    }
+  }
+  return null;
+}
+
 // Box score (player stat lines) for one game. Tries site summary then cdn
 // boxscore, a couple of rounds. Returns the boxscore object or null.
 export async function espnBoxscore(eventId) {
