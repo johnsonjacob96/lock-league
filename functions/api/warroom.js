@@ -173,10 +173,15 @@ export async function onRequest({ request, env, waitUntil }) {
     (a, b) => b.live.W - a.live.W || a.live.L - b.live.L || a.name.localeCompare(b.name));
   const anyLive = events.some((e) => e.state === "in");
 
-  // Recap: once every game this week is final, summarize the week.
+  // Recap: once every game this week is final AND every pick has an actual
+  // result (no manual grade — a free-text or unmatched-prop Super Lock —
+  // still outstanding), summarize the week. A pending manual pick can still
+  // flip the standings, so don't crown a winner/tie until it clears; the
+  // recap simply doesn't appear yet and reappears once the last one is marked.
   let recap = null;
   const allFinal = events.length > 0 && events.every((e) => e.state === "post");
-  if (allFinal && members.length) {
+  const totalPending = members.reduce((n, m) => n + m.live.pending, 0);
+  if (allFinal && totalPending === 0 && members.length) {
     const top = members[0];
     const tie = members.filter((m) => m.live.W === top.live.W && m.live.L === top.live.L).length > 1;
     const winner = !tie && top.live.W > 0 ? { name: top.name, W: top.live.W, L: top.live.L } : null;

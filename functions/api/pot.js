@@ -29,6 +29,22 @@ const DEFAULT_PAYOUT = [
   { place: 3, amount: 100 },
 ];
 
+// The UTC instant that reads as 23:59:59 America/Chicago on the given
+// YYYY-MM-DD. Standard "guess, observe the offset, correct" technique so it's
+// right on both sides of the CDT/CST boundary without a timezone library.
+function centralEndOfDay(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const guess = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago", hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(guess).reduce((o, p) => (o[p.type] = p.value, o), {});
+  const renderedAsUtc = Date.UTC(
+    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+    Number(parts.hour) % 24, Number(parts.minute), Number(parts.second));
+  return new Date(guess.getTime() + (guess.getTime() - renderedAsUtc));
+}
+
 function seasonOf(env, url, body) {
   return (
     Number(url?.searchParams.get("season")) ||
@@ -110,7 +126,12 @@ export async function onRequest({ request, env }) {
       if (body.deadline !== undefined) {
         if (!body.deadline) deadline = null;
         else {
-          const d = new Date(body.deadline);
+          // A bare YYYY-MM-DD (an <input type="date"> value) parses as UTC
+          // midnight, which reads as the PREVIOUS day once displayed/compared
+          // in Central and flips "past due" up to a day early. Treat it as
+          // end-of-day Central instead of literal UTC midnight.
+          const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(String(body.deadline).trim());
+          const d = dateOnly ? centralEndOfDay(String(body.deadline).trim()) : new Date(body.deadline);
           if (isNaN(d.getTime())) return json({ error: "bad-deadline" }, { status: 400 });
           deadline = d.toISOString();
         }

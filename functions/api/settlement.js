@@ -12,33 +12,31 @@
 //   POST ?action=mark-paid   -> mark a week's payout paid/unpaid (collector or that winner)
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
-import { currentNflWeek } from "../_shared/nfl.js";
+import { currentNflWeek, pickCutoff } from "../_shared/nfl.js";
 import { ensureExtras } from "../_shared/migrations.js";
+import { weeklyMemberRecords, weeklyWinner } from "../_shared/standings.js";
 
 const DEFAULT_PRIZE = 40;
 
-// Weekly winner from graded picks: unique best W (fewest L breaks ties). Ties
-// stay open (no winner) — mirrors the client + grader logic exactly.
-function computeWeeklyWinners(picks) {
+// Weekly winner: unique best W (fewest L breaks ties), with every member's
+// unfilled bet-type slot counted as an automatic loss once that week has
+// locked. Mirrors the client's mergeLiveSeason injection and grader.js's
+// pushWeekResults exactly, so the payout ledger, the site standings, and the
+// winner push always agree. `picks` must be ALL of a season's picks
+// (graded + pending), not filtered to result IS NOT NULL, so a genuinely
+// unfilled slot can be told apart from one still awaiting a manual grade.
+function computeWeeklyWinners(picks, memberIds, season, env) {
   const byWeek = new Map();
   for (const p of picks) {
-    if (!byWeek.has(p.week)) byWeek.set(p.week, new Map());
-    const wk = byWeek.get(p.week);
-    let m = wk.get(p.member_id);
-    if (!m) { m = { member_id: p.member_id, name: p.name, w: 0, l: 0, any: false }; wk.set(p.member_id, m); }
-    if (p.result === "W") { m.w++; m.any = true; }
-    else if (p.result === "L") { m.l++; m.any = true; }
-    else if (p.result === "P") { m.any = true; }
+    if (!byWeek.has(p.week)) byWeek.set(p.week, []);
+    byWeek.get(p.week).push(p);
   }
   const winners = {};
-  for (const [week, wk] of byWeek) {
-    let best = null, tied = false;
-    for (const m of wk.values()) {
-      if (!m.any) continue;
-      if (!best || m.w > best.w || (m.w === best.w && m.l < best.l)) { best = m; tied = false; }
-      else if (m.w === best.w && m.l === best.l) tied = true;
-    }
-    winners[week] = (best && !tied && best.w > 0) ? { member_id: best.member_id, name: best.name, w: best.w, l: best.l } : null;
+  for (const [week, rows] of byWeek) {
+    const locked = Date.now() >= pickCutoff(season, week, env).getTime();
+    const records = weeklyMemberRecords(memberIds, rows, { locked });
+    const win = weeklyWinner(records);
+    winners[week] = win ? { member_id: win.member_id, w: win.w, l: win.l } : null;
   }
   return winners;
 }
@@ -68,11 +66,11 @@ export async function onRequest({ request, env }) {
     if (!season || !week) return json({ error: "bad-body" }, { status: 400 });
     // Only the collector or that week's winner can flip a payout.
     const cfg = (await sql(env)`SELECT collector_id FROM pot_config WHERE season = ${season} LIMIT 1`)[0];
-    const graded = await sql(env)`
-      SELECT p.member_id, m.name, p.week, p.result
-      FROM picks p JOIN members m ON m.id = p.member_id
-      WHERE p.season = ${season} AND p.week = ${week} AND p.result IS NOT NULL`;
-    const winner = computeWeeklyWinners(graded)[week];
+    const [memberRows, picks] = await Promise.all([
+      sql(env)`SELECT id, name FROM members`,
+      sql(env)`SELECT member_id, week, bet_type, result FROM picks WHERE season = ${season} AND week = ${week}`,
+    ]);
+    const winner = computeWeeklyWinners(picks, memberRows.map((m) => m.id), season, env)[week];
     if (!winner) return json({ error: "no-winner-yet" }, { status: 409 });
     if (memberId !== cfg?.collector_id && memberId !== winner.member_id) {
       return json({ error: "forbidden", detail: "only the collector or the winner can flip this" }, { status: 403 });
@@ -93,14 +91,11 @@ export async function onRequest({ request, env }) {
 
     const [members, picks, payoutRows] = await Promise.all([
       sql(env)`SELECT id, name, venmo_handle FROM members ORDER BY name`,
-      sql(env)`
-        SELECT p.member_id, m.name, p.week, p.result
-        FROM picks p JOIN members m ON m.id = p.member_id
-        WHERE p.season = ${season} AND p.result IS NOT NULL`,
+      sql(env)`SELECT member_id, week, bet_type, result FROM picks WHERE season = ${season}`,
       sql(env)`SELECT week, paid, paid_at FROM weekly_payouts WHERE season = ${season}`,
     ]);
     const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
-    const winners = computeWeeklyWinners(picks);
+    const winners = computeWeeklyWinners(picks, members.map((m) => m.id), season, env);
     const paidByWeek = Object.fromEntries(payoutRows.map((r) => [r.week, r]));
     const collector = collectorId ? memberById[collectorId] : null;
 
@@ -114,7 +109,7 @@ export async function onRequest({ request, env }) {
         return {
           week,
           winner_id: winner.member_id,
-          winner_name: winner.name,
+          winner_name: memberById[winner.member_id]?.name || null,
           winner_record: `${winner.w}-${winner.l}`,
           winner_venmo: memberById[winner.member_id]?.venmo_handle || null,
           amount: prize,

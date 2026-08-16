@@ -18,8 +18,13 @@ async function scoreboardFor(season, week, seasontype = 2, env = null) {
     const events = await fetchScoreboard(season, week, seasontype, env);
     sbCache.set(key, { ts: Date.now(), events });
     return events;
-  } catch {
-    return hit ? hit.events : []; // fail open — the weekly cutoff still applies
+  } catch (e) {
+    if (hit) return hit.events; // serve the last-known board through a blip
+    // No board at all to check against. findStartedGame/findMondayGame exist
+    // specifically to catch an already-kicked-off or MNF game before the
+    // weekly cutoff — silently returning [] here would disable both guards
+    // instead of protecting them, so the caller must fail closed.
+    throw e;
   }
 }
 
@@ -190,6 +195,9 @@ export async function onRequest({ request, env }) {
     if (!season || !week || !["W", "L", "P"].includes(result)) {
       return json({ error: "bad-body", expected: "{season, week, result: W|L|P}" }, { status: 400 });
     }
+    // Only a free-text Super Lock (prop_meta IS NULL) is manually gradable —
+    // a structured one (a live-board player prop or game-line pick) is owned
+    // by the auto-grader, so this can never overwrite its graded result.
     const rows = await sql(env)`
       UPDATE picks
       SET result = ${result}, graded_at = NOW()
@@ -197,14 +205,17 @@ export async function onRequest({ request, env }) {
         AND season = ${season}
         AND week = ${week}
         AND bet_type = 'Super Lock'
+        AND prop_meta IS NULL
       RETURNING id`;
     if (!rows.length) return json({ error: "no-such-pick" }, { status: 404 });
     return json({ ok: true, id: rows[0].id, result });
   }
 
   // Remove a single pick (unpick from the board). Allowed until the weekly
-  // cutoff, same as adding — a started-game pick can't reach here because its
-  // board button renders locked (no data-bet to click).
+  // cutoff, same as adding — the board's own button renders locked once its
+  // game starts, but the API is the actual boundary, so it re-checks the
+  // same per-game start guard `submit` enforces (otherwise a member could
+  // unpick a losing bet on an already-live game and re-pick a later one).
   if (request.method === "POST" && action === "remove") {
     const memberId = await verifyCookie(env, request.headers.get("cookie"));
     if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
@@ -216,6 +227,18 @@ export async function onRequest({ request, env }) {
     const cutoff = pickCutoff(season, week, env);
     if (Date.now() > cutoff.getTime()) {
       return json({ error: "locked", cutoff: cutoff.toISOString() }, { status: 423 });
+    }
+    const existing = (await sql(env)`
+      SELECT game_key FROM picks
+      WHERE member_id = ${memberId} AND season = ${season} AND week = ${week} AND bet_type = ${bet_type}`)[0];
+    if (existing?.game_key) {
+      let started;
+      try {
+        started = await findStartedGame([{ game_key: existing.game_key }], season, week, seasonTypeFor(env), env);
+      } catch {
+        return json({ error: "scoreboard-unavailable", detail: "Can't verify game time right now — try again shortly." }, { status: 503 });
+      }
+      if (started) return json({ error: "game-started", ...started }, { status: 423 });
     }
     const rows = await sql(env)`
       DELETE FROM picks
@@ -266,6 +289,14 @@ export async function onRequest({ request, env }) {
     const body = await request.json().catch(() => ({}));
     const { season, week, picks } = body;
     if (!season || !week || !Array.isArray(picks)) return json({ error: "bad-body" }, { status: 400 });
+    // Every bet_type upserts on (member, season, week, bet_type); two picks
+    // sharing one in the same request would race as parallel ON CONFLICT
+    // upserts on the same row further down.
+    const seenTypes = new Set();
+    for (const p of picks) {
+      if (seenTypes.has(p.bet_type)) return json({ error: "duplicate-bet-type", bet_type: p.bet_type }, { status: 400 });
+      seenTypes.add(p.bet_type);
+    }
 
     const cutoff = pickCutoff(season, week, env);
     if (Date.now() > cutoff.getTime()) {
@@ -375,13 +406,22 @@ export async function onRequest({ request, env }) {
       }
     }
     // A game that has kicked off can no longer be picked (TNF after kickoff,
-    // international games that start before the Sunday noon cutoff, ...).
-    const started = await findStartedGame(picks, season, week, seasonTypeFor(env), env);
+    // international games that start before the Sunday noon cutoff, ...), and
+    // Monday (MNF) games can't be picked in this league. Both need a live
+    // scoreboard to check against; if ESPN is down and there's no cached
+    // board either, fail closed (503) instead of silently letting an
+    // unverified pick through — these guards exist precisely to protect
+    // against an already-started or ineligible game.
+    let started, monday;
+    try {
+      started = await findStartedGame(picks, season, week, seasonTypeFor(env), env);
+      monday = await findMondayGame(picks, season, week, seasonTypeFor(env), env);
+    } catch {
+      return json({ error: "scoreboard-unavailable", detail: "Can't verify game times right now — try again shortly." }, { status: 503 });
+    }
     if (started) {
       return json({ error: "game-started", ...started }, { status: 423 });
     }
-    // Monday (MNF) games can't be picked in this league.
-    const monday = await findMondayGame(picks, season, week, seasonTypeFor(env), env);
     if (monday) {
       return json({ error: "monday-not-allowed", ...monday }, { status: 422 });
     }

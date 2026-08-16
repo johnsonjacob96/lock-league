@@ -1,22 +1,39 @@
-# Lock League reminder scheduler — Cloudflare Cron Trigger.
+# Lock League notification scheduler — Cloudflare Cron Trigger.
 #
-# Why this exists: GitHub Actions scheduled workflows proved unreliable for a
-# timed notification (observed 15-30 min late on every run, and a full drop of
-# the pick reminder on 2026-08-13). Cloudflare cron triggers run on the same
-# edge platform as the app and fire on schedule, so the Sunday reminder can be
-# trusted. This Worker only *triggers*; all logic (window guard, DST handling,
-# recipient selection, Web Push) stays in the app at /api/notify.
+# Why this exists: GitHub Actions scheduled workflows proved unreliable for
+# timed notifications (observed 15-30 min late on every run, and a full drop
+# of the pick reminder on 2026-08-13). Cloudflare cron triggers run on the same
+# edge platform as the app and fire on schedule, so these can be trusted. This
+# Worker only *triggers*; all logic (window guards, DST handling, recipient
+# selection, Web Push) stays in the app at /api/notify.
 #
-# Two UTC times bracket the DST-aware noon-CT lock (17:00 UTC in CDT, 18:00 in
-# CST). The /api/notify window guard sends only the one ~1h before lock and
-# no-ops the other. See ../functions/api/notify.js.
+# Reminder: two UTC times bracket the DST-aware noon-CT lock (17:00 UTC in
+# CDT, 18:00 in CST). The /api/notify window guard sends only the one ~1h
+# before lock and no-ops the other.
+#
+# Line-moves: ~11am CT and ~6pm CT daily, catching morning/evening odds
+# movement so members can re-lock before the Sunday cutoff. Migrated here from
+# GitHub Actions (line-alerts-cron.yml) for the same reliability reason above.
+#
+# The account is on the Workers Free plan (5 cron triggers total, account-
+# wide, shared with other projects), so the 11am-CT slot is SHARED: the
+# 16:00 UTC daily trigger fires both reminder and line-moves (both apps guard
+# themselves — reminder no-ops on non-Sundays, line-moves runs every day
+# anyway), instead of two separate triggers at the same time. That keeps this
+# Worker at 3 triggers instead of 4. See src/index.js for the cron->type map.
+#
+# See ../functions/api/notify.js for both handlers.
 name = "lock-league-cron"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
 # Cloudflare's cron parser rejects "0" for Sunday; use the named day.
 [triggers]
-crons = ["0 16 * * SUN", "0 17 * * SUN"]
+crons = [
+  "0 16 * * *",     # reminder (Sundays only, app-guarded) + line-moves, shared slot
+  "0 17 * * SUN",   # reminder, second DST bracket
+  "0 23 * * *",     # line-moves, evening check
+]
 
 [vars]
 SITE_URL = "https://lock-league.pages.dev"

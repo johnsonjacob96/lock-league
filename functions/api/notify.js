@@ -135,7 +135,7 @@ export async function onRequest({ request, env }) {
     if (dryrun) {
       return json({ ok: true, dryrun: true, week: cur.week, wouldRemind: behind.map((b) => b.name) });
     }
-    const res = await pushPersonalized(env, byMemberId);
+    const res = await pushPersonalized(env, byMemberId, "reminder");
     return json({ ok: true, week: cur.week, reminded: behind.map((b) => b.name), ...res });
   }
 
@@ -202,7 +202,7 @@ export async function onRequest({ request, env }) {
         + `. Re-lock before ${timeStr} CT Sunday.`;
       byMemberId[mid] = { title, body, url: "/", tag: `ll-linemove-${cur.season}-${cur.week}` };
     }
-    const res = await pushPersonalized(env, byMemberId);
+    const res = await pushPersonalized(env, byMemberId, "lineMoves");
     await Promise.all(toMark.map((m) => sql(env)`UPDATE picks SET alert_line = ${m.line} WHERE id = ${m.id}`));
     return json({ ok: true, week: cur.week, alerted: Object.keys(byMemberId).length, picks: toMark.length, ...res });
   }

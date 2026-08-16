@@ -6,7 +6,7 @@
 //
 // NOTE: Renamed from /api/_init (Netlify) to /api/init for Cloudflare Pages routing.
 import bcrypt from "bcryptjs";
-import { sql } from "../_shared/db.js";
+import { sql, ignoringConcurrentCreate } from "../_shared/db.js";
 
 const MEMBERS = ["Brayden", "Chase", "Chris", "Jack", "Jacob", "Jared", "Mason", "Tyler"];
 
@@ -19,13 +19,13 @@ function json(body, init = {}) {
 
 async function createSchema(env) {
   const s = sql(env);
-  await s`CREATE TABLE IF NOT EXISTS members (
+  await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS members (
     id            SERIAL PRIMARY KEY,
     name          TEXT NOT NULL UNIQUE,
     passphrase_h  TEXT NOT NULL,
     created_at    TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await s`CREATE TABLE IF NOT EXISTS picks (
+  )`);
+  await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS picks (
     id            SERIAL PRIMARY KEY,
     member_id     INT NOT NULL REFERENCES members(id),
     season        INT NOT NULL,
@@ -42,8 +42,8 @@ async function createSchema(env) {
     locked_at     TIMESTAMPTZ,
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(member_id, season, week, bet_type)
-  )`;
-  await s`CREATE TABLE IF NOT EXISTS games (
+  )`);
+  await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS games (
     id            SERIAL PRIMARY KEY,
     season        INT NOT NULL,
     week          INT NOT NULL,
@@ -56,38 +56,43 @@ async function createSchema(env) {
     closing_total     NUMERIC,
     status        TEXT DEFAULT 'scheduled',
     UNIQUE(season, week, away, home)
-  )`;
+  )`);
   // Last-good odds cache: one row (id=1) that /api/odds falls back to when
   // The Odds API is down or out of credits, so the board never blanks.
-  await s`CREATE TABLE IF NOT EXISTS odds_snapshot (
+  await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS odds_snapshot (
     id            INT PRIMARY KEY,
     payload       JSONB NOT NULL,
     fetched_at    TIMESTAMPTZ DEFAULT NOW()
-  )`;
+  )`);
   // Web Push subscriptions (one row per device per member).
-  await s`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS push_subscriptions (
     id          SERIAL PRIMARY KEY,
     member_id   INT NOT NULL REFERENCES members(id),
     endpoint    TEXT NOT NULL UNIQUE,
     p256dh      TEXT NOT NULL,
     auth        TEXT NOT NULL,
     created_at  TIMESTAMPTZ DEFAULT NOW()
-  )`;
-  await s`CREATE INDEX IF NOT EXISTS picks_season_week ON picks(season, week)`;
-  await s`CREATE INDEX IF NOT EXISTS picks_member ON picks(member_id)`;
-  await s`CREATE INDEX IF NOT EXISTS games_season_week ON games(season, week)`;
+  )`);
+  await ignoringConcurrentCreate(s`CREATE INDEX IF NOT EXISTS picks_season_week ON picks(season, week)`);
+  await ignoringConcurrentCreate(s`CREATE INDEX IF NOT EXISTS picks_member ON picks(member_id)`);
+  await ignoringConcurrentCreate(s`CREATE INDEX IF NOT EXISTS games_season_week ON games(season, week)`);
 }
 
+// Only the members actually inserted BY THIS RUN get their default
+// passphrase echoed back — a member who already existed (created here or
+// with a passphrase changed since) never has their credential re-disclosed
+// on a re-run of this endpoint.
 async function seedMembers(env) {
   const seeded = [];
   for (const name of MEMBERS) {
     const passphrase = name.toLowerCase() + "2026";
     const hash = await bcrypt.hash(passphrase, 10);
-    await sql(env)`
+    const inserted = await sql(env)`
       INSERT INTO members (name, passphrase_h)
       VALUES (${name}, ${hash})
-      ON CONFLICT (name) DO NOTHING`;
-    seeded.push({ name, initial_passphrase: passphrase });
+      ON CONFLICT (name) DO NOTHING
+      RETURNING name`;
+    if (inserted.length) seeded.push({ name, initial_passphrase: passphrase });
   }
   return seeded;
 }
@@ -154,6 +159,6 @@ export async function onRequest({ request, env }) {
     const counts = await sql(env)`SELECT COUNT(*)::int AS n FROM picks`;
     return json({ ok: true, members_seeded: seeded, history_picks_imported: imported, total_picks_in_db: counts[0]?.n });
   } catch (e) {
-    return json({ error: e.message, stack: e.stack }, { status: 500 });
+    return json({ error: e.message }, { status: 500 });
   }
 }

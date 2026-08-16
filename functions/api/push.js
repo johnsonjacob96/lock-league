@@ -1,23 +1,35 @@
 // /api/push — manage a member's Web Push subscriptions.
-//   GET                      -> { vapidPublic, subscribed }  (member must be logged in)
+//   GET                      -> { vapidPublic, subscribed, prefs }  (member must be logged in)
 //   POST ?action=subscribe   body { endpoint, keys:{p256dh,auth} } -> saves subscription
 //   POST ?action=unsubscribe body { endpoint }                     -> removes subscription
+//   POST ?action=prefs       body { lineMoves?, reminder?, results? } (bool) -> merges into notif_prefs
 //   POST ?action=test        -> sends a test push to this member's devices
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
 import { ensurePushTables, pushToMembers } from "../_shared/push-notify.js";
+import { ensureExtras } from "../_shared/migrations.js";
+
+const PREF_KEYS = ["lineMoves", "reminder", "results"];
+// Missing/NULL key = on (opt-out default), so pre-existing subscribers keep
+// getting everything until they explicitly flip a category off.
+const defaultPrefs = () => Object.fromEntries(PREF_KEYS.map((k) => [k, true]));
 
 export async function onRequest({ request, env }) {
   const memberId = await verifyCookie(env, request.headers.get("cookie"));
   if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
   await ensurePushTables(env);
+  await ensureExtras(env);
   const url = new URL(request.url);
 
   if (request.method === "GET") {
     if (!env.VAPID_PUBLIC) return json({ error: "push-not-configured" }, { status: 503 });
     const rows = await sql(env)`
-      SELECT COUNT(*)::int AS n FROM push_subscriptions WHERE member_id = ${memberId}`;
-    return json({ vapidPublic: env.VAPID_PUBLIC, subscribed: (rows[0]?.n || 0) > 0 });
+      SELECT
+        (SELECT COUNT(*) FROM push_subscriptions WHERE member_id = ${memberId})::int AS n,
+        notif_prefs
+      FROM members WHERE id = ${memberId}`;
+    const prefs = { ...defaultPrefs(), ...(rows[0]?.notif_prefs || {}) };
+    return json({ vapidPublic: env.VAPID_PUBLIC, subscribed: (rows[0]?.n || 0) > 0, prefs });
   }
 
   if (request.method === "POST") {
@@ -43,6 +55,16 @@ export async function onRequest({ request, env }) {
         await sql(env)`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint} AND member_id = ${memberId}`;
       }
       return json({ ok: true, subscribed: false });
+    }
+
+    if (action === "prefs") {
+      const patch = {};
+      for (const k of PREF_KEYS) if (typeof bodyIn?.[k] === "boolean") patch[k] = bodyIn[k];
+      if (!Object.keys(patch).length) return json({ error: "no-valid-prefs" }, { status: 400 });
+      const rows = await sql(env)`SELECT notif_prefs FROM members WHERE id = ${memberId}`;
+      const merged = { ...defaultPrefs(), ...(rows[0]?.notif_prefs || {}), ...patch };
+      await sql(env)`UPDATE members SET notif_prefs = ${JSON.stringify(merged)}::jsonb WHERE id = ${memberId}`;
+      return json({ ok: true, prefs: merged });
     }
 
     if (action === "test") {

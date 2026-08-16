@@ -768,6 +768,13 @@
   .notif-test { display: none; margin-top: 2px; background: none; border: none; padding: 0; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #46e08a; }
   .notif-test:hover { opacity: 0.8; }
   .notif-test.show { display: inline-block; }
+  .notif-categories { display: none; flex-direction: column; gap: 10px; margin: -8px 0 16px; padding-left: 2px; }
+  .notif-categories.show { display: flex; }
+  .notif-cat-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .notif-cat-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #c7cccb; }
+  .notif-switch.sm { width: 36px; height: 20px; }
+  .notif-switch.sm .knob { width: 14px; height: 14px; }
+  .notif-switch.sm[aria-checked="true"] .knob { transform: translateX(16px); }
 
   /* War Room (live leaderboard) */
   .wr-wrap { max-width: 1120px; }
@@ -979,6 +986,20 @@
         <div class="notif-status" id="notif-status">Checking...</div>
       </div>
       <button id="notif-toggle" class="notif-switch" role="switch" aria-checked="false" aria-label="Toggle notifications" disabled><span class="knob"></span></button>
+    </div>
+    <div id="notif-categories" class="notif-categories">
+      <div class="notif-cat-row">
+        <span class="notif-cat-label">Better lines available</span>
+        <button class="notif-switch sm" data-pref="lineMoves" role="switch" aria-checked="true" aria-label="Toggle better-line alerts"><span class="knob"></span></button>
+      </div>
+      <div class="notif-cat-row">
+        <span class="notif-cat-label">Pick reminders</span>
+        <button class="notif-switch sm" data-pref="reminder" role="switch" aria-checked="true" aria-label="Toggle pick reminders"><span class="knob"></span></button>
+      </div>
+      <div class="notif-cat-row">
+        <span class="notif-cat-label">Weekly results</span>
+        <button class="notif-switch sm" data-pref="results" role="switch" aria-checked="true" aria-label="Toggle weekly results"><span class="knob"></span></button>
+      </div>
     </div>
     <button id="notif-test" class="notif-test">Send test notification</button>
     <label>Venmo handle (so members can pay you when you win)</label>
@@ -2115,7 +2136,7 @@ function renderLifetime() {
     const units = totals.W - 1.1 * totals.L;
     return { name, totals, byType, weeksWon, seasonsAsChamp, seasonsPlayed, units };
   });
-  agg.sort((a, b) => b.totals.W - a.totals.W);
+  agg.sort((a, b) => b.totals.W - a.totals.W || a.totals.L - b.totals.L || b.weeksWon - a.weeksWon);
   const groupUnits = agg.reduce((s, m) => s + m.units, 0);
 
   // Find historical champions, one card per season
@@ -2544,7 +2565,7 @@ async function changePassphrase() {
 // ---- Web Push notifications ----
 // `subscribed` = this browser/device has a push subscription; `accountSubscribed`
 // = the member has one on ANY device (from /api/push, which counts per member).
-const pushState = { supported: false, subscribed: false, accountSubscribed: false, vapidPublic: null, busy: false };
+const pushState = { supported: false, subscribed: false, accountSubscribed: false, vapidPublic: null, busy: false, prefs: null };
 
 function pushSupported() {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -2575,6 +2596,15 @@ async function loadPushConfig() {
     return await r.json(); // { vapidPublic, subscribed }
   } catch { return null; }
 }
+function setNotifCategoriesVisible(on) {
+  document.getElementById("notif-categories")?.classList.toggle("show", on);
+}
+function renderNotifPrefs(prefs) {
+  pushState.prefs = prefs;
+  document.querySelectorAll("#notif-categories [data-pref]").forEach((btn) => {
+    btn.setAttribute("aria-checked", prefs?.[btn.dataset.pref] !== false ? "true" : "false");
+  });
+}
 async function refreshNotifUI() {
   const statusEl = document.getElementById("notif-status");
   const toggle = document.getElementById("notif-toggle");
@@ -2588,12 +2618,14 @@ async function refreshNotifUI() {
       : "Add to Home Screen first, then turn this on.";
     toggle.disabled = true; toggle.setAttribute("aria-checked", "false");
     testBtn.classList.remove("show");
+    setNotifCategoriesVisible(false);
     return;
   }
   if (Notification.permission === "denied") {
     statusEl.textContent = "Blocked in your browser settings. Allow this site to turn on.";
     toggle.disabled = true; toggle.setAttribute("aria-checked", "false");
     testBtn.classList.remove("show");
+    setNotifCategoriesVisible(false);
     return;
   }
   const cfg = await loadPushConfig();
@@ -2601,6 +2633,7 @@ async function refreshNotifUI() {
     statusEl.textContent = "Notifications are not available right now.";
     toggle.disabled = true; toggle.setAttribute("aria-checked", "false");
     testBtn.classList.remove("show");
+    setNotifCategoriesVisible(false);
     return;
   }
   pushState.vapidPublic = cfg.vapidPublic;
@@ -2611,9 +2644,11 @@ async function refreshNotifUI() {
   toggle.disabled = false;
   toggle.setAttribute("aria-checked", on ? "true" : "false");
   statusEl.textContent = on
-    ? "On. Reminders and weekly results."
-    : "Off. Get pick reminders and weekly results.";
+    ? "On. Better lines, reminders and weekly results."
+    : "Off. Get pick reminders, better-line alerts and weekly results.";
   testBtn.classList.toggle("show", on);
+  renderNotifPrefs(cfg.prefs);
+  setNotifCategoriesVisible(on);
 }
 async function enablePush() {
   const perm = await Notification.requestPermission();
@@ -2666,6 +2701,28 @@ async function sendTestNotification() {
     const j = await r.json().catch(() => ({}));
     showToast(j.sent ? "TEST SENT" : "NO DEVICE FOUND", j.sent ? "ok" : "err");
   } catch { showToast("TEST FAILED", "err"); }
+}
+async function togglePref(btn) {
+  const key = btn.dataset.pref;
+  if (!key || btn.disabled) return;
+  const next = btn.getAttribute("aria-checked") !== "true";
+  btn.disabled = true;
+  btn.setAttribute("aria-checked", next ? "true" : "false"); // optimistic
+  try {
+    const r = await fetch("/api/push?action=prefs", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [key]: next }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "failed");
+    pushState.prefs = j.prefs;
+  } catch {
+    btn.setAttribute("aria-checked", next ? "false" : "true"); // revert
+    showToast("COULD NOT SAVE", "err");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ---- Season-start "get ready" nudge (preseason only) ----
@@ -2845,9 +2902,8 @@ function renderUserArea() {
   if (state.user) {
     const c = memberColor(state.user.name);
     el.innerHTML = `
-      <div class="flex items-center gap-3 p-3 border-t border-outline-variant -mx-4 -mb-4 mt-2">
-        <div class="avatar" style="border-color:${c};color:${c}">${initials(state.user.name)}</div>
-        <div class="flex-1 min-w-0">
+      <div class="flex items-center p-3 border-t border-outline-variant -mx-4 -mb-4 mt-2">
+        <div class="flex-1 min-w-0 border-l-2 pl-3" style="border-color:${c}">
           <div class="font-label-caps text-xs text-on-surface truncate uppercase">${escapeHtml(state.user.name)}</div>
           <div class="flex items-center gap-2">
             <button class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant hover:text-primary-fixed uppercase" id="account-btn">Account</button>
@@ -2930,11 +2986,11 @@ async function loadOdds(force = false) {
 
 function fmtKickoffDay(iso) {
   const d = new Date(iso);
-  return d.toLocaleString("en-US", { weekday: "short" }).toUpperCase();
+  return d.toLocaleString("en-US", { weekday: "short", timeZone: "America/Chicago" }).toUpperCase();
 }
 function fmtKickoffTime(iso) {
   const d = new Date(iso);
-  return d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+  return d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone: "America/Chicago" });
 }
 
 function americanOdds(p) {
@@ -4656,8 +4712,9 @@ async function render() {
       bindWeekNav();
     }
   } else if (state.view === "payments") {
-    root.innerHTML = await renderPayments();
+    const html = await renderPayments();
     if (state.view !== "payments") return;
+    root.innerHTML = html;
     bindSettleCard();
     bindPotCard();
     const prompt = document.getElementById("signin-prompt");
@@ -4810,6 +4867,10 @@ document.getElementById("acct-logout").onclick = () => {
 document.getElementById("acct-next").addEventListener("keydown", e => { if (e.key === "Enter") changePassphrase(); });
 document.getElementById("notif-toggle").onclick = toggleNotifications;
 document.getElementById("notif-test").onclick = sendTestNotification;
+document.getElementById("notif-categories").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-pref]");
+  if (btn) togglePref(btn);
+});
 
 // Phones vary from ~320 to ~430 CSS px wide, and iOS "Display Zoom" shifts it
 // further, so a fixed-pixel design looks a little zoomed in on small phones and

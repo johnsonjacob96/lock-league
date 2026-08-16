@@ -561,9 +561,13 @@ export async function onRequestGet(context) {
   if (primary) {
     try {
       const payload = await fetchPrimary(env, primary);
-      // In preseason test mode, an empty FD/DK board means no preseason coverage
-      // yet — fall through to the ESPN nominal board instead of returning blank.
-      if (!(testConfig(env) && (!payload.games || !payload.games.length))) {
+      // An empty board means "no lines posted yet" or a malformed response,
+      // never "no games this week" — always fall through to the ESPN board
+      // instead of returning/snapshotting a blank one. (This used to only
+      // fall through during the preseason test window, so during the regular
+      // season an empty-but-200 primary response was accepted as success and
+      // overwrote the last-good snapshot, poisoning the stale fallback too.)
+      if (payload.games && payload.games.length) {
         cache = { ts: Date.now(), data: payload };
         waitUntil(putEdge(edge, payload, ttlS));
         waitUntil(saveSnapshot(env, payload));

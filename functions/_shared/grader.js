@@ -1,11 +1,12 @@
 // Shared grading logic for /api/grade (manual + GitHub Actions cron).
 // Mirrors lib/grader.js (kept in sync for Cloudflare Pages Functions runtime).
 import { sql } from "./db.js";
-import { weeksToGrade, currentNflWeek, seasonTypeFor, testConfig } from "./nfl.js";
-import { pushPersonalized, alreadySent, markSent } from "./push-notify.js";
+import { weeksToGrade, currentNflWeek, pickCutoff, seasonTypeFor, testConfig } from "./nfl.js";
+import { pushPersonalized, claimSend } from "./push-notify.js";
 import { gradeProp } from "./props.js";
 import { espnScoreboardEvents, espnBoxscore } from "./espn.js";
 import { loadScoreboardSeed } from "./scoreseed.js";
+import { weeklyMemberRecords, weeklyWinner } from "./standings.js";
 
 function normTeam(s) { return String(s || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
 const safeJson = (s) => { try { return JSON.parse(s); } catch { return null; } };
@@ -221,43 +222,44 @@ function isWeekComplete(season, week, now) {
 }
 
 // Web Push: tell each member their week record, and crown the winner. Sent at
-// most once per week (guarded by week_notifications).
+// most once per week — claimSend() atomically reserves the (season, week,
+// "winner") slot before anything is sent, so concurrent isolates racing to
+// grade the same week's finished games can't each pass a check-then-act
+// guard and duplicate the blast.
 export async function pushWeekResults(env, season, week) {
-  if (await alreadySent(env, season, week, "winner")) return { skipped: "already-sent" };
-  const rows = await sql(env)`
-    SELECT p.member_id, m.name, p.result
-    FROM picks p JOIN members m ON m.id = p.member_id
-    WHERE p.season = ${season} AND p.week = ${week}`;
-  if (!rows.length) return { skipped: "no-picks" };
+  const [members, picks] = await Promise.all([
+    sql(env)`SELECT id, name FROM members`,
+    sql(env)`SELECT member_id, bet_type, result FROM picks WHERE season = ${season} AND week = ${week}`,
+  ]);
+  if (!picks.length) return { skipped: "no-picks" };
+  // Claim the send slot right before computing/sending (not at the top of the
+  // function) so an early "no-picks" bail never permanently locks out a week
+  // that later gets picks.
+  if (!(await claimSend(env, season, week, "winner"))) return { skipped: "already-sent" };
 
-  const rec = {};
-  for (const r of rows) {
-    const e = rec[r.member_id] || (rec[r.member_id] = { name: r.name, W: 0, L: 0, P: 0 });
-    if (r.result === "W" || r.result === "L" || r.result === "P") e[r.result]++;
-  }
-  const ranked = Object.entries(rec).sort((a, b) => b[1].W - a[1].W || a[1].L - b[1].L);
-  if (!ranked.length) return { skipped: "no-graded" };
-  const [topId, top] = ranked[0];
-  const tie = ranked.filter(([, c]) => c.W === top.W && c.L === top.L).length > 1;
-  const winnerName = !tie && top.W > 0 ? top.name : null;
+  const locked = Date.now() >= pickCutoff(season, week, env).getTime();
+  const records = weeklyMemberRecords(members.map((m) => m.id), picks, { locked });
+  const win = weeklyWinner(records);
+  const winnerName = win ? members.find((m) => m.id === win.member_id)?.name : null;
   const fmt = (c) => `${c.W}-${c.L}${c.P ? "-" + c.P : ""}`;
 
   const byMemberId = {};
-  for (const [id, c] of Object.entries(rec)) {
-    const isWinner = winnerName && Number(id) === Number(topId);
-    byMemberId[id] = {
+  for (const m of members) {
+    const r = records.get(m.id);
+    if (!r || !(r.W || r.L || r.P || r.pending)) continue; // no activity this week
+    const isWinner = win && m.id === win.member_id;
+    byMemberId[m.id] = {
       title: isWinner ? `You won Week ${week}` : `Week ${week} is in the books`,
       body: isWinner
-        ? `You took the week at ${fmt(c)}. Nice.`
+        ? `You took the week at ${fmt(r)}. Nice.`
         : winnerName
-          ? `You went ${fmt(c)}. ${winnerName} won the week at ${fmt(top)}.`
-          : `You went ${fmt(c)}. The top of the board tied this week.`,
+          ? `You went ${fmt(r)}. ${winnerName} won the week at ${fmt(records.get(win.member_id))}.`
+          : `You went ${fmt(r)}. The top of the board tied this week.`,
       url: "/",
       tag: `ll-week-${season}-${week}`,
     };
   }
-  const res = await pushPersonalized(env, byMemberId);
-  await markSent(env, season, week, "winner");
+  const res = await pushPersonalized(env, byMemberId, "results");
   return { winner: winnerName, ...res };
 }
 
@@ -270,35 +272,33 @@ export async function notifyGradeResults(results, env) {
   const newly = (results || []).filter((r) => r.graded > 0);
   if (!newly.length) return false; // only ping the group when something new graded
 
-  const s = sql(env);
+  const members = await sql(env)`SELECT id, name FROM members`;
   const blocks = [];
   for (const r of newly) {
-    const rows = await s`
-      SELECT m.name, p.result FROM picks p JOIN members m ON m.id = p.member_id
-      WHERE p.season = ${r.season} AND p.week = ${r.week}`;
-    blocks.push(weekSummaryText(r.week, rows, r.graded));
+    const picks = await sql(env)`
+      SELECT member_id, bet_type, result FROM picks WHERE season = ${r.season} AND week = ${r.week}`;
+    const locked = Date.now() >= pickCutoff(r.season, r.week, env).getTime();
+    const records = weeklyMemberRecords(members.map((m) => m.id), picks, { locked });
+    blocks.push(weekSummaryText(r.week, members, records, r.graded));
   }
   await sendGroupMessage(blocks.join("\n\n"), { discord, groupme });
   return true;
 }
 
-export function weekSummaryText(week, rows, newlyGraded) {
-  const rec = {};
-  let ungraded = 0;
-  for (const row of rows) {
-    const m = rec[row.name] || (rec[row.name] = { W: 0, L: 0, P: 0 });
-    if (row.result) m[row.result]++;
-    else ungraded++;
-  }
-  const sorted = Object.entries(rec).sort((a, b) => b[1].W - a[1].W || a[1].L - b[1].L);
+export function weekSummaryText(week, members, records, newlyGraded) {
+  const active = members
+    .map((m) => ({ name: m.name, r: records.get(m.id) }))
+    .filter(({ r }) => r && (r.W || r.L || r.P || r.pending));
+  const ungraded = active.reduce((n, { r }) => n + r.pending, 0);
+  const sorted = active.sort((a, b) => b.r.W - a.r.W || a.r.L - b.r.L);
   const lines = sorted
-    .map(([name, c]) => `${name} ${c.W}-${c.L}${c.P ? "-" + c.P : ""}`)
+    .map(({ name, r }) => `${name} ${r.W}-${r.L}${r.P ? "-" + r.P : ""}`)
     .join(" · ");
   let crown = "";
   if (sorted.length) {
-    const [topName, top] = sorted[0];
-    const tied = sorted.filter(([, c]) => c.W === top.W && c.L === top.L).length > 1;
-    if (!tied && top.W > 0) crown = `\n${ungraded ? "📈 Leader" : "🏆 Winner"}: ${topName} (${top.W}-${top.L})`;
+    const top = sorted[0];
+    const tied = sorted.filter(({ r }) => r.W === top.r.W && r.L === top.r.L).length > 1;
+    if (!tied && top.r.W > 0) crown = `\n${ungraded ? "📈 Leader" : "🏆 Winner"}: ${top.name} (${top.r.W}-${top.r.L})`;
   }
   return `🏈 Lock League — Week ${week} update (${newlyGraded} new grade${newlyGraded === 1 ? "" : "s"})\n${lines}${crown}`;
 }
