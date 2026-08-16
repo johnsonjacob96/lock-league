@@ -2902,15 +2902,12 @@ function renderUserArea() {
   if (state.user) {
     const c = memberColor(state.user.name);
     el.innerHTML = `
-      <div class="flex items-center p-3 border-t border-outline-variant -mx-4 -mb-4 mt-2">
-        <div class="flex-1 min-w-0 border-l-2 pl-3" style="border-color:${c}">
+      <div class="flex items-center gap-1 p-3 border-t border-outline-variant -mx-4 -mb-4 mt-2">
+        <button class="flex-1 min-w-0 text-left rounded-lg px-2 py-1.5 cursor-pointer transition-colors hover:bg-primary-fixed/5" id="account-btn">
           <div class="font-label-caps text-xs text-on-surface truncate uppercase">${escapeHtml(state.user.name)}</div>
-          <div class="flex items-center gap-2">
-            <button class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant hover:text-primary-fixed uppercase" id="account-btn">Account</button>
-            <span class="text-on-surface-variant/40 text-[10px]">·</span>
-            <button class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant hover:text-live-red uppercase" id="logout-btn">Sign Out</button>
-          </div>
-        </div>
+          <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant uppercase">Account</div>
+        </button>
+        <button class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant hover:text-live-red uppercase shrink-0 px-1" id="logout-btn">Sign Out</button>
       </div>
     `;
     el.querySelector("#logout-btn").onclick = logout;
