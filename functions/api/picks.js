@@ -20,10 +20,9 @@ async function scoreboardFor(season, week, seasontype = 2, env = null) {
     return events;
   } catch (e) {
     if (hit) return hit.events; // serve the last-known board through a blip
-    // No board at all to check against. findStartedGame/findMondayGame exist
-    // specifically to catch an already-kicked-off or MNF game before the
-    // weekly cutoff — silently returning [] here would disable both guards
-    // instead of protecting them, so the caller must fail closed.
+    // No ESPN board at all. Don't paper over it with [] — that would silently
+    // disable the started-game / Monday guards. Throw so boardEvents can try the
+    // odds-board fallback, and only fail closed if that's also unavailable.
     throw e;
   }
 }
@@ -131,11 +130,31 @@ export function deriveProp(markets, prop) { // exported for tests; CF ignores no
   return { market: prop.market, player: pl.player, line, side, price, book, pick_text: propPickText({ market: prop.market, player: pl.player, line, side }) };
 }
 
+// Kickoff data for the started-game / Monday guards. Prefers the live ESPN
+// scoreboard (authoritative status + scores), but the CF colo frequently can't
+// reach ESPN — site.api 403s the datacenter IP and cdn returns empty bodies —
+// so failing closed on the scoreboard alone blocked every legitimate pick even
+// though the odds board was up. The in-request odds board (SharpAPI, reachable
+// from the colo) already carries each game's away/home/kickoff, which is all the
+// guards need, so fall back to it. Only when BOTH are unavailable do we have no
+// kickoff to verify against — the caller then fails closed (503). Fetched once
+// and shared by both guards within the request.
+async function boardEvents(season, week, seasontype, env, request) {
+  try {
+    return await scoreboardFor(season, week, seasontype, env);
+  } catch {
+    const games = await fetchLiveOdds(request);
+    if (games && games.length) {
+      return games.map(g => ({ away: g.away, home: g.home, kickoff: g.kickoff }));
+    }
+    throw new Error("no-board"); // neither ESPN nor odds available
+  }
+}
+
 // Returns the offending pick if any submitted game has already started.
-async function findStartedGame(picks, season, week, seasontype = 2, env = null) {
+function findStartedGame(picks, events) {
   const keyed = picks.filter(p => p.game_key);
   if (!keyed.length) return null;
-  const events = await scoreboardFor(season, week, seasontype, env);
   const now = Date.now();
   for (const p of keyed) {
     const [away, home] = String(p.game_key).split("@");
@@ -150,12 +169,10 @@ async function findStartedGame(picks, season, week, seasontype = 2, env = null) 
 // Returns the offending pick if any submitted game is a Monday (MNF) game — those
 // aren't allowed in this league. Weekday is read in Central (an MNF kickoff falls
 // on Tuesday in UTC, so a naive UTC check would miss it). The board never offers
-// them, so this is a backstop against a hand-crafted request. Uses the cached
-// scoreboard (shared with findStartedGame within the request).
-async function findMondayGame(picks, season, week, seasontype = 2, env = null) {
+// them, so this is a backstop against a hand-crafted request.
+function findMondayGame(picks, events) {
   const keyed = picks.filter(p => p.game_key);
   if (!keyed.length) return null;
-  const events = await scoreboardFor(season, week, seasontype, env);
   for (const p of keyed) {
     const [away, home] = String(p.game_key).split("@");
     const ev = events.find(e => sameTeam(e.away, away) && sameTeam(e.home, home));
@@ -234,7 +251,8 @@ export async function onRequest({ request, env }) {
     if (existing?.game_key) {
       let started;
       try {
-        started = await findStartedGame([{ game_key: existing.game_key }], season, week, seasonTypeFor(env), env);
+        const events = await boardEvents(season, week, seasonTypeFor(env), env, request);
+        started = findStartedGame([{ game_key: existing.game_key }], events);
       } catch {
         return json({ error: "scoreboard-unavailable", detail: "Can't verify game time right now — try again shortly." }, { status: 503 });
       }
@@ -407,15 +425,16 @@ export async function onRequest({ request, env }) {
     }
     // A game that has kicked off can no longer be picked (TNF after kickoff,
     // international games that start before the Sunday noon cutoff, ...), and
-    // Monday (MNF) games can't be picked in this league. Both need a live
-    // scoreboard to check against; if ESPN is down and there's no cached
-    // board either, fail closed (503) instead of silently letting an
-    // unverified pick through — these guards exist precisely to protect
-    // against an already-started or ineligible game.
+    // Monday (MNF) games can't be picked in this league. Both need kickoff times
+    // to check against — the live ESPN scoreboard first, then the odds board as a
+    // fallback (see boardEvents). Only if neither is reachable do we fail closed
+    // (503) instead of letting an unverified pick through — these guards exist
+    // precisely to protect against an already-started or ineligible game.
     let started, monday;
     try {
-      started = await findStartedGame(picks, season, week, seasonTypeFor(env), env);
-      monday = await findMondayGame(picks, season, week, seasonTypeFor(env), env);
+      const events = await boardEvents(season, week, seasonTypeFor(env), env, request);
+      started = findStartedGame(picks, events);
+      monday = findMondayGame(picks, events);
     } catch {
       return json({ error: "scoreboard-unavailable", detail: "Can't verify game times right now — try again shortly." }, { status: 503 });
     }
