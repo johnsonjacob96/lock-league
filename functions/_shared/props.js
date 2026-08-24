@@ -45,6 +45,7 @@ export const PROP_ORDER = [
 export function marketKeyFromName(raw) {
   let n = String(raw || "").toLowerCase().replace(/[_+]+/g, " ");
   if (!n) return null;
+  const pre = n; // separators normalized to spaces, before the stat folds below
   n = n
     .replace(/yds/g, "yards")
     .replace(/touchdowns?/g, "td")
@@ -70,10 +71,16 @@ export function marketKeyFromName(raw) {
   if (pass) {
     if (yard) return "pass_yds";
     if (td) return "pass_tds";
-    if (n.includes("int")) return "pass_int";
-    if (n.includes("comp")) return "pass_cmp";
+    if (/\bint\b/.test(n)) return "pass_int";
+    if (/\bcomp\b/.test(n)) return "pass_cmp";
     if (n.includes("attempt")) return "pass_att";
   }
+  // Passing-by-nature stats books sometimes post without the "pass" token, and
+  // "carries" is a rushing-attempts market (folded to "attempt" above but with no
+  // rush token). Word-bounded so "points" (po-int-s) never reads as interceptions.
+  if (/\bcomp\b/.test(n)) return "pass_cmp";
+  if (/\bint\b/.test(n)) return "pass_int";
+  if (/\bcarr/.test(pre)) return "rush_att"; // "carries" folded to "attempt" in n
   return null;
 }
 
@@ -111,7 +118,8 @@ export function normalizeSharpProps(rows) {
   // ("N+ <flavor> Touchdowns") selection strings before mapping the O/U rows.
   const tdMap = new Map();
   for (const r of rows || []) {
-    if (!/touchdown/i.test(String(r.market_type || ""))) continue;
+    if (!/touchdown/i.test(String(r.market_type || "")) &&
+        !/touchdown/i.test(String(r.stat_category || ""))) continue;
     const sub = tdSubtypeFromSelection(r.selection);
     if (!sub) continue;
     const key = String(r.player_name ?? r.player ?? "").toLowerCase().trim();
@@ -128,10 +136,14 @@ export function normalizeSharpProps(rows) {
     // Player name lives in `player_name` (the `selection` field is the O/U side).
     const player = String(r.player_name ?? r.player ?? "").trim();
     if (!player) continue;
-    // Resolve the gradable market. A generic touchdowns market_type (returns null
-    // from marketKeyFromName) is disambiguated by the player's scanned subtype.
-    let market = marketKeyFromName(r.market_type);
-    if (!market && /touchdown/i.test(String(r.market_type || ""))) {
+    // Resolve the gradable market from the market_type, falling back to the
+    // semantic stat_category (both use the same tolerant token map, so
+    // player_receiving_yards / receiving_yards / "Receiving Yards" all land on
+    // rec_yds). A generic touchdowns market (null from marketKeyFromName) is
+    // disambiguated by the player's scanned TD subtype.
+    let market = marketKeyFromName(r.market_type) || marketKeyFromName(r.stat_category);
+    if (!market && (/touchdown/i.test(String(r.market_type || "")) ||
+                    /touchdown/i.test(String(r.stat_category || "")))) {
       market = tdMap.get(player.toLowerCase()) || null;
     }
     if (!market) continue;
