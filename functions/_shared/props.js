@@ -91,7 +91,33 @@ const SHARP_BOOK = (sb) => {
   return null;
 };
 
+// SharpAPI's `player_touchdowns` market_type is generic — the main Over/Under
+// row (market_type/market_ref/stat_category all just "touchdowns") does NOT say
+// whether it's passing/rushing/receiving/anytime TDs. Only the sibling cumulative
+// selections ("Drake Maye 2+ Passing Touchdowns") carry the subtype. So we scan
+// those to learn each player's TD flavor, then map the O/U line onto the matching
+// gradable market. Unknown/absent subtype -> the row is dropped (grade-safe).
+function tdSubtypeFromSelection(sel) {
+  const s = String(sel || "").toLowerCase();
+  if (s.includes("passing")) return "pass_tds";
+  if (s.includes("rushing")) return "rush_tds";
+  if (s.includes("receiving")) return "rec_tds";
+  if (/\banytime\b|to score a touchdown|first touchdown|last touchdown/.test(s)) return "anytime_td";
+  return null;
+}
+
 export function normalizeSharpProps(rows) {
+  // Pre-scan: resolve each player's touchdown subtype from the cumulative
+  // ("N+ <flavor> Touchdowns") selection strings before mapping the O/U rows.
+  const tdMap = new Map();
+  for (const r of rows || []) {
+    if (!/touchdown/i.test(String(r.market_type || ""))) continue;
+    const sub = tdSubtypeFromSelection(r.selection);
+    if (!sub) continue;
+    const key = String(r.player_name ?? r.player ?? "").toLowerCase().trim();
+    if (key && !tdMap.has(key)) tdMap.set(key, sub);
+  }
+
   // key = `${market}|${player}` -> aggregate across books + over/under sides.
   const agg = new Map();
   for (const r of rows || []) {
@@ -99,10 +125,16 @@ export function normalizeSharpProps(rows) {
       /player|prop/i.test(String(r.market_type || "")) ||
       marketKeyFromName(r.market_type) != null;
     if (!isProp) continue;
-    const market = marketKeyFromName(r.market_type);
-    if (!market) continue;
-    const player = String(r.player ?? r.selection ?? "").trim();
+    // Player name lives in `player_name` (the `selection` field is the O/U side).
+    const player = String(r.player_name ?? r.player ?? "").trim();
     if (!player) continue;
+    // Resolve the gradable market. A generic touchdowns market_type (returns null
+    // from marketKeyFromName) is disambiguated by the player's scanned subtype.
+    let market = marketKeyFromName(r.market_type);
+    if (!market && /touchdown/i.test(String(r.market_type || ""))) {
+      market = tdMap.get(player.toLowerCase()) || null;
+    }
+    if (!market) continue;
     const book = SHARP_BOOK(r.sportsbook);
     if (!book) continue;
     const def = PROP_DEFS[market];
@@ -119,14 +151,18 @@ export function normalizeSharpProps(rows) {
     if (!e) { e = { market, label: def.label, unit: def.unit, kind: def.kind, player, home, away, kickoff, byBook: {} }; agg.set(id, e); }
     const b = e.byBook[book] || (e.byBook[book] = { over: null, under: null, yes: null, line: null, main: false });
     if (def.kind === "yes") {
-      // Anytime TD: single-sided yes price (some feeds also send a "no").
-      if (stype === "no") b.no = price; else b.yes = price;
+      // Anytime TD: yes/no, or an O/U 0.5 (over == yes). Ignore alt/"other" rows.
+      if (stype === "yes" || stype === "over") { b.yes = price; if (Number.isFinite(line)) b.line = line; }
+      else if (stype === "no" || stype === "under") b.no = price;
+      else continue;
       if (isMain) b.main = true;
     } else {
-      const side = stype === "under" ? "under" : "over";
+      // Only the main Over/Under line grades; skip cumulative ("N+", selection_type
+      // "other") rows that would otherwise clobber the over/under prices.
+      if (stype !== "over" && stype !== "under") continue;
       // Keep the main line; if a book sends alternates too, the main-flagged one wins.
       if (Number.isFinite(line) && (b.line == null || (isMain && !b.main))) b.line = line;
-      b[side] = price;
+      b[stype] = price;
       if (isMain) b.main = true;
     }
   }

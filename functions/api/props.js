@@ -36,7 +36,10 @@ function pickWeek(env) {
 // week's kickoff window, mirroring the odds path.
 async function fetchWeekProps(env) {
   if (!env.SHARPAPI_KEY) return { source: "none", props: [] };
-  const primaryMarket = env.SHARP_PROP_MARKET || "player_props";
+  // SharpAPI groups player props under market=`props` (confirmed live: returns
+  // player_receptions / player_touchdowns rows; `player_props` returns 0).
+  // SHARP_PROP_MARKET can still override without a redeploy.
+  const primaryMarket = env.SHARP_PROP_MARKET || "props";
   let rows = await fetchSharpRaw(env, 12, { market: primaryMarket }).catch(() => []);
   let props = normalizeSharpProps(rows);
   if (!props.length) {
