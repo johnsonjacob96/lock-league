@@ -258,6 +258,18 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
   for (const row of rows || []) {
     if (row.is_player_prop === true) continue;
     const mt = String(row.market_type ?? row.market ?? "").toLowerCase();
+    // SharpAPI's spread,total feed also carries derivative markets that share the
+    // same keywords and would otherwise pollute the board: team totals (~20-24
+    // pts, e.g. team_total / 1st_half_team_total), half/quarter lines
+    // (1st_half_total_points, 3rd_quarter_point_spread, ...), total_touchdowns
+    // (~5.5), and odd/even. Only the FULL-GAME point spread and points total
+    // belong on the board, so drop anything scoped to a team, a period, or a
+    // non-points derivative before the keyword match.
+    const isDerivative =
+      /team/.test(mt) ||                                  // team_total, *_team_total
+      /1st|2nd|3rd|4th|half|quarter|period/.test(mt) ||   // half/quarter lines
+      /touchdown|odd|even/.test(mt);                       // total_touchdowns, odd/even
+    if (isDerivative) continue;
     const isSpread = mt.includes("spread") || mt.includes("handicap");
     const isTotal = mt.includes("total") || mt.includes("over") || mt.includes("under");
     if (!isSpread && !isTotal) continue;
