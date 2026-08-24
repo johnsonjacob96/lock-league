@@ -125,7 +125,22 @@ export function deriveProp(markets, prop) { // exported for tests; CF ignores no
   const side = prop.side === "under" ? "under" : "over";
   // Use the priced book's own line (books can hang different numbers), falling
   // back to the aggregate line only if that book didn't post one.
-  const line = (bk && bk.line != null) ? bk.line : pl.line;
+  const mainLine = (bk && bk.line != null) ? bk.line : pl.line;
+  // Alternate OVER line ("buy up the line"): the request names a line other than
+  // the main one. Only honor it if the live board actually offers that alt line —
+  // re-derive its price from the board so a stored pick can't claim a line or odds
+  // the book isn't posting (same anti-cheat as the main line).
+  if (side === "over" && prop.line != null && Number(prop.line) !== Number(mainLine) && Array.isArray(pl.alts)) {
+    const alt = pl.alts.find((a) => Number(a.line) === Number(prop.line));
+    if (!alt) return null; // requested alt line isn't on the board
+    const altBook = (prop.book && alt[prop.book] != null) ? prop.book
+      : (alt.fanduel != null ? "fanduel" : (alt.draftkings != null ? "draftkings" : null));
+    const altPrice = altBook ? alt[altBook] : null;
+    if (altPrice == null) return null;
+    return { market: prop.market, player: pl.player, line: alt.line, side: "over", price: altPrice, book: altBook,
+      pick_text: propPickText({ market: prop.market, player: pl.player, line: alt.line, side: "over" }) };
+  }
+  const line = mainLine;
   const price = bk ? (side === "under" ? (bk.under ?? null) : (bk.over ?? null)) : null;
   return { market: prop.market, player: pl.player, line, side, price, book, pick_text: propPickText({ market: prop.market, player: pl.player, line, side }) };
 }

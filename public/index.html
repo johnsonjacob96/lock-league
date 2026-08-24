@@ -402,6 +402,14 @@
   .sl-side-btn.active { background:rgba(244,207,90,0.12); border-color:#f4cf5a; color:#f4cf5a; }
   .sl-side-btn .sl-side-lab { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; }
   .sl-side-btn .sl-side-price { font-family:'JetBrains Mono',monospace; font-size:11px; opacity:0.85; }
+  .sl-alt-wrap { display:flex; flex-direction:column; gap:5px; }
+  .sl-alt-lab { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:#6b7472; }
+  .sl-alts { display:flex; flex-wrap:wrap; gap:6px; }
+  .sl-alt-btn { display:inline-flex; align-items:center; gap:6px; padding:6px 9px; border-radius:7px; background:#101315; border:1px solid #29302f; color:#c7cdcb; cursor:pointer; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; letter-spacing:0.04em; transition:all .12s; }
+  .sl-alt-btn:hover { border-color:#3a423e; }
+  .sl-alt-btn.active { background:rgba(244,207,90,0.12); border-color:#f4cf5a; color:#f4cf5a; }
+  .sl-alt-btn .sl-alt-odds { color:#9aa4a2; font-weight:600; }
+  .sl-alt-btn.active .sl-alt-odds { color:#f4cf5a; }
   .sl-hint { font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.45; letter-spacing:0.02em; color:#9aa4a2; }
   .sl-hint.warn { color:#f5a24a; }
   .sl-locked { background:#101315; border:1px solid #29302f; border-radius:8px; padding:11px 13px; }
@@ -3124,7 +3132,7 @@ let slMode = "board";          // "board" | "custom"
 let slGameKey = "";            // game selected for prop picking
 let slMarkets = null;          // loaded prop menu for slGameKey (null=unloaded, []=none)
 let slLoading = false;
-let slDraft = { market: "", player: "", side: "" };
+let slDraft = { market: "", player: "", side: "", line: null }; // line=null -> main line; a number -> an alt "buy up" line
 let slEditing = false;         // "Change pick" forces the entry UI over a locked pick
 
 function slMeta(p) { return (p && (p.prop_meta || p.prop)) || null; }
@@ -3147,6 +3155,25 @@ function slBestSide(pl, side) {
   if (!cands.length) return { price: null, book: null, line: pl.line };
   cands.sort((a, b) => b.price - a.price);
   return cands[0];
+}
+// Best price for an alternate OVER line (buy up the line) across both books.
+function slBestAlt(pl, line) {
+  const alt = (pl.alts || []).find(a => Number(a.line) === Number(line));
+  if (!alt) return { price: null, book: null, line };
+  const cands = [];
+  for (const bk of ["fanduel", "draftkings"]) if (alt[bk] != null) cands.push({ book: bk, price: alt[bk], line: Number(line) });
+  if (!cands.length) return { price: null, book: null, line };
+  cands.sort((a, b) => b.price - a.price);
+  return cands[0];
+}
+// Resolve the current draft selection (main O/U, an alt buy-up line, or anytime
+// TD) into a single {side, line, price, book, label}. Single source of truth for
+// the side buttons' active state, the lock button, and the lock request.
+function slPropSel(m, pl) {
+  if (m.kind === "yes") { const b = slBestSide(pl, "yes"); return { side: "yes", line: null, price: b.price, book: b.book, label: `${slShort(pl.player)} anytime TD` }; }
+  if (slDraft.line != null) { const a = slBestAlt(pl, slDraft.line); return { side: "over", line: Number(slDraft.line), price: a.price, book: a.book, label: `Over ${slDraft.line}` }; }
+  if (slDraft.side === "over" || slDraft.side === "under") { const b = slBestSide(pl, slDraft.side); const ln = b.line ?? pl.line; return { side: slDraft.side, line: ln, price: b.price, book: b.book, label: `${slDraft.side === "over" ? "Over" : "Under"} ${ln}` }; }
+  return null;
 }
 
 function superLockEditorHtml() {
@@ -3304,33 +3331,46 @@ function slMarketPickerHtml() {
     const pl = m.players.find(x => x.player === slDraft.player);
     if (pl) {
       if (m.kind === "yes") {
-        sub += slLockBtnHtml(m, pl, "yes");
+        sub += slLockBtnHtml(m, pl);
       } else {
         const ov = slBestSide(pl, "over"), un = slBestSide(pl, "under");
+        const mainOver = slDraft.side === "over" && slDraft.line == null;
+        const mainUnder = slDraft.side === "under" && slDraft.line == null;
         sub += `<div class="sl-sides mt-2">
-          <button class="sl-side-btn ${slDraft.side === "over" ? "active" : ""}" data-slside="over">
+          <button class="sl-side-btn ${mainOver ? "active" : ""}" data-slside="over">
             <span class="sl-side-lab">Over ${ov.line ?? pl.line}</span>
             <span class="sl-side-price">${fmtPrice(ov.price)}${ov.book ? " · " + bookLabel(ov.book) : ""}</span></button>
-          <button class="sl-side-btn ${slDraft.side === "under" ? "active" : ""}" data-slside="under">
+          <button class="sl-side-btn ${mainUnder ? "active" : ""}" data-slside="under">
             <span class="sl-side-lab">Under ${un.line ?? pl.line}</span>
             <span class="sl-side-price">${fmtPrice(un.price)}${un.book ? " · " + bookLabel(un.book) : ""}</span></button>
         </div>`;
-        if (slDraft.side) sub += slLockBtnHtml(m, pl, slDraft.side);
+        // Alternate over lines — "buy up the line" for longer odds.
+        if (pl.alts && pl.alts.length) {
+          const chips = pl.alts.map(a => {
+            const best = slBestAlt(pl, a.line);
+            if (best.price == null) return "";
+            const on = Number(slDraft.line) === Number(a.line);
+            return `<button class="sl-alt-btn ${on ? "active" : ""}" data-slalt="${a.line}">o${a.line}<span class="sl-alt-odds">${fmtPrice(best.price)}</span></button>`;
+          }).join("");
+          if (chips) sub += `<div class="sl-alt-wrap mt-2"><span class="sl-alt-lab">Buy up the line</span><div class="sl-alts">${chips}</div></div>`;
+        }
+        if (slDraft.side || slDraft.line != null) sub += slLockBtnHtml(m, pl);
       }
     }
   }
   return `<select class="sl-select mt-2" id="sl-market">${marketOpts}</select>${sub}`;
 }
 
-function slLockBtnHtml(m, pl, side) {
-  const best = slBestSide(pl, side);
-  const meets = best.price != null && Number(best.price) >= -120;
-  const label = m.kind === "yes" ? `Lock ${slShort(pl.player)} anytime TD` : `Lock ${side === "over" ? "Over" : "Under"} ${best.line ?? pl.line}`;
-  const warn = (best.price != null && !meets)
-    ? `<div class="sl-hint warn mt-1">${fmtPrice(best.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
-    : (best.price == null ? `<div class="sl-hint warn mt-1">No price available for this side.</div>` : "");
+function slLockBtnHtml(m, pl) {
+  const sel = slPropSel(m, pl);
+  if (!sel) return "";
+  const meets = sel.price != null && Number(sel.price) >= -120;
+  const warn = (sel.price != null && !meets)
+    ? `<div class="sl-hint warn mt-1">${fmtPrice(sel.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
+    : (sel.price == null ? `<div class="sl-hint warn mt-1">No price available for this line.</div>` : "");
   const dis = meets ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
-  return `<button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>${label} · ${fmtPrice(best.price)}</button>${warn}`;
+  const book = sel.book ? ` · ${bookLabel(sel.book)}` : "";
+  return `<button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>Lock ${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${book}</button>${warn}`;
 }
 
 function myCardProgress() {
@@ -3382,14 +3422,15 @@ function bindSuperLockEditor() {
   // Board picker: game -> market -> player -> side -> lock.
   const gameSel = document.getElementById("sl-game");
   if (gameSel) gameSel.onchange = () => {
-    slGameKey = gameSel.value; slDraft = { market: "", player: "", side: "" }; slMarkets = null;
+    slGameKey = gameSel.value; slDraft = { market: "", player: "", side: "", line: null }; slMarkets = null;
     if (slGameKey) loadPropMenu(slGameKey); else refreshSuperLockEditor();
   };
   const marketSel = document.getElementById("sl-market");
-  if (marketSel) marketSel.onchange = () => { slDraft.market = marketSel.value; slDraft.player = ""; slDraft.side = ""; refreshSuperLockEditor(); };
+  if (marketSel) marketSel.onchange = () => { slDraft.market = marketSel.value; slDraft.player = ""; slDraft.side = ""; slDraft.line = null; refreshSuperLockEditor(); };
   const playerSel = document.getElementById("sl-player");
-  if (playerSel) playerSel.onchange = () => { slDraft.player = playerSel.value; slDraft.side = ""; refreshSuperLockEditor(); };
-  root.querySelectorAll(".sl-side-btn").forEach(b => b.onclick = () => { slDraft.side = b.dataset.slside; refreshSuperLockEditor(); });
+  if (playerSel) playerSel.onchange = () => { slDraft.player = playerSel.value; slDraft.side = ""; slDraft.line = null; refreshSuperLockEditor(); };
+  root.querySelectorAll(".sl-side-btn").forEach(b => b.onclick = () => { slDraft.side = b.dataset.slside; slDraft.line = null; refreshSuperLockEditor(); });
+  root.querySelectorAll(".sl-alt-btn").forEach(b => b.onclick = () => { slDraft.line = Number(b.dataset.slalt); slDraft.side = "over"; refreshSuperLockEditor(); });
   const lock = document.getElementById("sl-lock");
   if (lock && !lock.disabled) lock.onclick = () => lockStructuredProp();
   const lockLine = document.getElementById("sl-lock-line");
@@ -3423,10 +3464,10 @@ async function lockStructuredProp() {
   const m = (slMarkets || []).find(x => x.market === slDraft.market);
   const pl = m && m.players.find(x => x.player === slDraft.player);
   if (!m || !pl) return;
-  const side = m.kind === "yes" ? "yes" : slDraft.side;
-  if (!side) return;
-  const best = slBestSide(pl, side);
-  const prop = { market: m.market, player: pl.player, line: m.kind === "yes" ? null : (best.line ?? pl.line), side, book: best.book, game_key: slGameKey };
+  const sel = slPropSel(m, pl);
+  if (!sel) return;
+  const best = { book: sel.book, price: sel.price };
+  const prop = { market: m.market, player: pl.player, line: sel.side === "yes" ? null : sel.line, side: sel.side, book: sel.book, game_key: slGameKey };
   const msg = document.getElementById("mycard-sl-msg");
   try {
     const r = await fetch("/api/picks", {
@@ -3444,7 +3485,7 @@ async function lockStructuredProp() {
       return;
     }
     currentMyPicks["Super Lock"] = { pick_text: propTextClient(prop, m), prop, book: best.book, price: best.price, locked_at: new Date().toISOString() };
-    slEditing = false; slDraft = { market: "", player: "", side: "" };
+    slEditing = false; slDraft = { market: "", player: "", side: "", line: null };
     showToast("SUPER LOCK LOCKED");
     refreshMyCard();
     refreshSuperLockEditor();

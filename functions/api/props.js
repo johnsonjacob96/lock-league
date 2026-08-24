@@ -69,7 +69,7 @@ export function menuForGame(props, away, home) { // exported for tests; CF ignor
   const byMarket = new Map();
   for (const p of inGame) {
     const arr = byMarket.get(p.market) || byMarket.set(p.market, []).get(p.market);
-    arr.push({ player: p.player, line: p.line, kind: p.kind, fanduel: p.fanduel, draftkings: p.draftkings });
+    arr.push({ player: p.player, line: p.line, kind: p.kind, fanduel: p.fanduel, draftkings: p.draftkings, alts: p.alts || [] });
   }
   const markets = [];
   for (const key of PROP_ORDER) {

@@ -113,6 +113,15 @@ function tdSubtypeFromSelection(sel) {
   return null;
 }
 
+// SharpAPI ships alternate lines as cumulative "N+ <Stat>" selections
+// (selection_type "other"), e.g. "Cooper Kupp 4+ Receptions". "N+" is an OVER at
+// line N-0.5 with its own odds — buying up the line (higher N) lengthens the
+// payout. Returns the threshold N, or null for a non-alt selection.
+function altThreshold(sel) {
+  const m = String(sel || "").match(/\b(\d+)\s*\+/);
+  return m ? Number(m[1]) : null;
+}
+
 export function normalizeSharpProps(rows) {
   // Pre-scan: resolve each player's touchdown subtype from the cumulative
   // ("N+ <flavor> Touchdowns") selection strings before mapping the O/U rows.
@@ -160,7 +169,7 @@ export function normalizeSharpProps(rows) {
 
     const id = `${market}|${player.toLowerCase()}`;
     let e = agg.get(id);
-    if (!e) { e = { market, label: def.label, unit: def.unit, kind: def.kind, player, home, away, kickoff, byBook: {} }; agg.set(id, e); }
+    if (!e) { e = { market, label: def.label, unit: def.unit, kind: def.kind, player, home, away, kickoff, byBook: {}, altByBook: {} }; agg.set(id, e); }
     const b = e.byBook[book] || (e.byBook[book] = { over: null, under: null, yes: null, line: null, main: false });
     if (def.kind === "yes") {
       // Anytime TD: yes/no, or an O/U 0.5 (over == yes). Ignore alt/"other" rows.
@@ -168,14 +177,18 @@ export function normalizeSharpProps(rows) {
       else if (stype === "no" || stype === "under") b.no = price;
       else continue;
       if (isMain) b.main = true;
-    } else {
-      // Only the main Over/Under line grades; skip cumulative ("N+", selection_type
-      // "other") rows that would otherwise clobber the over/under prices.
-      if (stype !== "over" && stype !== "under") continue;
-      // Keep the main line; if a book sends alternates too, the main-flagged one wins.
+    } else if (stype === "over" || stype === "under") {
+      // Main Over/Under line: keep the book's main line (the main-flagged row wins).
       if (Number.isFinite(line) && (b.line == null || (isMain && !b.main))) b.line = line;
       b[stype] = price;
       if (isMain) b.main = true;
+    } else {
+      // Alternate over line: a cumulative "N+ <Stat>" selection -> over at N-0.5
+      // with its own odds. Bucket per book so the picker can offer buy-up lines.
+      const n = altThreshold(r.selection);
+      if (n != null && price != null) {
+        (e.altByBook[book] || (e.altByBook[book] = new Map())).set(n - 0.5, price);
+      }
     }
   }
   // Flatten to the picker shape: one entry per (market, player) with the best
@@ -186,11 +199,25 @@ export function normalizeSharpProps(rows) {
     const fd = books.fanduel, dk = books.draftkings;
     const line = (fd && fd.line != null) ? fd.line : (dk && dk.line != null ? dk.line : null);
     if (e.kind === "ou" && line == null) continue;
+    // Alternate OVER lines above the main line — "buy up the line" for longer odds.
+    // Union the thresholds across books, keep the best (longest) price per book,
+    // sorted by line. Only lines above the main one (higher = harder = longer odds).
+    let alts = [];
+    if (e.kind === "ou") {
+      const lineSet = new Set();
+      for (const bk of Object.keys(e.altByBook)) for (const ln of e.altByBook[bk].keys()) if (ln > line) lineSet.add(ln);
+      alts = [...lineSet].sort((a, b) => a - b).map((ln) => ({
+        line: ln,
+        fanduel: e.altByBook.fanduel ? (e.altByBook.fanduel.get(ln) ?? null) : null,
+        draftkings: e.altByBook.draftkings ? (e.altByBook.draftkings.get(ln) ?? null) : null,
+      }));
+    }
     out.push({
       market: e.market, label: e.label, unit: e.unit, kind: e.kind,
       player: e.player, home: e.home, away: e.away, kickoff: e.kickoff, line,
       fanduel: fd ? { line: fd.line, over: fd.over, under: fd.under, yes: fd.yes } : null,
       draftkings: dk ? { line: dk.line, over: dk.over, under: dk.under, yes: dk.yes } : null,
+      alts,
     });
   }
   return out;
