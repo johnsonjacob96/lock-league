@@ -598,6 +598,7 @@
   .slot .lp-meta, .sl-locked .lp-meta { display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
   .slot .lp-book, .sl-locked .lp-book { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:#9aa4a2; border:1px solid #2c332f; border-radius:4px; padding:1px 5px; }
   .slot .lp-ts, .sl-locked .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#868f8c; }
+  .slot .lp-odds, .sl-locked .lp-odds { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; letter-spacing:0.02em; color:#f4cf5a; }
 
   /* Weekly settlement ($5 to the winner) */
   .stl-you { font-family:'Inter',sans-serif; font-size:14px; color:#d4d8d7; line-height:1.4; }
@@ -802,6 +803,7 @@
   .wr-chip .wr-bt { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
   .wr-chip .wr-pick { font-family: 'Inter', sans-serif; font-size: 13px; color: #e6e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wr-chip .wr-sub { display: inline-flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9aa4a2; white-space: nowrap; }
+  .wr-chip .wr-odds { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: #f4cf5a; letter-spacing: 0.02em; }
   .wr-chip.st-win { border-left-color: #46e08a; }
   .wr-chip.st-win .wr-pick { color: #eafff3; }
   .wr-chip.st-lose { border-left-color: #ef4444; opacity: 0.8; }
@@ -3173,13 +3175,18 @@ function slLockedHtml(p) {
   const lockedTs = p.locked_at ? `<span class="lp-ts">Locked ${fmtLockedAt(p.locked_at)}</span>` : "";
   const repick = `<div class="mt-2"><button class="sl-link" id="sl-repick">Change pick</button></div>`;
   if (meta) {
+    // The odds are a core piece of the Super Lock (prop prices swing widely), so
+    // show the locked price — the longest-odds book we locked against. Prefer the
+    // top-level column, fall back to the price stamped in prop_meta.
+    const price = p.price != null ? p.price : (meta.price != null ? meta.price : null);
+    const odds = price != null ? `<span class="lp-odds">${fmtPrice(price)}</span>` : "";
     const book = meta.book ? `<span class="lp-book">${bookLabel(meta.book)}</span>` : "";
     return `
       <div class="sl-locked">
         <div class="flex items-center justify-between gap-2">
           <span class="sl-locked-txt">${txt}</span>${resBadge}
         </div>
-        <div class="lp-meta">${book}${lockedTs}</div>
+        <div class="lp-meta">${odds}${book}${lockedTs}</div>
         <div class="sl-auto"><span class="material-symbols-outlined text-[12px]" style="font-variation-settings:'FILL' 1">bolt</span>${res ? "Auto-graded from box score" : "Auto-grades after the game"}</div>
       </div>${repick}`;
   }
@@ -4396,9 +4403,13 @@ function wrChip(p, ctx) {
   const isExp = expId && state.wrExpanded === expId;
   const chev = canExpand ? `<span class="wr-chev" aria-hidden="true">▾</span>` : "";
   const stateCls = `${cls} ${live ? "is-live" : ""} ${settled ? "is-settled" : ""} ${p.final ? "is-final" : ""}`;
+  // Odds are a core piece of the Super Lock; show the locked price (longest-odds
+  // book) so the league can see the number each member took.
+  const oddsTag = (p.bet_type === "Super Lock" && p.price != null)
+    ? `<span class="wr-odds">${americanOdds(p.price)}</span>` : "";
   const inner = `${btEl}
       <span class="wr-pick">${escapeHtml(shortPickText(p.pick_text))}</span>
-      <span class="wr-sub">${escapeHtml(scoreTxt)}${mark}${chev}</span>`;
+      <span class="wr-sub">${oddsTag}${escapeHtml(scoreTxt)}${mark}${chev}</span>`;
   if (canExpand) {
     return `<button type="button" class="wr-chip ${stateCls} expandable" data-exp="${expId}" data-key="${escapeHtml(p.game_key)}" aria-expanded="${isExp ? "true" : "false"}">${inner}</button>`;
   }

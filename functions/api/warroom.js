@@ -61,7 +61,7 @@ export async function onRequest({ request, env, waitUntil }) {
 
   const [picks, events, roster] = await Promise.all([
     sql(env)`
-      SELECT p.member_id, m.name, p.bet_type, p.pick_text, p.game_key, p.side, p.line, p.result, p.prop_meta
+      SELECT p.member_id, m.name, p.bet_type, p.pick_text, p.game_key, p.side, p.line, p.result, p.prop_meta, p.price, p.book
       FROM picks p JOIN members m ON m.id = p.member_id
       WHERE p.season = ${cur.season} AND p.week = ${cur.week}
       ORDER BY m.name`,
@@ -139,6 +139,7 @@ export async function onRequest({ request, env, waitUntil }) {
         const gameLive = !!ev && (ev.state === "in" || ev.state === "post");
         m.picks.push({
           bet_type: bt, kind: "pick", pick_text: p.pick_text,
+          price: p.price ?? null, book: p.book ?? null, // odds shown on the Super Lock chip
           game_key: p.game_key || null, // lets the client open the live game drill-down
           status: s.status, final: !!s.final, state: s.state || null,
           detail: s.detail || (ev && ev.detail) || null,
