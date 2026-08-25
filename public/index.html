@@ -401,7 +401,7 @@
   .sl-side-btn:hover { border-color:#3a423e; }
   .sl-side-btn.active { background:rgba(244,207,90,0.12); border-color:#f4cf5a; color:#f4cf5a; }
   .sl-side-btn .sl-side-lab { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; font-weight:700; }
-  .sl-side-btn .sl-side-price { font-family:'JetBrains Mono',monospace; font-size:11px; opacity:0.85; }
+  .sl-side-btn .sl-side-price { font-family:'JetBrains Mono',monospace; font-size:11px; opacity:0.85; white-space:nowrap; }
   .sl-alt-wrap { display:flex; flex-direction:column; gap:5px; }
   .sl-alt-lab { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:#6b7472; }
   .sl-alts { display:flex; flex-wrap:wrap; gap:6px; }
@@ -612,7 +612,7 @@
      the lower half unreachable until the games column ends (feels like it "stops
      then continues" as you scroll). Let the pinned card scroll internally instead. */
   @media (min-width: 1024px) {
-    .picks-aside { max-height: calc(100vh - 5rem); overflow-y: auto; overflow-x: visible; scrollbar-width: thin; }
+    .picks-aside { max-height: calc(100vh - 5rem); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
     .picks-aside::-webkit-scrollbar { width: 8px; }
     .picks-aside::-webkit-scrollbar-thumb { background: #2c332f; border-radius: 4px; }
   }
@@ -3289,7 +3289,7 @@ function slGameLineSubHtml(g, kind) {
     if (!info) return "";
     return `<button class="sl-side-btn ${slDraft.side === sd ? "active" : ""}" data-slside="${sd}">
       <span class="sl-side-lab">${escapeHtml(info.label)}</span>
-      <span class="sl-side-price">${fmtPrice(info.price)}${info.book ? " · " + bookLabel(info.book) : ""}</span></button>`;
+      <span class="sl-side-price">${fmtPrice(info.price)}${info.book ? " · " + bookShort(info.book) : ""}</span></button>`;
   }).join("");
   let out = `<div class="sl-sides mt-2">${btns}</div>`;
   if (sides.includes(slDraft.side)) {
@@ -3348,10 +3348,10 @@ function slMarketPickerHtml() {
         sub += `<div class="sl-sides mt-2">
           <button class="sl-side-btn ${mainOver ? "active" : ""}" data-slside="over">
             <span class="sl-side-lab">Over ${ov.line ?? pl.line}</span>
-            <span class="sl-side-price">${fmtPrice(ov.price)}${ov.book ? " · " + bookLabel(ov.book) : ""}</span></button>
+            <span class="sl-side-price">${fmtPrice(ov.price)}${ov.book ? " · " + bookShort(ov.book) : ""}</span></button>
           <button class="sl-side-btn ${mainUnder ? "active" : ""}" data-slside="under">
             <span class="sl-side-lab">Under ${un.line ?? pl.line}</span>
-            <span class="sl-side-price">${fmtPrice(un.price)}${un.book ? " · " + bookLabel(un.book) : ""}</span></button>
+            <span class="sl-side-price">${fmtPrice(un.price)}${un.book ? " · " + bookShort(un.book) : ""}</span></button>
         </div>`;
         // Alternate over lines — "buy up the line" for longer odds.
         if (pl.alts && pl.alts.length) {
@@ -3378,7 +3378,7 @@ function slLockBtnHtml(m, pl) {
     ? `<div class="sl-hint warn mt-1">${fmtPrice(sel.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
     : (sel.price == null ? `<div class="sl-hint warn mt-1">No price available for this line.</div>` : "");
   const dis = meets ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
-  const book = sel.book ? ` · ${bookLabel(sel.book)}` : "";
+  const book = sel.book ? ` · ${bookShort(sel.book)}` : "";
   return `<button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>Lock ${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${book}</button>${warn}`;
 }
 
@@ -3819,6 +3819,11 @@ function refreshMyCard() {
 
 function bookLabel(k) {
   return ({ fanduel: "FanDuel", draftkings: "DraftKings", espn: "ESPN" })[k] || (k ? String(k).toUpperCase() : "");
+}
+// Compact book code for the narrow Super Lock picker buttons (the full name wraps
+// in the col-span-4 card at the lg breakpoint).
+function bookShort(k) {
+  return ({ fanduel: "FD", draftkings: "DK", espn: "ESPN" })[k] || (k ? String(k).toUpperCase() : "");
 }
 
 function renderGameCard(g, requestedBook) {
