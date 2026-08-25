@@ -607,6 +607,15 @@
   .slot .lp-book, .sl-locked .lp-book { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:#9aa4a2; border:1px solid #2c332f; border-radius:4px; padding:1px 5px; }
   .slot .lp-ts, .sl-locked .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#868f8c; }
   .slot .lp-odds, .sl-locked .lp-odds { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; letter-spacing:0.02em; color:#f4cf5a; }
+  /* Picks-tab sidebar: it's a sticky column (top-16). When My Card + Super Lock
+     picker grows taller than the viewport, a plain sticky pins the top and leaves
+     the lower half unreachable until the games column ends (feels like it "stops
+     then continues" as you scroll). Let the pinned card scroll internally instead. */
+  @media (min-width: 1024px) {
+    .picks-aside { max-height: calc(100vh - 5rem); overflow-y: auto; overflow-x: visible; scrollbar-width: thin; }
+    .picks-aside::-webkit-scrollbar { width: 8px; }
+    .picks-aside::-webkit-scrollbar-thumb { background: #2c332f; border-radius: 4px; }
+  }
 
   /* Weekly settlement ($5 to the winner) */
   .stl-you { font-family:'Inter',sans-serif; font-size:14px; color:#d4d8d7; line-height:1.4; }
@@ -3687,7 +3696,7 @@ function renderThisWeek() {
     </section>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <aside class="lg:col-span-4 lg:order-2 lg:sticky lg:top-16 self-start space-y-4">
+      <aside class="picks-aside lg:col-span-4 lg:order-2 lg:sticky lg:top-16 self-start space-y-4">
         ${renderMyCardPanel()}
         ${renderWhosInWidget()}
       </aside>
