@@ -1,0 +1,41 @@
+# Week-1 smoke suite — catches board/prop/pick/grading logic regressions and
+# client-render/layout bugs before they reach the league. Run before go-live and
+# on every push to main. `smoke/README.md` documents the layers.
+name: smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: "Also run the live prod health probe"
+        type: boolean
+        default: false
+
+jobs:
+  logic:
+    name: logic (board · props · picks · grading)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install
+      - run: npm run smoke
+      - name: Live prod probe (manual dispatch only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.live }}
+        run: npm run smoke:live
+
+  render:
+    name: render (client picker · war room · layout)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install
+      - name: Install Playwright + Chromium
+        run: npm install --no-save playwright@1 && npx playwright install --with-deps chromium
+      - run: npm run smoke:render

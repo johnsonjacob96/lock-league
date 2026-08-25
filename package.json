@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "wrangler pages dev --port 8765",
     "deploy": "wrangler pages deploy public",
-    "build:css": "tailwindcss -c tailwind.config.js -i tailwind.input.css -o public/assets/tailwind.css --minify"
+    "build:css": "tailwindcss -c tailwind.config.js -i tailwind.input.css -o public/assets/tailwind.css --minify",
+    "smoke": "node smoke/run.mjs",
+    "smoke:render": "node smoke/run.mjs --render",
+    "smoke:live": "node smoke/run.mjs --live",
+    "smoke:all": "node smoke/run.mjs --all"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0",

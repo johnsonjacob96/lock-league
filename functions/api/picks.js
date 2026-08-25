@@ -50,7 +50,7 @@ async function fetchLiveOdds(request) {
   }
 }
 
-function findGame(games, gameKey) {
+export function findGame(games, gameKey) { // exported for smoke tests; CF ignores non-handler exports
   if (!gameKey) return null;
   const [a, h] = String(gameKey).split("@");
   return games.find((g) => sameTeam(g.away, a) && sameTeam(g.home, h)) || null;
@@ -70,7 +70,7 @@ function pickBookFor(game, side, preferred) {
 
 // Re-derive a gradable pick's line, price, book, and canonical pick_text from
 // the live board. Returns null if the chosen market isn't offered right now.
-function deriveGradable(game, betType, side, preferredBook) {
+export function deriveGradable(game, betType, side, preferredBook) { // exported for smoke tests
   const chosen = pickBookFor(game, side, preferredBook);
   if (!chosen) return null;
   const { book, data } = chosen;
@@ -167,7 +167,7 @@ async function boardEvents(season, week, seasontype, env, request) {
 }
 
 // Returns the offending pick if any submitted game has already started.
-function findStartedGame(picks, events) {
+export function findStartedGame(picks, events) { // exported for smoke tests
   const keyed = picks.filter(p => p.game_key);
   if (!keyed.length) return null;
   const now = Date.now();
@@ -185,7 +185,7 @@ function findStartedGame(picks, events) {
 // aren't allowed in this league. Weekday is read in Central (an MNF kickoff falls
 // on Tuesday in UTC, so a naive UTC check would miss it). The board never offers
 // them, so this is a backstop against a hand-crafted request.
-function findMondayGame(picks, events) {
+export function findMondayGame(picks, events) { // exported for smoke tests
   const keyed = picks.filter(p => p.game_key);
   if (!keyed.length) return null;
   for (const p of keyed) {
