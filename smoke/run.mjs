@@ -12,7 +12,7 @@ const args = process.argv.slice(2);
 const want = (f) => args.includes(f) || args.includes("--all");
 const baseUrl = (args.find(a => a.startsWith("--url=")) || "").split("=")[1] || "https://lock-league.pages.dev";
 
-const suites = [runLogic()];
+const suites = [await runLogic()];
 
 if (want("--render")) {
   try { const { run } = await import("./render.mjs"); suites.push(await run()); }

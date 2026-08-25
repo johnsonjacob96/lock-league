@@ -8,13 +8,13 @@ import { normalizeSharpProps } from "../functions/_shared/props.js";
 import { menuForGame } from "../functions/api/props.js";
 import { deriveProp, deriveGradable, findGame, findStartedGame, findMondayGame } from "../functions/api/picks.js";
 import { gradeProp } from "../functions/_shared/props.js";
-import { gradeTotal, resolveSpreadResult } from "../functions/_shared/grader.js";
+import { gradeTotal, resolveSpreadResult, resolvePickResult } from "../functions/_shared/grader.js";
 import { sharpBoardRows, sharpPropRows, scoreboard, boxscoreG1, KEYS } from "./fixtures.mjs";
 
 const LOCK_MIN = -120; // league rule: Super Lock odds must be -120 or longer
 const lockable = (price) => price != null && Number(price) >= LOCK_MIN;
 
-export function run() {
+export async function run() {
   const s = suite("logic — Week-1 simulation (board · props · picks · grading)");
 
   // ── 1. Board: derivative markets must never reach the game spread/total ──
@@ -90,6 +90,23 @@ export function run() {
   s.eq("grade Over 44.5 (total 47) -> W", gradeTotal("over", 44.5, evSea.away_score + evSea.home_score), "W");
   s.eq("grade Under 44.5 (total 47) -> L", gradeTotal("under", 44.5, evSea.away_score + evSea.home_score), "L");
   s.eq("grade total push (line 47, total 47) -> P", gradeTotal("over", 47, 47), "P");
+
+  // ── 7. Grading ROUTER: the exact bet_type + prop_meta routing gradeWeek uses ──
+  // (auto-grade pipeline minus ESPN/DB — box score is injected). Catches a pick
+  // being sent to the wrong grader, or free-text/missing data being auto-graded.
+  const evR = { ...evSea, id: "SEA1" };                    // SEA 27 NE 20, total 47
+  const getBox = async (id) => (id === "SEA1" ? box : null);
+  const route = (p) => resolvePickResult(p, evR, getBox);
+  s.eq("router: Favorite -> spread grader (W)", await route({ bet_type: "Favorite", side: "fav", line: -3.5, pick_text: "Seattle Seahawks -3.5" }), "W");
+  s.eq("router: Over -> total grader (W)", await route({ bet_type: "Over", side: "over", line: 44.5 }), "W");
+  s.eq("router: Super Lock spread (prop_meta.kind=spread) -> spread grader (W)", await route({ bet_type: "Super Lock", side: "fav", line: -3.5, pick_text: "Seattle Seahawks -3.5", prop_meta: { kind: "spread" } }), "W");
+  s.eq("router: Super Lock total (prop_meta.kind=total) -> total grader (W)", await route({ bet_type: "Super Lock", side: "over", line: 44.5, prop_meta: { kind: "total" } }), "W");
+  s.eq("router: Super Lock player prop -> box-score grader (Kupp o3.5, 4 rec, W)", await route({ bet_type: "Super Lock", prop_meta: { market: "receptions", player: "Cooper Kupp", line: 3.5, side: "over" } }), "W");
+  s.eq("router: Super Lock alt-line prop (o4.5, 4 rec, L)", await route({ bet_type: "Super Lock", prop_meta: { market: "receptions", player: "Cooper Kupp", line: 4.5, side: "over" } }), "L");
+  s.eq("router: prop_meta stored as a JSON string is parsed (Maye pass_tds o1.5, W)", await route({ bet_type: "Super Lock", prop_meta: JSON.stringify({ market: "pass_tds", player: "Drake Maye", line: 1.5, side: "over" }) }), "W");
+  s.eq("router: free-text Super Lock (no prop_meta) -> null (manual, never auto-graded)", await route({ bet_type: "Super Lock", prop_meta: null }), null);
+  s.eq("router: Over with a null final score -> null (not graded yet)", await resolvePickResult({ bet_type: "Over", side: "over", line: 44.5 }, { ...evR, home_score: null }, getBox), null);
+  s.eq("router: player prop but box fetch fails -> null (retry next run, not a loss)", await resolvePickResult({ bet_type: "Super Lock", prop_meta: { market: "receptions", player: "Cooper Kupp", line: 3.5, side: "over" } }, { ...evR, id: "MISSING" }, getBox), null);
 
   return s;
 }

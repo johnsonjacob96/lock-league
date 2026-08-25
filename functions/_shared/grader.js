@@ -109,6 +109,27 @@ export function resolveSpreadResult(p, ev) {
   return gradeSpread(p.side, favLine, ev.away_score, ev.home_score, favIsHome);
 }
 
+// Route a single pick to the right grader against a FINAL event. This is the
+// authoritative grading router used by gradeWeek — kept pure (except getBox, an
+// injected `(eventId) -> boxscore` so it runs without ESPN) so the exact routing
+// is smoke-tested. Returns 'W'|'L'|'P', or null when the pick can't be auto-graded
+// (missing scores, an unmatched player, or a free-text Super Lock -> manual).
+export async function resolvePickResult(p, ev, getBox) {
+  const haveScore = ev && ev.home_score != null && ev.away_score != null;
+  const total = () => ev.home_score + ev.away_score;
+  if (p.bet_type === "Favorite" || p.bet_type === "Dog") return haveScore ? resolveSpreadResult(p, ev) : null;
+  if (p.bet_type === "Over" || p.bet_type === "Under") return haveScore ? gradeTotal(p.side, Number(p.line), total()) : null;
+  if (p.bet_type === "Super Lock") {
+    const meta = typeof p.prop_meta === "string" ? safeJson(p.prop_meta) : p.prop_meta;
+    if (!meta) return null;                                                    // free-text -> manual
+    if (meta.kind === "spread") return haveScore ? resolveSpreadResult(p, ev) : null; // game-line SL (spread)
+    if (meta.kind === "total") return haveScore ? gradeTotal(p.side, Number(p.line), total()) : null; // game-line SL (total)
+    if (meta.market) { const box = getBox ? await getBox(ev.id) : null; return box ? gradeProp(meta, box) : null; } // player prop
+    return null;
+  }
+  return null;
+}
+
 export async function gradeWeek(env, season, week) {
   const s = sql(env);
   const events = await fetchScoreboard(season, week, seasonTypeFor(env), env);
@@ -131,31 +152,11 @@ export async function gradeWeek(env, season, week) {
     const ev = events.find((e) => sameTeam(e.away, pAway) && sameTeam(e.home, pHome));
     if (!ev || ev.status !== "final") continue;
 
-    let result = null;
-    if (p.bet_type === "Favorite" || p.bet_type === "Dog") {
-      if (ev.home_score == null || ev.away_score == null) continue;
-      result = resolveSpreadResult(p, ev);
-    } else if (p.bet_type === "Over" || p.bet_type === "Under") {
-      if (ev.home_score == null || ev.away_score == null) continue;
-      const total = ev.home_score + ev.away_score;
-      result = gradeTotal(p.side, Number(p.line), total);
-    } else if (p.bet_type === "Super Lock") {
-      // Structured Super Locks auto-grade; free-text ones stay manual.
-      const meta = typeof p.prop_meta === "string" ? safeJson(p.prop_meta) : p.prop_meta;
-      if (!meta) continue; // free-text -> manual (mark-super-lock action)
-      if (meta.kind === "spread") {
-        if (ev.home_score == null || ev.away_score == null) continue;
-        result = resolveSpreadResult(p, ev); // a game-line Super Lock (a spread)
-      } else if (meta.kind === "total") {
-        if (ev.home_score == null || ev.away_score == null) continue;
-        result = gradeTotal(p.side, Number(p.line), ev.home_score + ev.away_score); // (a total)
-      } else if (meta.market) {
-        let box = boxCache.get(ev.id);
-        if (box === undefined) { box = await fetchBoxscore(ev.id); boxCache.set(ev.id, box); }
-        if (!box) continue; // couldn't fetch -> retry next run
-        result = gradeProp(meta, box); // player prop; null (player unmatched) -> manual
-      } else continue;
-    }
+    const result = await resolvePickResult(p, ev, async (id) => {
+      let box = boxCache.get(id);
+      if (box === undefined) { box = await fetchBoxscore(id); boxCache.set(id, box); }
+      return box; // fetched at most once per event per run; null on failure -> skip (retry next run)
+    });
     if (result) {
       await s`UPDATE picks SET result = ${result}, graded_at = NOW() WHERE id = ${p.id}`;
       graded++;

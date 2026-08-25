@@ -24,7 +24,7 @@ opt-in via manual dispatch (or run it locally before go-live).
 
 | Layer | File | What it simulates | Catches |
 |-------|------|-------------------|---------|
-| **logic** | `logic.mjs` | A 3-game Week 1 fed through `normalizeSharp` (board), `normalizeSharpProps` + `menuForGame` (props/alts), `deriveProp`/`deriveGradable` (pick anti-cheat), `findStartedGame`/`findMondayGame` (guards), and `gradeProp`/`gradeTotal`/`resolveSpreadResult` (grading). | Derivative-market leaks, prop mapping/alt gaps, anti-cheat holes, the −120 rule, guard regressions, mis-grading. |
+| **logic** | `logic.mjs` | A 3-game Week 1 fed through `normalizeSharp` (board), `normalizeSharpProps` + `menuForGame` (props/alts), `deriveProp`/`deriveGradable` (pick anti-cheat), `findStartedGame`/`findMondayGame` (guards), the grading math (`gradeProp`/`gradeTotal`/`resolveSpreadResult`), **and the auto-grade router** `resolvePickResult` — the exact `bet_type` + `prop_meta` routing `gradeWeek` uses (spread vs total vs player-prop vs free-text→manual), with the box score injected. | Derivative-market leaks, prop mapping/alt gaps, anti-cheat holes, the −120 rule, guard regressions, mis-grading, and a pick routed to the wrong grader / free-text auto-graded. |
 | **render** | `render.mjs` | Loads the real `index.html` headless, injects the simulated prop menu, and drives the Super Lock picker (every market + alt lines), War Room chip, and locked card at 1280/1024/500px. | JS errors on a data shape, layout/horizontal overflow, odds not showing, wrapping. |
 | **live** | `live.mjs` | Read-only probes of the deployed endpoints. | Board serving leaked totals, props endpoint down/malformed, an endpoint 404/5xx after a deploy. Never writes. |
 
