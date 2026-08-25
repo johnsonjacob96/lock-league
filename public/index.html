@@ -3124,7 +3124,7 @@ function renderMyCardBody() {
       <div class="min-w-0 flex-1">
         <div class="slot-name" style="${filled ? `color:${meta.color}` : ""}">${bt}</div>
         ${filled
-          ? `<div class="slot-val truncate">${txt}</div>${metaHtml}${moveHtml}`
+          ? `<div class="slot-val">${txt}</div>${metaHtml}${moveHtml}`
           : `<div class="slot-empty">${isSuper ? "Enter it below ↓" : "Tap a line below"}</div>`}
       </div>
       ${filled ? `<span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};font-variation-settings:'FILL' 1">check_circle</span>` : ""}

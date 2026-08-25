@@ -63,6 +63,11 @@ export async function run() {
           // Locked card shows odds.
           currentMyPicks["Super Lock"] = { pick_text: "Cooper Kupp o3.5 rec", prop: { market: "receptions", player: "Cooper Kupp", line: 3.5, side: "over", price: 280, book: "fanduel" }, price: 280, book: "fanduel", locked_at: new Date().toISOString() };
           out.checks.lockedOdds = /lp-odds[^>]*>\+280</.test(superLockEditorHtml());
+          // A long locked game-total slot must show its O/U number (not clip it).
+          currentMyPicks["Over"] = { pick_text: "New Orleans Saints / Detroit Lions O49.5", book: "draftkings", locked_at: new Date().toISOString() };
+          document.body.insertAdjacentHTML("beforeend", `<div id="mcb" style="width:230px">${renderMyCardBody()}</div>`);
+          const ov = [...document.querySelectorAll("#mcb .slot-val")].find(v => /New Orleans/.test(v.textContent));
+          out.checks.overSlotShowsLine = !!ov && /O49\.5/.test(ov.textContent) && getComputedStyle(ov).whiteSpace !== "nowrap";
         } catch (e) { out.err = String(e && e.stack || e); }
         return out;
       }, markets);
@@ -73,6 +78,7 @@ export async function run() {
       s.ok(`[${vw}px] O/U price stays on one line`, r.checks.priceOneLine !== false);
       s.ok(`[${vw}px] War Room Super Lock chip shows odds`, r.checks.wrOdds === true);
       s.ok(`[${vw}px] locked Super Lock card shows odds`, r.checks.lockedOdds === true);
+      s.ok(`[${vw}px] locked Over/Under slot shows its line, not truncated`, r.checks.overSlotShowsLine === true);
       await page.close();
     }
   } finally {
