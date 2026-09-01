@@ -82,6 +82,10 @@ export async function run() {
   s.eq("grade Walker rush_yds o68.5 (actual 72) -> W", gradeProp({ market: "rush_yds", player: "Kenneth Walker III", line: 68.5, side: "over" }, box), "W");
   s.eq("grade Walker rush_yds u68.5 -> L", gradeProp({ market: "rush_yds", player: "Kenneth Walker III", line: 68.5, side: "under" }, box), "L");
   s.eq("grade Walker anytime TD yes (1 rush TD) -> W", gradeProp({ market: "anytime_td", player: "Kenneth Walker III", side: "yes" }, box), "W");
+  // Anytime TD counts return + defensive scores, not just rush/rec.
+  s.eq("grade anytime TD: pick-six (interception/defensive TD, no rush/rec) -> W", gradeProp({ market: "anytime_td", player: "Devon Witherspoon", side: "yes" }, box), "W");
+  s.eq("grade anytime TD: kick-return TD -> W", gradeProp({ market: "anytime_td", player: "Zach Charbonnet", side: "yes" }, box), "W");
+  s.eq("grade anytime TD: player who scored no TD of any kind -> L", gradeProp({ market: "anytime_td", player: "Cooper Kupp", side: "yes" }, box), "L");
   s.eq("grade unknown player -> null (falls to manual)", gradeProp({ market: "rush_yds", player: "Ghost Player", line: 10, side: "over" }, box), null);
 
   const evSea = sb.find(e => e.home === "Seattle Seahawks");   // SEA 27 NE 20

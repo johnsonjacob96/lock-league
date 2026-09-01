@@ -29,7 +29,13 @@ export const PROP_DEFS = {
   receptions:   { label: "Receptions",       unit: "rec",      kind: "ou",  stat: ["receptions"] },
   rec_tds:      { label: "Receiving TDs",    unit: "rec TDs",  kind: "ou",  stat: ["receivingTouchdowns"] },
   rush_rec_yds: { label: "Rush + Rec Yards", unit: "yds",      kind: "ou",  stat: ["rushingYards", "receivingYards"] },
-  anytime_td:   { label: "Anytime TD",       unit: "TD",       kind: "yes", stat: ["rushingTouchdowns", "receivingTouchdowns"] },
+  // Anytime TD = the player crosses the goal line ANY way — rush, reception, OR a
+  // return / defensive score (kick/punt return, pick-six, fumble-return). Passing
+  // TDs are excluded (the QB doesn't score). It's a yes/no market, so overlapping
+  // ESPN keys (a pick-six counts under both interception- and defensive-TDs) are
+  // harmless — any positive sum means the player scored. Keys verified against live
+  // ESPN box scores (kick/punt/interception/defensive TDs).
+  anytime_td:   { label: "Anytime TD",       unit: "TD",       kind: "yes", stat: ["rushingTouchdowns", "receivingTouchdowns", "kickReturnTouchdowns", "puntReturnTouchdowns", "interceptionTouchdowns", "defensiveTouchdowns"] },
 };
 
 // Preferred order in the picker (most-locked first).
