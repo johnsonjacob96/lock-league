@@ -9,6 +9,7 @@ import { menuForGame } from "../functions/api/props.js";
 import { deriveProp, deriveGradable, findGame, findStartedGame, findMondayGame } from "../functions/api/picks.js";
 import { gradeProp } from "../functions/_shared/props.js";
 import { gradeTotal, resolveSpreadResult, resolvePickResult } from "../functions/_shared/grader.js";
+import { anytimeTdMarketFromOdds } from "../functions/_shared/oddsapi-props.js";
 import { sharpBoardRows, sharpPropRows, scoreboard, boxscoreG1, KEYS } from "./fixtures.mjs";
 
 const LOCK_MIN = -120; // league rule: Super Lock odds must be -120 or longer
@@ -135,6 +136,37 @@ export async function run() {
   } finally {
     globalThis.fetch = realFetch;
   }
+
+  // ── 9. Anytime TD from The Odds API: mapping + it flows through deriveProp ──
+  // SharpAPI lacks anytime-TD; we source it from The Odds API and shape it as an
+  // `anytime_td` market so the existing menu/derive/grade path handles it.
+  const oddsPayload = {
+    bookmakers: [
+      { key: "draftkings", markets: [{ key: "player_anytime_td", outcomes: [
+        { name: "Yes", description: "A.J. Brown", price: 160 },
+        { name: "Yes", description: "Saquon Barkley", price: -140 },
+        { name: "No", description: "Saquon Barkley", price: 110 },  // No side must be ignored
+      ] }] },
+      { key: "fanduel", markets: [{ key: "player_anytime_td", outcomes: [
+        { name: "Yes", description: "A.J. Brown", price: 165 },
+        { name: "Yes", description: "Saquon Barkley", price: -135 },
+      ] }] },
+      { key: "betmgm", markets: [{ key: "player_anytime_td", outcomes: [
+        { name: "Yes", description: "A.J. Brown", price: 150 },  // non-FD/DK book must be ignored
+      ] }] },
+    ],
+  };
+  const atd = anytimeTdMarketFromOdds(oddsPayload);
+  s.eq("anytime-td: market shape", [atd.market, atd.kind, atd.label], ["anytime_td", "yes", "Anytime TD"]);
+  s.eq("anytime-td: 2 players (No side + non-FD/DK book dropped)", atd.players.length, 2);
+  const brown = atd.players.find((p) => p.player === "A.J. Brown");
+  s.eq("anytime-td: A.J. Brown FD+DK Yes prices", [brown.draftkings.yes, brown.fanduel.yes], [160, 165]);
+  s.ok("anytime-td: no line, no No-side price leaked", brown.line === null && brown.draftkings.yes === 160);
+  // Now lock it like the picker would: deriveProp re-derives price/book off the menu.
+  const d = deriveProp([atd], { market: "anytime_td", player: "A.J. Brown", side: "yes", book: "fanduel" });
+  s.eq("anytime-td: deriveProp -> yes @ FD 165, no line", [d.market, d.side, d.line, d.price, d.book], ["anytime_td", "yes", null, 165, "fanduel"]);
+  s.eq("anytime-td: deriveProp rejects a player not on the board", deriveProp([atd], { market: "anytime_td", player: "Nobody At All", side: "yes" }), null);
+  s.eq("anytime-td: empty payload -> null (no market)", anytimeTdMarketFromOdds({ bookmakers: [] }), null);
 
   return s;
 }
