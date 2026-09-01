@@ -3,7 +3,7 @@
 // board normalization, prop menu + alt lines, pick anti-cheat re-derivation, the
 // started/Monday guards, and grading. This is the primary bug net before Week 1.
 import { suite } from "./assert.mjs";
-import { normalizeSharp } from "../functions/api/odds.js";
+import { normalizeSharp, fetchSharpRaw } from "../functions/api/odds.js";
 import { normalizeSharpProps } from "../functions/_shared/props.js";
 import { menuForGame } from "../functions/api/props.js";
 import { deriveProp, deriveGradable, findGame, findStartedGame, findMondayGame } from "../functions/api/picks.js";
@@ -107,6 +107,34 @@ export async function run() {
   s.eq("router: free-text Super Lock (no prop_meta) -> null (manual, never auto-graded)", await route({ bet_type: "Super Lock", prop_meta: null }), null);
   s.eq("router: Over with a null final score -> null (not graded yet)", await resolvePickResult({ bet_type: "Over", side: "over", line: 44.5 }, { ...evR, home_score: null }, getBox), null);
   s.eq("router: player prop but box fetch fails -> null (retry next run, not a loss)", await resolvePickResult({ bet_type: "Super Lock", prop_meta: { market: "receptions", player: "Cooper Kupp", line: 3.5, side: "over" } }, { ...evR, id: "MISSING" }, getBox), null);
+
+  // ── 8. SharpAPI rate-limit resilience: a mid-pagination 429 must not blank ──
+  // the whole pull (that was the "props show up inconsistently" bug — a 429 on a
+  // later page threw away every prior page, and the empty menu got cached).
+  const realFetch = globalThis.fetch;
+  const fakeRes = (status, json) => ({
+    ok: status >= 200 && status < 300, status,
+    json: async () => json, text: async () => JSON.stringify(json),
+  });
+  const env = { SHARPAPI_KEY: "test" };
+  try {
+    // Page 0 succeeds (2 rows, more available); page 1 is rate-limited.
+    let call = 0;
+    globalThis.fetch = async () => (call++ === 0
+      ? fakeRes(200, { data: [{ id: "p0a" }, { id: "p0b" }], pagination: { has_more: true, next_cursor: "c1" } })
+      : fakeRes(429, { error: { code: "rate_limited" } }));
+    const partial = await fetchSharpRaw(env, 4, { market: "props" });
+    s.eq("fetchSharpRaw: 429 mid-pagination keeps page-0 rows (partial, not blank)", partial.map(r => r.id), ["p0a", "p0b"]);
+
+    // Page 0 itself is rate-limited: nothing to salvage -> surfaces the error so
+    // the caller serves last-good instead of caching an empty menu.
+    globalThis.fetch = async () => fakeRes(429, { error: { code: "rate_limited" } });
+    let threw = false;
+    try { await fetchSharpRaw(env, 4, { market: "props" }); } catch { threw = true; }
+    s.ok("fetchSharpRaw: 429 on page 0 throws (no rows to salvage)", threw);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 
   return s;
 }

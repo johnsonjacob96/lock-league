@@ -22,8 +22,14 @@ import { fetchSharpRaw } from "./odds.js";
 import { normalizeSharpProps, PROP_ORDER, PROP_DEFS } from "../_shared/props.js";
 import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS } from "../_shared/nfl.js";
 
-const TTL_MS = 60 * 1000;
+// Props move slowly (books nudge lines, not menus), so cache hard: a 5-min fresh
+// window keeps us well under SharpAPI's ~12 req/min cap even with the whole
+// league opening prop menus, and the last-good entry survives a transient 429
+// for half an hour so one rate-limited pull never blanks the menu for everyone.
+const TTL_MS = 5 * 60 * 1000;
+const LASTGOOD_TTL_S = 30 * 60;
 const EDGE_KEY = new Request("https://lock-league.internal/cache/props");
+const EDGE_LASTGOOD = new Request("https://lock-league.internal/cache/props-lastgood");
 let cache = { ts: 0, key: "", data: null };
 
 function pickWeek(env) {
@@ -36,18 +42,27 @@ function pickWeek(env) {
 // week's kickoff window, mirroring the odds path.
 async function fetchWeekProps(env) {
   if (!env.SHARPAPI_KEY) return { source: "none", props: [] };
-  // SharpAPI groups player props under market=`props` (confirmed live: returns
-  // player_receptions / player_touchdowns rows; `player_props` returns 0).
-  // SHARP_PROP_MARKET can still override without a redeploy.
+  // SharpAPI groups ALL player props under market=`props` (confirmed live:
+  // receptions, passing/rushing/receiving yards, and TD markets all arrive under
+  // it; `player_props` returns 0). SHARP_PROP_MARKET can still override without a
+  // redeploy — re-probe values via /api/odds?debug=props&market=<v>.
   const primaryMarket = env.SHARP_PROP_MARKET || "props";
-  let rows = await fetchSharpRaw(env, 12, { market: primaryMarket }).catch(() => []);
-  let props = normalizeSharpProps(rows);
-  if (!props.length) {
-    // Wrong/unopened market string: best-effort unfiltered pull (capped), the
-    // keyword normalizer still isolates any prop rows present.
-    rows = await fetchSharpRaw(env, 12, { market: undefined }).catch(() => []);
-    props = normalizeSharpProps(rows);
+  // Cap the paginated pull at 4 pages: the full week's props land in ~3, and
+  // every page is one request against a ~12/min budget shared with the odds
+  // board. There is deliberately NO unfiltered fallback fetch here — it doubled
+  // our request count (and thus 429s) for no gain now that the market string is
+  // confirmed. fetchSharpRaw returns a partial slate (not an error) on a
+  // mid-pagination 429, so we degrade gracefully instead of blanking.
+  let rows;
+  try {
+    rows = await fetchSharpRaw(env, 4, { market: primaryMarket });
+  } catch (e) {
+    // Page-0 failure (nothing salvageable), typically a 429. Surface it so the
+    // caller serves last-good instead of caching an empty menu.
+    console.warn("props: SharpAPI fetch failed:", String((e && e.message) || e));
+    return { source: "error", props: [] };
   }
+  const props = normalizeSharpProps(rows);
   // Scope to the current pick week by kickoff, when the rows carry a time.
   const win = weekWindow(pickWeek(env).week, env);
   const from = Date.parse(win.from), to = Date.parse(win.to);
@@ -87,18 +102,66 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const gameKey = url.searchParams.get("game_key") || "";
   const [away, home] = gameKey.split("@");
+
+  // Diagnostic: trace every pipeline stage so we can see exactly where props
+  // vanish (raw fetch -> normalize -> week-scope -> per-game menu). Read-only,
+  // gated behind ?debug=1. Bypasses the cache to reflect a fresh pull.
+  if (url.searchParams.get("debug") === "1") {
+    if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    const out = {};
+    try {
+      const primaryMarket = env.SHARP_PROP_MARKET || "props";
+      out.market = primaryMarket;
+      let rawErr = null;
+      let rows = await fetchSharpRaw(env, 12, { market: primaryMarket }).catch((e) => { rawErr = String(e && e.message || e); return []; });
+      out.rawCount = rows.length;
+      out.rawErr = rawErr;
+      const mt = {};
+      let propRows = 0;
+      for (const r of rows) { const k = String(r.market_type || "?"); mt[k] = (mt[k] || 0) + 1; if (r.is_player_prop === true) propRows++; }
+      out.rawMarketTypes = mt;
+      out.rawPlayerPropRows = propRows;
+      let normalized = normalizeSharpProps(rows);
+      out.normalizedCount = normalized.length;
+      out.normalizedSample = normalized.slice(0, 3).map((p) => ({ market: p.market, player: p.player, line: p.line, home: p.home, away: p.away, kickoff: p.kickoff }));
+      // Did the fallback path need to run?
+      if (!normalized.length) {
+        let fbErr = null;
+        const fbRows = await fetchSharpRaw(env, 12, { market: undefined }).catch((e) => { fbErr = String(e && e.message || e); return []; });
+        out.fallbackRawCount = fbRows.length;
+        out.fallbackErr = fbErr;
+        normalized = normalizeSharpProps(fbRows);
+        out.fallbackNormalizedCount = normalized.length;
+      }
+      const win = weekWindow(pickWeek(env).week, env);
+      out.window = win;
+      const from = Date.parse(win.from), to = Date.parse(win.to);
+      const scoped = normalized.filter((p) => { const t = Date.parse(p.kickoff || ""); return !Number.isFinite(t) || (t >= from && t < to); });
+      out.scopedCount = scoped.length;
+      out.distinctGames = [...new Set(scoped.map((p) => `${p.away}@${p.home}`))].slice(0, 20);
+      if (away && home) {
+        const markets = menuForGame(scoped, away, home);
+        out.gameKey = gameKey;
+        out.gameMarkets = markets.map((m) => ({ market: m.market, players: m.players.length }));
+      }
+    } catch (e) {
+      out.error = String(e && e.message || e);
+    }
+    return json(out, { headers: { "Cache-Control": "no-store" } });
+  }
+
   if (!away || !home) return json({ error: "missing-game_key", markets: [] }, { status: 400 });
 
   const { week } = pickWeek(env);
   const cacheKey = `props:${week}`;
+  const edge = caches.default;
 
   // Serve the week's normalized props from L1/L2, then filter to this game.
-  let weekProps = null, source = "cache";
+  let weekProps = null, source = "cache", stale = false;
   if (cache.data && cache.key === cacheKey && Date.now() - cache.ts < TTL_MS) {
     weekProps = cache.data;
   } else {
     try {
-      const edge = caches.default;
       const hit = await edge.match(EDGE_KEY);
       if (hit) {
         const payload = await hit.json();
@@ -106,21 +169,43 @@ export async function onRequestGet(context) {
       }
     } catch { /* fall through */ }
   }
+
+  // Cache miss or expiry: pull fresh. A non-empty pull becomes the new truth
+  // (fresh cache + long-lived last-good). An empty/failed pull (SharpAPI 429 /
+  // throttled colo / props not posted yet) must NOT overwrite good data — fall
+  // back to the last-good props so one rate-limited fetch never blanks the menu
+  // league-wide. Mirrors the odds board's stale-serving behavior.
   if (!weekProps) {
     const res = await fetchWeekProps(env).catch(() => ({ source: "error", props: [] }));
-    weekProps = res.props; source = res.source;
-    cache = { ts: Date.now(), key: cacheKey, data: weekProps };
-    try {
-      const edge = caches.default;
-      waitUntil(edge.put(EDGE_KEY, new Response(JSON.stringify({ key: cacheKey, props: weekProps }), {
-        headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${TTL_MS / 1000}` },
-      })));
-    } catch { /* best-effort */ }
+    if (res.props && res.props.length) {
+      weekProps = res.props; source = res.source;
+      cache = { ts: Date.now(), key: cacheKey, data: weekProps };
+      const body = JSON.stringify({ key: cacheKey, props: weekProps, ts: Date.now() });
+      try {
+        waitUntil(edge.put(EDGE_KEY, new Response(body, {
+          headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${TTL_MS / 1000}` },
+        })));
+        waitUntil(edge.put(EDGE_LASTGOOD, new Response(body, {
+          headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${LASTGOOD_TTL_S}` },
+        })));
+      } catch { /* best-effort */ }
+    } else {
+      try {
+        const lg = await edge.match(EDGE_LASTGOOD);
+        if (lg) {
+          const payload = await lg.json();
+          if (payload.key === cacheKey && payload.props && payload.props.length) {
+            weekProps = payload.props; source = "stale"; stale = true;
+          }
+        }
+      } catch { /* fall through */ }
+      if (!weekProps) { weekProps = []; source = res.source; }
+    }
   }
 
   const markets = menuForGame(weekProps || [], away, home);
   return json({
-    game_key: gameKey, away, home, week, source,
+    game_key: gameKey, away, home, week, source, stale,
     live: markets.length > 0,
     markets, fetched_at: new Date().toISOString(),
   }, { headers: { "Cache-Control": "no-store", "X-Prop-Source": source } });
