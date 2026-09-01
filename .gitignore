@@ -5,9 +5,6 @@ __pycache__/
 node_modules/
 .vercel/
 
-# Local Netlify folder
-.netlify
-
 # Local Cloudflare wrangler / pages dev
 .wrangler
 .dev.vars
