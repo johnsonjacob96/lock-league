@@ -325,7 +325,15 @@ export async function fetchSharpRaw(env, maxPages = 8, overrides = null) { // ex
     for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== null) url.searchParams.set(k, v);
     if (cursor) url.searchParams.set("cursor", cursor);
     const r = await fetch(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } });
-    if (!r.ok) throw new Error(`sharpapi ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    if (!r.ok) {
+      // SharpAPI's free tier caps at ~12 requests/min; a paginated pull can trip
+      // that mid-stream (429). Keep whatever we've already paged in rather than
+      // discarding the entire fetch — a partial slate beats a blank one. Only
+      // surface the error when page 0 itself failed (nothing to salvage), so the
+      // caller can fall back or serve stale.
+      if (all.length) break;
+      throw new Error(`sharpapi ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    }
     const j = await r.json();
     const rows = Array.isArray(j) ? j : (j.data ?? j.odds ?? j.results ?? j.events ?? []);
     all.push(...rows);
