@@ -56,12 +56,21 @@ export function anytimeTdMarketFromOdds(payload) {
       e[book] = { yes: price };
     }
   }
+  // Order by the odds the picker actually shows (it displays the highest-payout
+  // book per player), shortest first = most likely to score at the top. American
+  // odds are monotonic, so ascending numeric value = descending implied
+  // probability across the whole range: a -140 favorite sits above +120, which
+  // sits above a +550 longshot.
+  const bestYes = (p) => {
+    const vals = [p.fanduel && p.fanduel.yes, p.draftkings && p.draftkings.yes].filter((v) => Number.isFinite(v));
+    return vals.length ? Math.max(...vals) : Infinity; // priceless -> bottom
+  };
   const players = [...byPlayer.entries()]
     .map(([player, books]) => ({
       player, line: null, kind: "yes",
       fanduel: books.fanduel || null, draftkings: books.draftkings || null, alts: [],
     }))
-    .sort((a, b) => a.player.localeCompare(b.player));
+    .sort((a, b) => bestYes(a) - bestYes(b) || a.player.localeCompare(b.player));
   if (!players.length) return null;
   const def = PROP_DEFS.anytime_td;
   return { market: "anytime_td", label: def.label, unit: def.unit, kind: def.kind, players };

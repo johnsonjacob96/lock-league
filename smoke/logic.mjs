@@ -159,6 +159,8 @@ export async function run() {
   const atd = anytimeTdMarketFromOdds(oddsPayload);
   s.eq("anytime-td: market shape", [atd.market, atd.kind, atd.label], ["anytime_td", "yes", "Anytime TD"]);
   s.eq("anytime-td: 2 players (No side + non-FD/DK book dropped)", atd.players.length, 2);
+  // Ordered by odds, most-likely first: Saquon (best -135) above A.J. Brown (best +165).
+  s.eq("anytime-td: ordered by odds (favorite first, longshots last)", atd.players.map((p) => p.player), ["Saquon Barkley", "A.J. Brown"]);
   const brown = atd.players.find((p) => p.player === "A.J. Brown");
   s.eq("anytime-td: A.J. Brown FD+DK Yes prices", [brown.draftkings.yes, brown.fanduel.yes], [160, 165]);
   s.ok("anytime-td: no line, no No-side price leaked", brown.line === null && brown.draftkings.yes === 160);
