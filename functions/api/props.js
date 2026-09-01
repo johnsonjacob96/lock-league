@@ -21,6 +21,7 @@ import { sameTeam } from "../_shared/grader.js";
 import { fetchSharpRaw } from "./odds.js";
 import { normalizeSharpProps, PROP_ORDER, PROP_DEFS } from "../_shared/props.js";
 import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS } from "../_shared/nfl.js";
+import { fetchAnytimeTdMarket } from "../_shared/oddsapi-props.js";
 
 // Props move slowly (books nudge lines, not menus), so cache hard: a 5-min fresh
 // window keeps us well under SharpAPI's ~12 req/min cap even with the whole
@@ -31,6 +32,47 @@ const LASTGOOD_TTL_S = 30 * 60;
 const EDGE_KEY = new Request("https://lock-league.internal/cache/props");
 const EDGE_LASTGOOD = new Request("https://lock-league.internal/cache/props-lastgood");
 let cache = { ts: 0, key: "", data: null };
+
+// Anytime-TD-scorer comes from The Odds API (1 credit per game), so cache it hard
+// per game: a 15-min fresh window keeps credit use low even as the league opens
+// menus, and a 6-hour last-good survives a quota/API hiccup without dropping the
+// market. Keys are per week+game.
+const ATD_TTL_S = 15 * 60;
+const ATD_LASTGOOD_TTL_S = 6 * 3600;
+const atdKey = (week, away, home, kind) =>
+  new Request(`https://lock-league.internal/cache/atd/${kind}/${week}/${encodeURIComponent(away)}@${encodeURIComponent(home)}`);
+
+// Fetch (or serve cached) the anytime-TD market for one game. Fail-soft: returns
+// null on any error so an Odds API hiccup never breaks the SharpAPI prop menu.
+async function getAnytimeTd(env, week, away, home, edge, waitUntil) {
+  if (!env.ODDS_API_KEY) return null;
+  const freshK = atdKey(week, away, home, "fresh");
+  const lastK = atdKey(week, away, home, "last");
+  try {
+    const hit = await edge.match(freshK);
+    if (hit) return await hit.json();
+  } catch { /* fall through */ }
+  let market = null;
+  try {
+    market = await fetchAnytimeTdMarket(env, away, home);
+  } catch (e) {
+    console.warn("anytime-td: Odds API failed:", String((e && e.message) || e));
+  }
+  if (market && market.players && market.players.length) {
+    const body = JSON.stringify(market);
+    try {
+      waitUntil(edge.put(freshK, new Response(body, { headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${ATD_TTL_S}` } })));
+      waitUntil(edge.put(lastK, new Response(body, { headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${ATD_LASTGOOD_TTL_S}` } })));
+    } catch { /* best-effort */ }
+    return market;
+  }
+  // Empty/failed pull — serve last-good if we have it (quota exhausted, etc.).
+  try {
+    const lg = await edge.match(lastK);
+    if (lg) return await lg.json();
+  } catch { /* fall through */ }
+  return null;
+}
 
 function pickWeek(env) {
   const cur = currentNflWeek(new Date(), env);
@@ -204,6 +246,10 @@ export async function onRequestGet(context) {
   }
 
   const markets = menuForGame(weekProps || [], away, home);
+  // Anytime TD (from The Odds API — SharpAPI doesn't carry it). Lazy per game,
+  // cached, fail-soft. Prepend so it leads the menu (it's first in PROP_ORDER).
+  const atd = await getAnytimeTd(env, week, away, home, edge, waitUntil).catch(() => null);
+  if (atd && atd.players.length) markets.unshift(atd);
   return json({
     game_key: gameKey, away, home, week, source, stale,
     live: markets.length > 0,
