@@ -85,6 +85,15 @@ export function boxscoreG1() {
           athletes: [ athlete("Kenneth Walker III", "rushing", null, ["15", "72", "1"]) ] },
         { name: "receiving", keys: ["receptions", "receivingYards", "receivingTouchdowns"],
           athletes: [ athlete("Cooper Kupp", "receiving", null, ["4", "58", "0"]) ] },
+        // Return / defensive scores — anytime TD must count these too. Devon
+        // Witherspoon's pick-six shows under BOTH interceptions and defensive
+        // (as ESPN really reports it); Zach Charbonnet has a kick-return TD.
+        { name: "interceptions", keys: ["interceptions", "interceptionYards", "interceptionTouchdowns"],
+          athletes: [ athlete("Devon Witherspoon", "interceptions", null, ["1", "97", "1"]) ] },
+        { name: "defensive", keys: ["totalTackles", "sacks", "defensiveTouchdowns"],
+          athletes: [ athlete("Devon Witherspoon", "defensive", null, ["5", "0", "1"]) ] },
+        { name: "kickReturns", keys: ["kickReturns", "kickReturnYards", "kickReturnTouchdowns"],
+          athletes: [ athlete("Zach Charbonnet", "kickReturns", null, ["2", "108", "1"]) ] },
       ] },
     ],
   };
