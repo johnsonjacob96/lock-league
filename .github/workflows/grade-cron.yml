@@ -4,6 +4,7 @@ name: Grade Picks (cron)
 # at the same UTC times as the originals.
 on:
   schedule:
+    - cron: "30 5 * * 4"   # Thu 05:30 UTC — Wednesday season opener
     - cron: "30 5 * * 5"   # Fri 05:30 UTC — catch Thursday Night Football
     - cron: "0 22 * * 0"   # Sun 22:00 UTC — catch Sun early slate
     - cron: "30 1 * * 1"   # Mon 01:30 UTC — catch Sun late slate

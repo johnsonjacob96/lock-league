@@ -5,11 +5,11 @@
 export const REGULAR_SEASON_WEEKS = 18;
 const MS_WEEK = 7 * 24 * 3600 * 1000;
 
-// 2026 kickoff: Thursday Sept 10, 2026 8:20pm ET (TNF opener).
+// 2026 kickoff: Wednesday Sept 9, 2026 8:20pm ET (NE at SEA).
 // Week N runs Tuesday → Tuesday. Week 1 starts Tue Sept 8, 08:00 UTC
 // (≈ 3–4am ET, safely after Monday Night Football ends).
 export const WEEK1_START_MS = Date.UTC(2026, 8, 8, 8);
-export const SEASON_2026_KICKOFF = new Date(Date.UTC(2026, 8, 11, 0, 20)); // Thu 8:20pm ET
+export const SEASON_2026_KICKOFF = new Date(Date.UTC(2026, 8, 10, 0, 20)); // Wed 8:20pm ET
 
 // ── Preseason test mode ─────────────────────────────────────────────────────
 // Set env.LL_TEST_MODE=1 to point the WHOLE app at 2026 preseason Week 2

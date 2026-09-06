@@ -1,7 +1,7 @@
 // /api/picks  GET (read) / POST (submit) / POST ?action=mark-super-lock
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
-import { pickCutoff, BET_TYPES, seasonTypeFor } from "../_shared/nfl.js";
+import { pickCutoff, BET_TYPES, seasonTypeFor, currentNflWeek } from "../_shared/nfl.js";
 import { fetchScoreboard, sameTeam } from "../_shared/grader.js";
 import { ensureExtras } from "../_shared/migrations.js";
 import { PROP_DEFS, propPickText, samePlayer } from "../_shared/props.js";
@@ -42,7 +42,7 @@ async function fetchLiveOdds(request) {
     const r = await fetch(new URL("/api/odds", request.url), { signal: ctrl.signal });
     if (!r.ok) return null;
     const j = await r.json();
-    return Array.isArray(j.games) ? j.games : null;
+    return j.source !== "mock" && Array.isArray(j.games) && j.games.length ? j.games : null;
   } catch {
     return null;
   } finally {
@@ -76,6 +76,7 @@ export function deriveGradable(game, betType, side, preferredBook) { // exported
   const { book, data } = chosen;
   if (betType === "Favorite" || betType === "Dog") {
     const s = data.spread;
+    if (!hasNumber(s.line) || ![game.home, game.away].includes(s.fav)) return null;
     if (side === "fav") {
       return { line: s.line, price: s.favPrice ?? null, book, pick_text: `${s.fav} ${s.line}` };
     }
@@ -83,6 +84,7 @@ export function deriveGradable(game, betType, side, preferredBook) { // exported
     return { line: s.line, price: s.dogPrice ?? null, book, pick_text: `${dog} +${Math.abs(s.line)}` };
   }
   const t = data.total;
+  if (!hasNumber(t.point)) return null;
   const tag = side === "over" ? "O" : "U";
   const price = side === "over" ? (t.overPrice ?? null) : (t.underPrice ?? null);
   return { line: t.point, price, book, pick_text: `${game.away} / ${game.home} ${tag}${t.point}` };
@@ -156,7 +158,9 @@ export function deriveProp(markets, prop) { // exported for tests; CF ignores no
 // and shared by both guards within the request.
 async function boardEvents(season, week, seasontype, env, request) {
   try {
-    return await scoreboardFor(season, week, seasontype, env);
+    const events = await scoreboardFor(season, week, seasontype, env);
+    if (!events.length) throw new Error("empty-board");
+    return events;
   } catch {
     const games = await fetchLiveOdds(request);
     if (games && games.length) {
@@ -197,6 +201,23 @@ export function findMondayGame(picks, events) { // exported for smoke tests
   return null;
 }
 
+// Every structured pick needs a known, valid kickoff. Missing games must not
+// silently pass the kickoff guard when a provider returns a partial board.
+export function unverifiedGame(picks, events) {
+  return picks.find(p => p.game_key && !events.some(e => {
+    const [a, h] = String(p.game_key).split("@");
+    return sameTeam(e.away, a) && sameTeam(e.home, h) && Number.isFinite(Date.parse(e.kickoff));
+  }));
+}
+
+export function validPickPeriod(season, week, env) {
+  if (!Number.isInteger(season) || !Number.isInteger(week)) return false;
+  const cur = currentNflWeek(new Date(), env);
+  return season === (cur.season || 2026) && week === (cur.status === "offseason" ? 1 : cur.week);
+}
+const unavailableOdds = () => json({ error: "odds-unavailable", detail: "Cannot verify the offered line right now. Your saved picks are unchanged; try again shortly." }, { status: 503 });
+const hasNumber = n => n !== null && n !== undefined && n !== "" && Number.isFinite(Number(n));
+
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const action = (url.searchParams.get("action") || "").toLowerCase();
@@ -208,6 +229,7 @@ export async function onRequest({ request, env }) {
     if (!env.CRON_SECRET || request.headers.get("X-Cron-Secret") !== env.CRON_SECRET) {
       return json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
     }
+    if (Date.now() >= Date.UTC(2026, 8, 8, 8)) return json({ error: "test-window-closed" }, { status: 410 });
     const s = sql(env);
     const out = {};
     const run = async (label, fn) => { try { const r = await fn(); out[label] = Array.isArray(r) ? r.length : (r ?? true); } catch (e) { out[label] = "skip:" + String(e && e.message || e).slice(0, 40); } };
@@ -222,7 +244,7 @@ export async function onRequest({ request, env }) {
   if (request.method === "POST" && action === "mark-super-lock") {
     const memberId = await verifyCookie(env, request.headers.get("cookie"));
     if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
-    const body = await request.json().catch(() => ({}));
+    const body = (await request.json().catch(() => ({}))) || {};
     const { season, week, result } = body;
     if (!season || !week || !["W", "L", "P"].includes(result)) {
       return json({ error: "bad-body", expected: "{season, week, result: W|L|P}" }, { status: 400 });
@@ -230,7 +252,10 @@ export async function onRequest({ request, env }) {
     // Only a free-text Super Lock (prop_meta IS NULL) is manually gradable —
     // a structured one (a live-board player prop or game-line pick) is owned
     // by the auto-grader, so this can never overwrite its graded result.
-    const rows = await sql(env)`
+    const s = sql(env);
+    const [, rows] = await s.transaction([
+      s`SELECT pg_advisory_xact_lock(${memberId}::int, ${(Number(season) * 100 + Number(week))}::int)`,
+      s`
       UPDATE picks
       SET result = ${result}, graded_at = NOW()
       WHERE member_id = ${memberId}
@@ -238,7 +263,8 @@ export async function onRequest({ request, env }) {
         AND week = ${week}
         AND bet_type = 'Super Lock'
         AND prop_meta IS NULL
-      RETURNING id`;
+      RETURNING id`
+    ]);
     if (!rows.length) return json({ error: "no-such-pick" }, { status: 404 });
     return json({ ok: true, id: rows[0].id, result });
   }
@@ -251,32 +277,44 @@ export async function onRequest({ request, env }) {
   if (request.method === "POST" && action === "remove") {
     const memberId = await verifyCookie(env, request.headers.get("cookie"));
     if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
-    const body = await request.json().catch(() => ({}));
+    const body = (await request.json().catch(() => ({}))) || {};
     const { season, week, bet_type } = body;
     if (!season || !week || !BET_TYPES.includes(bet_type)) {
       return json({ error: "bad-body", expected: "{season, week, bet_type}" }, { status: 400 });
     }
+    if (!validPickPeriod(season, week, env)) return json({ error: "invalid-pick-period" }, { status: 400 });
     const cutoff = pickCutoff(season, week, env);
-    if (Date.now() > cutoff.getTime()) {
+    if (Date.now() >= cutoff.getTime()) {
       return json({ error: "locked", cutoff: cutoff.toISOString() }, { status: 423 });
     }
     const existing = (await sql(env)`
-      SELECT game_key FROM picks
+      SELECT game_key, result, locked_at::text AS locked_at FROM picks
       WHERE member_id = ${memberId} AND season = ${season} AND week = ${week} AND bet_type = ${bet_type}`)[0];
+    if (existing?.result) return json({ error: "pick-graded" }, { status: 423 });
+    let removeKickoff = null;
     if (existing?.game_key) {
       let started;
       try {
         const events = await boardEvents(season, week, seasonTypeFor(env), env, request);
-        started = findStartedGame([{ game_key: existing.game_key }], events);
+        if (unverifiedGame([existing], events)) throw new Error("unknown-kickoff");
+        removeKickoff = events.find(e => sameTeam(e.away, existing.game_key.split("@")[0]) && sameTeam(e.home, existing.game_key.split("@")[1])).kickoff;
+        started = findStartedGame([existing], events);
       } catch {
         return json({ error: "scoreboard-unavailable", detail: "Can't verify game time right now — try again shortly." }, { status: 503 });
       }
       if (started) return json({ error: "game-started", ...started }, { status: 423 });
     }
-    const rows = await sql(env)`
-      DELETE FROM picks
-      WHERE member_id = ${memberId} AND season = ${season} AND week = ${week} AND bet_type = ${bet_type}
-      RETURNING id`;
+    const s = sql(env);
+    const [, rows] = await s.transaction([
+      s`SELECT pg_advisory_xact_lock(${memberId}::int, ${(season * 100 + week)}::int)`,
+      s`DELETE FROM picks
+        WHERE member_id = ${memberId} AND season = ${season} AND week = ${week} AND bet_type = ${bet_type}
+          AND result IS NULL AND locked_at IS NOT DISTINCT FROM ${existing?.locked_at || null}::timestamptz
+          AND clock_timestamp() < ${cutoff.toISOString()}::timestamptz
+          AND (${removeKickoff}::timestamptz IS NULL OR clock_timestamp() < ${removeKickoff}::timestamptz)
+        RETURNING id`
+    ]);
+    if (existing && !rows.length) return json({ error: "pick-changed", detail: "Pick changed or locked. Refresh your card." }, { status: 409 });
     return json({ ok: true, removed: rows.length });
   }
 
@@ -319,9 +357,9 @@ export async function onRequest({ request, env }) {
   if (request.method === "POST") {
     const memberId = await verifyCookie(env, request.headers.get("cookie"));
     if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
-    const body = await request.json().catch(() => ({}));
+    const body = (await request.json().catch(() => ({}))) || {};
     const { season, week, picks } = body;
-    if (!season || !week || !Array.isArray(picks)) return json({ error: "bad-body" }, { status: 400 });
+    if (!season || !week || !Array.isArray(picks) || !picks.length || picks.length > BET_TYPES.length || picks.some(p => !p || typeof p !== "object")) return json({ error: "bad-body" }, { status: 400 });
     // Every bet_type upserts on (member, season, week, bet_type); two picks
     // sharing one in the same request would race as parallel ON CONFLICT
     // upserts on the same row further down.
@@ -331,8 +369,9 @@ export async function onRequest({ request, env }) {
       seenTypes.add(p.bet_type);
     }
 
+    if (!validPickPeriod(season, week, env)) return json({ error: "invalid-pick-period" }, { status: 400 });
     const cutoff = pickCutoff(season, week, env);
-    if (Date.now() > cutoff.getTime()) {
+    if (Date.now() >= cutoff.getTime()) {
       return json({ error: "locked", cutoff: cutoff.toISOString() }, { status: 423 });
     }
     // Shape check. Super Lock is free-text (honor system on price); the four
@@ -340,6 +379,7 @@ export async function onRequest({ request, env }) {
     for (const p of picks) {
       if (!BET_TYPES.includes(p.bet_type)) return json({ error: "bad-bet-type", bet_type: p.bet_type }, { status: 400 });
       if (p.bet_type === "Super Lock") {
+        if (p.prop && p.line_pick) return json({ error: "ambiguous-super-lock" }, { status: 400 });
         if (p.prop) {
           // Structured Super Lock (picked off the live prop board -> auto-grades).
           if (!PROP_DEFS[p.prop.market]) return json({ error: "bad-prop-market", market: p.prop.market }, { status: 400 });
@@ -356,7 +396,7 @@ export async function onRequest({ request, env }) {
         } else {
           // Free-text Super Lock (manual Hit/Miss/Push, honor system on price).
           if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
-          if (p.price != null && !(Number(p.price) >= -120)) {
+          if (p.price != null && (!hasNumber(p.price) || !(Number(p.price) >= -120))) {
             return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: p.price }, { status: 400 });
           }
         }
@@ -368,11 +408,13 @@ export async function onRequest({ request, env }) {
     // Authoritative line check: re-derive every gradable pick's line/price/book/
     // text from the current live board, so a stored pick can never claim a line
     // the book isn't actually offering (closes the old free-text hole). If odds
-    // are momentarily unavailable, degrade to requiring a well-formed structured
-    // line — never a free-typed string.
+    // are unavailable, keep the saved card unchanged and ask the member to retry.
+    let oddsPromise;
+    const liveOdds = () => oddsPromise ||= fetchLiveOdds(request);
     const gradable = picks.filter((p) => p.bet_type !== "Super Lock");
     if (gradable.length) {
-      const games = await fetchLiveOdds(request);
+      const games = await liveOdds();
+      if (!games) return unavailableOdds();
       for (const p of gradable) {
         if (games) {
           const g = findGame(games, p.game_key);
@@ -380,31 +422,21 @@ export async function onRequest({ request, env }) {
           const d = deriveGradable(g, p.bet_type, p.side, p.book);
           if (!d) return json({ error: "line-not-offered", game_key: p.game_key, bet_type: p.bet_type }, { status: 422 });
           p.line = d.line; p.price = d.price; p.book = d.book; p.pick_text = d.pick_text;
-        } else {
-          if (!Number.isFinite(Number(p.line))) return json({ error: "missing-line", bet_type: p.bet_type }, { status: 400 });
-          if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
+
         }
       }
     }
     // Structured Super Lock: re-derive line/price/book/text from the live prop
     // board, same anti-cheat treatment as the gradable bets. Enforce the league's
     // "-120 or longer" lock rule on the derived price (no shorter than -120;
-    // plus-money allowed). If props are momentarily
-    // down (or not posted yet), degrade to a well-formed structured prop.
+    // plus-money allowed). Unavailable props never accept client-supplied lines.
     const structured = picks.filter((p) => p.bet_type === "Super Lock" && p.prop);
     for (const p of structured) {
       const markets = await fetchLiveProps(request, p.game_key);
       let d = markets ? deriveProp(markets, p.prop) : null;
       if (markets && !d) return json({ error: "prop-not-offered", game_key: p.game_key, market: p.prop.market, player: p.prop.player }, { status: 422 });
-      if (!d) {
-        // Degrade: trust the client's structured prop but require it be well-formed.
-        const kind = PROP_DEFS[p.prop.market].kind;
-        if (kind !== "yes" && !Number.isFinite(Number(p.prop.line))) return json({ error: "missing-line", bet_type: "Super Lock" }, { status: 400 });
-        d = { market: p.prop.market, player: p.prop.player, line: p.prop.line ?? null,
-              side: kind === "yes" ? "yes" : (p.prop.side === "under" ? "under" : "over"),
-              price: p.prop.price ?? null, book: p.prop.book || null,
-              pick_text: propPickText({ market: p.prop.market, player: p.prop.player, line: p.prop.line, side: p.prop.side }) };
-      }
+      if (!d) return unavailableOdds();
+      if (!hasNumber(d.price) || (PROP_DEFS[d.market].kind !== "yes" && !hasNumber(d.line))) return unavailableOdds();
       if (d.price != null && !(Number(d.price) >= -120)) {
         return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: d.price, player: d.player }, { status: 400 });
       }
@@ -417,7 +449,8 @@ export async function onRequest({ request, env }) {
     // spread/total instead of a player prop.
     const lineLocks = picks.filter((p) => p.bet_type === "Super Lock" && p.line_pick);
     if (lineLocks.length) {
-      const games = await fetchLiveOdds(request);
+      const games = await liveOdds();
+      if (!games) return unavailableOdds();
       for (const p of lineLocks) {
         const lp = p.line_pick;
         if (games) {
@@ -426,13 +459,10 @@ export async function onRequest({ request, env }) {
           const d = deriveGradable(g, lp.bet, lp.side, lp.book);
           if (!d) return json({ error: "line-not-offered", game_key: lp.game_key, bet_type: "Super Lock" }, { status: 422 });
           p.line = d.line; p.price = d.price; p.book = d.book; p.pick_text = d.pick_text; p.side = lp.side;
-        } else {
-          // Degrade: trust the client's structured line but require it be well-formed.
-          if (!Number.isFinite(Number(lp.line))) return json({ error: "missing-line", bet_type: "Super Lock" }, { status: 400 });
-          if (!lp.pick_text || typeof lp.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: "Super Lock" }, { status: 400 });
-          p.line = Number(lp.line); p.side = lp.side; p.book = lp.book || null; p.price = lp.price ?? null; p.pick_text = lp.pick_text;
+
         }
-        if (p.price != null && !(Number(p.price) >= -120)) {
+        if (!hasNumber(p.price)) return unavailableOdds();
+        if (!(Number(p.price) >= -120)) {
           return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: p.price }, { status: 400 });
         }
         p.prop = { kind: (lp.bet === "Over" || lp.bet === "Under") ? "total" : "spread", bet: lp.bet, side: p.side, line: p.line, book: p.book, price: p.price, game_key: p.game_key };
@@ -445,10 +475,16 @@ export async function onRequest({ request, env }) {
     // fallback (see boardEvents). Only if neither is reachable do we fail closed
     // (503) instead of letting an unverified pick through — these guards exist
     // precisely to protect against an already-started or ineligible game.
-    let started, monday;
+    const existing = await sql(env)`SELECT bet_type, game_key, result, locked_at::text AS locked_at FROM picks
+      WHERE member_id = ${memberId} AND season = ${season} AND week = ${week}`;
+    const replacing = existing.filter(p => seenTypes.has(p.bet_type));
+    if (replacing.some(p => p.result != null)) return json({ error: "pick-graded" }, { status: 423 });
+    let started, monday, verifiedEvents;
     try {
       const events = await boardEvents(season, week, seasonTypeFor(env), env, request);
-      started = findStartedGame(picks, events);
+      if (unverifiedGame([...picks, ...replacing], events)) throw new Error("unknown-kickoff");
+      verifiedEvents = events;
+      started = findStartedGame([...picks, ...replacing], events);
       monday = findMondayGame(picks, events);
     } catch {
       return json({ error: "scoreboard-unavailable", detail: "Can't verify game times right now — try again shortly." }, { status: 503 });
@@ -459,29 +495,52 @@ export async function onRequest({ request, env }) {
     if (monday) {
       return json({ error: "monday-not-allowed", ...monday }, { status: 422 });
     }
-    const lockedAt = new Date().toISOString();
-    await ensureExtras(env); // alert_line column used below
+    await ensureExtras(env);
     const s = sql(env);
-    // Distinct bet_types per member → upserts are independent; run in parallel.
-    // Re-locking clears alert_line so line-move alerts restart from the new line.
-    await Promise.all(picks.map(p => s`
-        INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at, alert_line, prop_meta)
-        VALUES (${memberId}, ${season}, ${week}, ${p.bet_type}, ${p.pick_text},
-                ${p.game_key || null}, ${p.side || null}, ${p.line ?? null},
-                ${p.book || null}, ${p.price ?? null}, ${lockedAt}, NULL,
-                ${p.prop ? JSON.stringify(p.prop) : null}::jsonb)
-        ON CONFLICT (member_id, season, week, bet_type)
-        DO UPDATE SET
-          pick_text  = EXCLUDED.pick_text,
-          game_key   = EXCLUDED.game_key,
-          side       = EXCLUDED.side,
-          line       = EXCLUDED.line,
-          book       = EXCLUDED.book,
-          price      = EXCLUDED.price,
-          locked_at  = EXCLUDED.locked_at,
-          alert_line = NULL,
-          prop_meta  = EXCLUDED.prop_meta`));
-    return json({ ok: true, count: picks.length });
+    const incoming = picks.map(p => {
+      const old = replacing.find(x => x.bet_type === p.bet_type);
+      const kickoff = key => {
+        if (!key) return null;
+        const [a, h] = key.split("@");
+        return verifiedEvents.find(e => sameTeam(e.away, a) && sameTeam(e.home, h)).kickoff;
+      };
+      return { ...p, prop_meta: p.prop || null, expected_locked_at: old?.locked_at || null,
+        existed: !!old, kickoff: kickoff(p.game_key), old_kickoff: kickoff(old?.game_key) };
+    });
+    // Serialize edits of a member/week. Re-check the row version and deadlines
+    // inside the transaction, then insert all slots in ONE statement. A stale
+    // browser or a request crossing kickoff must never partially save a card.
+    const [, saved] = await s.transaction([
+      s`SELECT pg_advisory_xact_lock(${memberId}::int, ${(season * 100 + week)}::int)`,
+      s`WITH incoming AS (
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(incoming)}::jsonb) AS x(
+          bet_type text, pick_text text, game_key text, side text, line numeric,
+          book text, price int, prop_meta jsonb, expected_locked_at timestamptz,
+          existed boolean, kickoff timestamptz, old_kickoff timestamptz)
+      ), blocked AS (
+        SELECT 1 FROM incoming i LEFT JOIN picks p ON p.member_id = ${memberId}
+          AND p.season = ${season} AND p.week = ${week} AND p.bet_type = i.bet_type
+        WHERE (p.id IS NOT NULL) <> i.existed OR p.result IS NOT NULL
+          OR p.locked_at IS DISTINCT FROM i.expected_locked_at
+          OR clock_timestamp() >= i.kickoff OR clock_timestamp() >= i.old_kickoff
+          OR clock_timestamp() >= ${cutoff.toISOString()}::timestamptz
+      )
+      INSERT INTO picks (member_id, season, week, bet_type, pick_text, game_key, side, line, book, price, locked_at, alert_line, prop_meta)
+      SELECT ${memberId}, ${season}, ${week}, bet_type, pick_text, game_key, side, line, book, price,
+        clock_timestamp(), NULL, prop_meta FROM incoming WHERE NOT EXISTS (SELECT 1 FROM blocked)
+      ON CONFLICT (member_id, season, week, bet_type) DO UPDATE SET
+        pick_text = EXCLUDED.pick_text, game_key = EXCLUDED.game_key, side = EXCLUDED.side,
+        line = EXCLUDED.line, book = EXCLUDED.book, price = EXCLUDED.price,
+        locked_at = EXCLUDED.locked_at, alert_line = NULL, prop_meta = EXCLUDED.prop_meta,
+        result = NULL, graded_at = NULL
+      RETURNING id`
+    ]);
+    if (saved.length !== picks.length) return json({ error: "pick-changed", detail: "Your card changed or a game locked. Refresh and try again." }, { status: 409 });
+    return json({ ok: true, count: picks.length, picks: picks.map(p => ({
+      bet_type: p.bet_type, pick_text: p.pick_text, game_key: p.game_key || null,
+      side: p.side || null, line: p.line ?? null, book: p.book || null,
+      price: p.price ?? null, prop: p.prop || null, locked_at: new Date().toISOString()
+    })) });
   }
 
   return json({ error: "method-not-allowed" }, { status: 405 });

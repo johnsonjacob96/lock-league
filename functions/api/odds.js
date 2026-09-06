@@ -14,7 +14,7 @@ import { json } from "../_shared/auth.js";
 import { sql } from "../_shared/db.js";
 import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS, seasonTypeFor, testConfig } from "../_shared/nfl.js";
 import { espnScoreboardEvents } from "../_shared/espn.js";
-import { saveScoreboardSeed } from "../_shared/scoreseed.js";
+import { saveScoreboardSeed, saveSummarySeed, loadScoreboardSeed } from "../_shared/scoreseed.js";
 
 const API_BASE = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds";
 // Synthetic, cookie-free key for the shared Cache API entry.
@@ -154,10 +154,17 @@ export function normalizeEspnEvents(events, env) {
 
 async function fetchEspn(env) {
   const { season, week } = currentSeasonWeek(env);
-  const events = await espnScoreboardEvents(season, seasonTypeFor(env), week);
+  let events, seeded = false;
+  try { events = await espnScoreboardEvents(season, seasonTypeFor(env), week); }
+  catch (error) {
+    events = await loadScoreboardSeed(env, season, week, seasonTypeFor(env));
+    if (!events?.length) throw error;
+    seeded = true;
+  }
   const games = normalizeEspnEvents(events, env);
   if (!games.length) throw new Error("espn: no games");
-  return { source: "espn", live: true, fetched_at: new Date().toISOString(), games };
+  return { source: "espn", live: !seeded, stale: seeded, season, week,
+    fetched_at: new Date().toISOString(), games };
 }
 
 // ── Source: SharpAPI (free tier = FanDuel + DraftKings, 60s pregame) ─────────
@@ -280,7 +287,8 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
     if (!home || !away) continue;
     const key = `${away}@${home}`;
     let g = games.get(key);
-    if (!g) { g = { id: row.event_id ?? key, kickoff: null, home, away, books: {} }; games.set(key, g); }
+    if (!g) { g = { id: row.event_id ?? key, sharp_event_ids: [], kickoff: null, home, away, books: {} }; games.set(key, g); }
+    if (row.event_id != null && !g.sharp_event_ids.includes(String(row.event_id))) g.sharp_event_ids.push(String(row.event_id));
     if (!g.kickoff) g.kickoff = row.event_start_time ?? row.start_time ?? row.commence_time ?? row.kickoff ?? null;
     const b = g.books[book] || (g.books[book] = { _spread: [], _total: [] });
     const pt = sharpPoint(row);
@@ -317,14 +325,14 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
 // is ~3 pages. Follow pagination.has_more, capped so a runaway can't loop.
 export async function fetchSharpRaw(env, maxPages = 8, overrides = null) { // exported for tests
   const base = "https://api.sharpapi.io/api/v1/odds";
-  const q = { league: "nfl", sportsbook: "fanduel,draftkings", market: "spread,total", limit: "500", ...(overrides || {}) };
+  const q = { league: "nfl", sportsbook: "fanduel,draftkings", market: "point_spread,total_points", limit: "200", ...(overrides || {}) };
   const all = [];
   let cursor = null;
   for (let page = 0; page < maxPages; page++) {
     const url = new URL(base);
     for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== null) url.searchParams.set(k, v);
     if (cursor) url.searchParams.set("cursor", cursor);
-    const r = await fetch(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } });
+    const r = await fetch(url, { headers: { "X-API-Key": env.SHARPAPI_KEY }, signal: AbortSignal.timeout(3000) });
     if (!r.ok) {
       // SharpAPI's free tier caps at ~12 requests/min; a paginated pull can trip
       // that mid-stream (429). Keep whatever we've already paged in rather than
@@ -355,7 +363,7 @@ async function fetchSharpApi(env) {
   });
   // Normally never blank the board on a window miss; under preseason test mode
   // do NOT fall back to the full season, or regular-season games would leak in.
-  const games = scoped.length ? scoped : (testConfig(env) ? [] : all);
+  const games = scoped;
   if (!games.length) throw new Error("sharpapi: no games parsed");
   return { source: "sharpapi", live: true, fetched_at: new Date().toISOString(), games };
 }
@@ -385,21 +393,35 @@ async function saveSnapshot(env, payload) {
     await s`INSERT INTO odds_snapshot (id, payload, fetched_at)
             VALUES (1, ${JSON.stringify(payload)}::jsonb, NOW())
             ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload, fetched_at = EXCLUDED.fetched_at`;
-  } catch { /* best-effort */ }
+    return true;
+  } catch { return false; }
 }
 async function loadSnapshot(env) {
   try {
     const rows = await sql(env)`SELECT payload, fetched_at FROM odds_snapshot WHERE id = 1`;
     if (rows.length) {
-      const p = rows[0].payload;
-      // A deliberately-seeded board (e.g. preseason lines pushed from a GitHub
-      // runner because the Worker can't reach ESPN) is served as the real board,
-      // not flagged stale. A normal last-good snapshot serves stale.
-      if (p && p.seeded) return { ...p, live: true, stale: false, snapshot_at: rows[0].fetched_at };
+      const p = scopedPayload(rows[0].payload, env);
+      if (!p) return null;
+      // Persisted odds are a last-good fallback, including manually seeded odds.
       return { ...p, live: false, stale: true, snapshot_at: rows[0].fetched_at };
     }
   } catch { /* none yet */ }
   return null;
+}
+
+// All cache layers must agree with the active pick week, including at rollover.
+export function scopedPayload(payload, env) {
+  if (!payload || payload.source === "mock" || !Array.isArray(payload.games)) return null;
+  const { season, week } = currentSeasonWeek(env);
+  if ((payload.season != null && payload.season !== season) ||
+      (payload.week != null && payload.week !== week)) return null;
+  const window = weekWindow(week, env);
+  const start = Date.parse(window.from), end = Date.parse(window.to);
+  const games = payload.games.filter(g => {
+    const t = Date.parse(g.kickoff);
+    return Number.isFinite(t) && t >= start && t < end;
+  });
+  return games.length ? { ...payload, season, week, games } : null;
 }
 
 // ── Mock (dev / screenshots) ────────────────────────────────────────────────
@@ -439,8 +461,15 @@ export async function onRequestGet(context) {
   const { request, env } = context;
   const waitUntil = context.waitUntil ? context.waitUntil.bind(context) : () => {};
   const url = new URL(request.url);
-  const force = url.searchParams.get("fresh") === "1";
+  const requestedFresh = url.searchParams.get("fresh") === "1";
   const wantMock = url.searchParams.get("mock") === "1";
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  const admin = !!env.CRON_SECRET && request.headers.get("X-Cron-Secret") === env.CRON_SECRET;
+  const force = requestedFresh && (local || admin);
+  if ((wantMock || url.searchParams.has("debug")) && !local && !admin) {
+    return json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+  if (wantMock) return json(mockPayload(), hdr("MOCK")); // never enter shared caches
   const primary = primaryProvider(env);
   const ttlS = ttlSeconds(env);
   const ttlMs = ttlS * 1000;
@@ -555,13 +584,8 @@ export async function onRequestGet(context) {
   }
 
   // L1 — warm-isolate memory.
-  if (!force && cache.data && Date.now() - cache.ts < ttlMs) return json(cache.data, hdr("HIT-MEM"));
-
-  if (wantMock) {
-    const payload = mockPayload();
-    cache = { ts: Date.now(), data: payload };
-    return json(payload, hdr("MISS-MOCK"));
-  }
+  const memory = scopedPayload(cache.data, env);
+  if (!force && memory && Date.now() - cache.ts < ttlMs) return json(memory, hdr("HIT-MEM"));
 
   // L2 — colo-shared cache (misses once past ttlS).
   const edge = caches.default;
@@ -569,9 +593,11 @@ export async function onRequestGet(context) {
     try {
       const cached = await edge.match(EDGE_KEY);
       if (cached) {
-        const payload = await cached.json();
-        cache = { ts: Date.now(), data: payload };
-        return json(payload, hdr("HIT-EDGE"));
+        const payload = scopedPayload(await cached.json(), env);
+        if (payload) {
+          cache = { ts: Date.now(), data: payload };
+          return json(payload, hdr("HIT-EDGE"));
+        }
       }
     } catch { /* fall through */ }
   }
@@ -604,9 +630,17 @@ export async function onRequestGet(context) {
   // source; a later SharpAPI success overwrites it with FD/DK.
   try {
     const payload = await fetchEspn(env);
+    const hasLines = payload.games.some(g => Object.values(g.books || {}).some(b => b.spread || b.total));
+    if (!hasLines) {
+      const last = await loadSnapshot(env);
+      if (last?.games.some(g => Object.values(g.books || {}).some(b => b.spread || b.total))) {
+        cache = { ts: Date.now(), data: last };
+        return json(last, hdr("STALE"));
+      }
+    }
     cache = { ts: Date.now(), data: payload };
     waitUntil(putEdge(edge, payload, ttlS));
-    waitUntil(saveSnapshot(env, payload));
+    if (hasLines) waitUntil(saveSnapshot(env, payload));
     return json(payload, hdr(primary ? "MISS-ESPN-FALLBACK" : "MISS-ESPN"));
   } catch { /* fall through */ }
 
@@ -616,10 +650,7 @@ export async function onRequestGet(context) {
     cache = { ts: Date.now(), data: snap };
     return json(snap, hdr("STALE"));
   }
-  if (!primary) {
-    const payload = mockPayload();
-    return json(payload, hdr("MISS-MOCK"));
-  }
+  if (!primary && local) return json(mockPayload(), hdr("MISS-MOCK"));
   return json({ source: "error", error: "all-sources-failed", live: false, games: [] }, { status: 502, headers: { "Cache-Control": "no-store" } });
 }
 
@@ -640,19 +671,38 @@ export async function onRequestPost(context) {
     return json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
   }
   const body = await request.json().catch(() => ({}));
-  const games = Array.isArray(body.events) ? normalizeEspnEvents(body.events, env)
+  const rawEvents = Array.isArray(body.events) ? body.events : null;
+  const season = Number(body.season), week = Number(body.week), seasontype = Number(body.seasontype);
+  if (rawEvents && (!Number.isInteger(season) || season !== 2026 ||
+      !Number.isInteger(week) || week < 1 || week > 18 || ![1, 2].includes(seasontype))) {
+    return json({ error: "bad-period" }, { status: 400 });
+  }
+  const games = rawEvents ? normalizeEspnEvents(rawEvents, env)
     : (Array.isArray(body.games) ? body.games : null);
-  if (!games || !games.length) {
-    return json({ error: "no-games", detail: "need non-empty events[] or games[]" }, { status: 422, headers: { "Cache-Control": "no-store" } });
+  if (!games?.length) return json({ error: "no-games" }, { status: 422 });
+
+  // Score ingestion must never overwrite the independent live odds snapshot.
+  // Legacy board seeds remain supported, but only for the current pick window.
+  const payload = scopedPayload({ source: body.source || "espn", live: true, seeded: true,
+    fetched_at: new Date().toISOString(), games, ...(rawEvents ? { season, week } : {}) }, env);
+  let oddsSeeded = false;
+  if (body.scoreboardOnly !== true && payload) {
+    oddsSeeded = await saveSnapshot(env, payload);
+    if (oddsSeeded) cache = { ts: Date.now(), data: payload };
   }
-  const payload = { source: body.source || "espn", live: true, seeded: true, fetched_at: new Date().toISOString(), games };
-  await saveSnapshot(env, payload);
-  cache = { ts: Date.now(), data: payload }; // warm this isolate's L1 immediately
-  // Also stash the raw events for the scoreboard (scores/War Room/grading), since
-  // the Worker can't reach ESPN. fetchScoreboard falls back to these.
   let scoreboardSeeded = false;
-  if (Array.isArray(body.events) && body.season && body.week && body.seasontype) {
-    scoreboardSeeded = await saveScoreboardSeed(env, Number(body.season), Number(body.week), Number(body.seasontype), body.events);
+  if (rawEvents) scoreboardSeeded = await saveScoreboardSeed(env, season, week, seasontype, rawEvents);
+  const summaries = body.summaries && typeof body.summaries === "object" && !Array.isArray(body.summaries)
+    ? Object.entries(body.summaries) : [];
+  const eventIds = new Set((rawEvents || []).map(ev => String(ev.id)));
+  let summariesSeeded = 0;
+  for (const [eventId, summary] of summaries) {
+    if (!eventIds.has(eventId) || !summary?.boxscore?.players?.length) {
+      return json({ error: "bad-summary", eventId }, { status: 400 });
+    }
+    if (await saveSummarySeed(env, eventId, summary)) summariesSeeded++;
   }
-  return json({ ok: true, games: games.length, source: payload.source, scoreboardSeeded, first: games[0] }, { headers: { "Cache-Control": "no-store" } });
+  const ok = (rawEvents ? scoreboardSeeded : oddsSeeded) && summariesSeeded === summaries.length;
+  return json({ ok, games: games.length, source: body.source || "espn", oddsSeeded, scoreboardSeeded,
+    summariesSeeded }, { status: ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
 }

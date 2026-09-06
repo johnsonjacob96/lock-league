@@ -27,8 +27,10 @@ jobs:
     steps:
       - name: Probe SharpAPI props (market=props)
         id: probe
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          resp=$(curl -s "https://lock-league.pages.dev/api/odds?debug=props&market=props")
+          resp=$(curl -fsS --max-time 45 -H "X-Cron-Secret: $CRON_SECRET" "https://lock-league.pages.dev/api/odds?debug=props&market=props")
           echo "$resp" > /tmp/probe.json
           node -e '
             const j = require("/tmp/probe.json");

@@ -5,7 +5,7 @@
 //   node smoke/run.mjs --live      # + live prod health probe (network)
 //   node smoke/run.mjs --all       # everything
 //   node smoke/run.mjs --live --url=https://<preview>.pages.dev
-import { report } from "./assert.mjs";
+import { report, suite } from "./assert.mjs";
 import { run as runLogic } from "./logic.mjs";
 
 const args = process.argv.slice(2);
@@ -16,11 +16,11 @@ const suites = [await runLogic()];
 
 if (want("--render")) {
   try { const { run } = await import("./render.mjs"); suites.push(await run()); }
-  catch (e) { console.log("\n⚠ render layer skipped:", e.message); }
+  catch (e) { const failed = suite("render"); failed.ok("requested layer completed", false, e.message); suites.push(failed); }
 }
 if (want("--live")) {
   try { const { run } = await import("./live.mjs"); suites.push(await run(baseUrl)); }
-  catch (e) { console.log("\n⚠ live layer skipped:", e.message); }
+  catch (e) { const failed = suite("live"); failed.ok("requested layer completed", false, e.message); suites.push(failed); }
 }
 
 process.exit(report(suites) ? 0 : 1);

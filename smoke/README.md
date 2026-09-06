@@ -33,3 +33,33 @@ opt-in via manual dispatch (or run it locally before go-live).
 - **New logic case** → add an assertion in `logic.mjs`; feed data via `fixtures.mjs`.
 - **New market/prop type** → add rows to `fixtures.mjs::sharpPropRows()`; the logic + render layers pick it up.
 - Fixtures mirror real SharpAPI/ESPN shapes (verified against production samples 2026-08-24). When a live shape surprises us, update the fixtures to match so the smoke test would have caught it.
+
+## Week 1 readiness regressions (2026-09-06)
+
+Use Node 24 for the additional suites:
+
+```sh
+npm ci
+npm test                 # real PostgreSQL handler SQL via PGlite; ingestion, cache, props, cron
+npm run smoke:render     # existing helper and viewport assertions
+npm run smoke:browser    # real login/save/reload/remove against isolated PostgreSQL
+npm run smoke:live       # deployed full Week 1 slate, markets and JSON endpoint checks
+```
+
+`npm test` never connects to production or sends notifications. The browser
+workflow uses local handlers and an in-memory database, with provider responses
+stubbed. It covers all eight login choices, persistence, outage feedback, mobile
+layout, and navigation. It does not prove actual Web Push delivery or live
+provider settlement. Browser screenshots are written to the OS temp directory.
+
+Explicitly requested render/live layers now fail if they cannot run. The live
+probe compares every upcoming eligible game against `week1-schedule.json`
+(ESPN schedule verified September 6), and rejects HTML masquerading as an API.
+Empty prop menus fail within 48 hours of kickoff; earlier availability is
+provider-dependent. This is a Week 1 readiness probe, not a year-round monitor.
+
+The existing Cloudflare preview environment lacks production SharpAPI/push
+secrets and uses a different, unverified database connection. It is not a
+production-equivalent provider test. Run integration tests locally; after
+deploying, run live verification and seed
+acknowledgment checks before declaring production ready.

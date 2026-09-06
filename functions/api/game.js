@@ -57,7 +57,7 @@ export async function onRequest({ request, env }) {
     const gameLive = ev.state === "in" || ev.state === "post";
     let leaders = [], situation = null, lastPlay = null;
     if (gameLive && ev.id) {
-      const gp = await espnSummary(ev.id).catch(() => null);
+      const gp = await espnSummary(ev.id, env).catch(() => null);
       if (gp) {
         leaders = parseLeaders(gp);
         const sit = gp.situation || gp.header?.competitions?.[0]?.situation;

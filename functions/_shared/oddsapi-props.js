@@ -17,7 +17,7 @@ const BOOKS = { draftkings: "draftkings", fanduel: "fanduel" };
 
 // Events list — FREE. Returns [{id, home_team, away_team, commence_time}, ...].
 export async function oddsApiEvents(env) {
-  const r = await fetch(`${HOST}/events?apiKey=${env.ODDS_API_KEY}`);
+  const r = await fetch(`${HOST}/events?apiKey=${env.ODDS_API_KEY}`, { signal: AbortSignal.timeout(3000) });
   if (!r.ok) throw new Error(`oddsapi events ${r.status}: ${(await r.text()).slice(0, 120)}`);
   const j = await r.json();
   return Array.isArray(j) ? j : [];
@@ -31,7 +31,7 @@ async function anytimeTdForEvent(env, eventId) {
   u.searchParams.set("markets", "player_anytime_td");
   u.searchParams.set("oddsFormat", "american");
   u.searchParams.set("bookmakers", "draftkings,fanduel");
-  const r = await fetch(u);
+  const r = await fetch(u, { signal: AbortSignal.timeout(3000) });
   if (!r.ok) throw new Error(`oddsapi odds ${r.status}: ${(await r.text()).slice(0, 120)}`);
   return await r.json();
 }
