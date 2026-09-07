@@ -45,6 +45,12 @@ for(const width of [375,390,844,1440]){
  await p.evaluate(()=>{state.season='2025';state.view='standings';syncNavActive();document.getElementById('root').innerHTML=renderStandings();document.getElementById('root').scrollTop=0;});
  if(!await p.locator('.champion-glow').count())throw new Error('Champion hero missing');
  await p.screenshot({path:`${output}/champion-${width}.png`});
+ if(width<768) {
+   await p.evaluate(()=>document.documentElement.style.setProperty('--safe-top','47px'));
+   const headerHeight=await p.locator('header.below-ticker').evaluate(el=>el.getBoundingClientRect().height);
+   if(headerHeight<103)throw new Error('Header clips content beneath the iPhone safe area');
+   await p.evaluate(()=>document.documentElement.style.removeProperty('--safe-top'));
+ }
  if(width<768 && await p.locator('#mobile-nav').evaluate(el=>getComputedStyle(el).paddingBottom)!=='0px')throw new Error('Bottom padding lifts navigation');
  await p.locator('.bottom-nav-link[data-view=more]').evaluate(el=>el.click());
  await p.waitForTimeout(50);
