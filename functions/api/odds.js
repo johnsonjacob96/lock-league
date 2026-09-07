@@ -123,8 +123,8 @@ export function mergeBookSupplement(primary, backup, now = Date.now()) {
     return { ...g, books };
   }) };
 }
-export async function supplementMissingBooks(env, primary) {
-  if (!env.ODDS_API_KEY || !env.DATABASE_URL || !needsBookSupplement(primary)) return primary;
+async function fetchSharedBackup(env) {
+  if (!env.ODDS_API_KEY || !env.DATABASE_URL) return null;
   try {
     const db = sql(env);
     if (!backupReady) {
@@ -148,8 +148,14 @@ export async function supplementMissingBooks(env, primary) {
       const rows = await db`SELECT payload FROM odds_backup_snapshot WHERE cache_key = ${key}`;
       backup = rows[0]?.payload;
     }
-    return mergeBookSupplement(primary, scopedPayload(backup, env));
-  } catch { return primary; } // A backup outage must not erase the primary book.
+    const scoped = scopedPayload(backup, env);
+    if (!scoped || !Number.isFinite(Date.parse(scoped.fetched_at)) || Date.now() - Date.parse(scoped.fetched_at) > BACKUP_TTL_MS) return null;
+    return scoped;
+  } catch { return null; }
+}
+export async function supplementMissingBooks(env, primary) {
+  if (!needsBookSupplement(primary)) return primary;
+  return mergeBookSupplement(primary, await fetchSharedBackup(env));
 }
 
 // ── Source 2: ESPN scoreboard (free consensus line) ─────────────────────────
@@ -681,6 +687,26 @@ export async function onRequestGet(context) {
         return json(payload, hdr("MISS-" + primary.toUpperCase(), payload.remaining ? { "X-Odds-Remaining": payload.remaining } : {}));
       }
     } catch { /* fall through to ESPN */ }
+  }
+
+  // A primary outage must not replace real FD/DK prices with ESPN consensus.
+  // Reuse the same quota-limited backup as partial coverage, then the last-good
+  // bookmaker snapshot. ESPN remains the last resort when neither is available.
+  if (primary === "sharpapi") {
+    const backup = await fetchSharedBackup(env);
+    if (backup?.games?.length) {
+      const payload = { ...backup, games: backup.games.map(g => ({ ...g,
+        books: Object.fromEntries(Object.entries(g.books || {}).map(([k,b]) => [k,{...b,supplemental:true}])) })) };
+      cache = { ts: Date.now(), data: payload };
+      waitUntil(putEdge(edge, payload, ttlS));
+      waitUntil(saveSnapshot(env, payload));
+      return json(payload, hdr("MISS-BACKUP"));
+    }
+    const last = await loadSnapshot(env);
+    if (last && ["sharpapi", "the-odds-api"].includes(last.source)) {
+      cache = { ts: Date.now(), data: last };
+      return json(last, hdr("STALE-BOOKS"));
+    }
   }
 
   // Source 2 — ESPN consensus (free). Primary on the no-key path, fallback otherwise.
