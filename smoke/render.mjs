@@ -230,7 +230,10 @@ export async function run() {
         checks.comparison=root.textContent.includes('Your card') && root.textContent.includes('Jack’s revealed picks') && root.querySelectorAll('.personal-live-card').length===1;
         checks.selector=!!root.querySelector('#live-member option[value="5"]') && root.querySelector('#live-member').value==='2';
         root.querySelector('#live-member').value='5';root.querySelector('#live-member').onchange();
-        checks.switchBack=state.wrMemberId==='5';state.wrMemberId=null;
+        checks.switchBack=state.wrMemberId==='5';
+        me.picks[1].game_key='Chicago Bears@Carolina Panthers';state.wrExpanded='5:Dog';
+        checks.ownFinalDrilldown=renderWarRoom().includes('wr-detail');
+        state.wrMemberId=null;state.wrExpanded=null;
         state.season='2025';root.innerHTML=renderStandings();
         checks.championRestored=!!root.querySelector('.champion-glow') && root.textContent.includes('Champion');
 

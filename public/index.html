@@ -4983,7 +4983,7 @@ function renderWarRoom() {
     let detail = "";
     if (state.wrExpanded && state.wrExpanded.startsWith(`${m.member_id}:`)) {
       const ep = orderedPicks.find((p) => `${m.member_id}:${p.bet_type}` === state.wrExpanded);
-      if (ep && ep.game_key && !((String(m.member_id) === String(state.wrMemberId) || (!state.wrMemberId && isMe(m.name))) && ep.kind === "pick" && (state.wrMemberId || !ep.final))) detail = wrGamePanel(ep);
+      if (ep && ep.game_key && !((state.wrMemberId ? String(m.member_id) === String(state.wrMemberId) : isMe(m.name)) && ep.kind === "pick" && (!isMe(m.name) || !ep.final))) detail = wrGamePanel(ep);
     }
     return `
       <div class="wr-card ${isMe(m.name) ? "row-you" : ""}">
