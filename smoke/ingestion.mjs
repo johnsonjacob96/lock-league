@@ -314,3 +314,23 @@ test('backup fills missing book markets without overwriting primary or accepting
   backup.games[0].kickoff='2026-09-20T17:00Z';
   assert.equal(mergeBookSupplement(primary,backup,now).games[0].books.draftkings,undefined);
 });
+
+
+test('primary outage keeps a recent two-book backup ahead of ESPN consensus', async t => {
+  clock(t, '2026-09-07T14:00:00Z');
+  const book = {spread:{fav:'Seattle Seahawks',line:-3.5,favPrice:-110,dogPrice:-110},total:{point:44.5,overPrice:-110,underPrice:-110},updated:'2026-09-07T13:59:00Z'};
+  const backup = {source:'the-odds-api',live:true,fetched_at:'2026-09-07T13:59:00Z',games:[{away:'New England Patriots',home:'Seattle Seahawks',kickoff:'2026-09-10T00:20Z',books:{fanduel:book,draftkings:book}}]};
+  const originalCaches=globalThis.caches;
+  globalThis.caches={default:{match:async()=>null,put:async()=>{}}};
+  t.after(()=>{globalThis.caches=originalCaches;});
+  let espnCalls=0;
+  t.mock.method(globalThis,'fetch',async url=>{if(String(url).includes('espn'))espnCalls++;return new Response('',{status:503});});
+  mockDb(t, ({query})=>query.includes('SELECT payload FROM odds_backup_snapshot')?dbRows('payload',backup):dbRows());
+  const pending=[];
+  const response=await onRequestGet({env:{...env,ODDS_PROVIDER:'sharpapi',SHARPAPI_KEY:'test',ODDS_API_KEY:'test'},request:new Request('https://lock-league.pages.dev/api/odds?fresh=1',{headers:{'X-Cron-Secret':env.CRON_SECRET}}),waitUntil:p=>pending.push(p)});
+  const body=await response.json();await Promise.all(pending);
+  assert.equal(body.source,'the-odds-api');
+  assert.ok(body.games[0].books.draftkings.total);
+  assert.equal(body.games[0].books.draftkings.supplemental,true);
+  assert.equal(espnCalls,0);
+});
