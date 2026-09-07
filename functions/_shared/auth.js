@@ -53,6 +53,6 @@ export function clearCookieHeader() {
 export function json(body, init = {}) {
   return new Response(JSON.stringify(body), {
     status: init.status || 200,
-    headers: { "Content-Type": "application/json", ...(init.headers || {}) },
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...(init.headers || {}) },
   });
 }

@@ -2,7 +2,7 @@
 // simulated data, and drives the Super Lock picker / War Room / locked card across
 // desktop + mobile widths — catching the class of bugs that don't show up in the
 // logic layer (JS errors on a data shape, layout overflow, sticky/scroll issues).
-// Needs Playwright; run.mjs skips this layer gracefully if it isn't installed.
+// Needs Playwright; an explicitly requested render layer fails if it cannot run.
 import { suite } from "./assert.mjs";
 import { execSync } from "node:child_process";
 import { pathToFileURL } from "node:url";

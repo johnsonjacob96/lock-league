@@ -40,19 +40,20 @@ export async function fetchScoreboard(season, week, seasontype = 2, env = null) 
   try {
     raw = await espnScoreboardEvents(season, seasontype, week);
   } catch (e) {
-    // ESPN unreachable from the colo. Prefer the last good scoreboard this
-    // isolate already fetched (freshest), then the GitHub-seeded snapshot, and
-    // only then give up — so a throttle blip can't blank a live board.
-    if (cached) return cached.events;
+    // Re-read the runner snapshot before falling back to expired isolate data.
+    // Otherwise a sustained ESPN outage freezes this isolate's scores forever.
     if (env) raw = await loadScoreboardSeed(env, season, week, seasontype);
-    if (!raw) throw e;
+    if (!raw?.length) {
+      if (cached) return cached.events;
+      throw e;
+    }
   }
   const events = (raw || []).map((ev) => {
     const comp = ev.competitions?.[0];
     const competitors = comp?.competitors || [];
     const home = competitors.find((c) => c.homeAway === "home");
     const away = competitors.find((c) => c.homeAway === "away");
-    const status = comp?.status?.type?.completed ? "final" : (ev.status?.type?.name || "scheduled");
+    const status = (comp?.status?.type?.completed || ev.status?.type?.completed) ? "final" : (ev.status?.type?.name || "scheduled");
     return {
       id: ev.id, // ESPN event id, for the box-score summary (prop grading)
       home: home?.team?.displayName,
@@ -154,7 +155,7 @@ export async function gradeWeek(env, season, week) {
 
     const result = await resolvePickResult(p, ev, async (id) => {
       let box = boxCache.get(id);
-      if (box === undefined) { box = await fetchBoxscore(id); boxCache.set(id, box); }
+      if (box === undefined) { box = await fetchBoxscore(id, env); boxCache.set(id, box); }
       return box; // fetched at most once per event per run; null on failure -> skip (retry next run)
     });
     if (result) {
@@ -233,13 +234,14 @@ export async function pushWeekResults(env, season, week) {
     sql(env)`SELECT member_id, bet_type, result FROM picks WHERE season = ${season} AND week = ${week}`,
   ]);
   if (!picks.length) return { skipped: "no-picks" };
+  const locked = Date.now() >= pickCutoff(season, week, env).getTime();
+  const records = weeklyMemberRecords(members.map((m) => m.id), picks, { locked });
+  if (!locked || [...records.values()].some(r => r.pending)) return { skipped: "pending-results" };
   // Claim the send slot right before computing/sending (not at the top of the
   // function) so an early "no-picks" bail never permanently locks out a week
   // that later gets picks.
   if (!(await claimSend(env, season, week, "winner"))) return { skipped: "already-sent" };
 
-  const locked = Date.now() >= pickCutoff(season, week, env).getTime();
-  const records = weeklyMemberRecords(members.map((m) => m.id), picks, { locked });
   const win = weeklyWinner(records);
   const winnerName = win ? members.find((m) => m.id === win.member_id)?.name : null;
   const fmt = (c) => `${c.W}-${c.L}${c.P ? "-" + c.P : ""}`;

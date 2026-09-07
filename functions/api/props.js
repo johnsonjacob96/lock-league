@@ -1,37 +1,19 @@
-// /api/props — player-prop lines for a single game, for the structured Super Lock.
-//
-// Lazy by design: the picker calls this only when a member opens the prop menu
-// for one of their games, so we never pre-pull the whole slate's props. Props
-// for the week are fetched once (SharpAPI), normalized to a small menu, cached
-// per warm isolate + on the colo-shared Cache API, then filtered to the
-// requested game.
-//
-// Timing note: books don't post weekly stat props until ~1-2 days before each
-// game, so this returns an empty menu (live:false-ish) until lines open. That's
-// the correct dormant state — the picker shows a "props open closer to kickoff"
-// hint and the free-text Super Lock still works.
-//
-// SharpAPI's exact prop market string isn't documented; SHARP_PROP_MARKET lets
-// us pin it once lines go live (a re-probe via /api/odds?debug=props confirms
-// the value). Until then we request a sensible default and, if that yields no
-// props, fall back to an unfiltered (capped) pull that the keyword-based
-// normalizer can still extract props from.
+// Lazy, per-game player props: use every SharpAPI event ID represented by the
+// current odds board (FD and DK can use different IDs). Never scan the whole
+// league merely to open one player's menu.
 import { json } from "../_shared/auth.js";
 import { sameTeam } from "../_shared/grader.js";
-import { fetchSharpRaw } from "./odds.js";
 import { normalizeSharpProps, PROP_ORDER, PROP_DEFS } from "../_shared/props.js";
 import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS } from "../_shared/nfl.js";
 import { fetchAnytimeTdMarket } from "../_shared/oddsapi-props.js";
 
-// Props move slowly (books nudge lines, not menus), so cache hard: a 5-min fresh
-// window keeps us well under SharpAPI's ~12 req/min cap even with the whole
-// league opening prop menus, and the last-good entry survives a transient 429
-// for half an hour so one rate-limited pull never blanks the menu for everyone.
 const TTL_MS = 5 * 60 * 1000;
 const LASTGOOD_TTL_S = 30 * 60;
-const EDGE_KEY = new Request("https://lock-league.internal/cache/props");
-const EDGE_LASTGOOD = new Request("https://lock-league.internal/cache/props-lastgood");
-let cache = { ts: 0, key: "", data: null };
+const RETRY_MS = 60 * 1000;
+const cache = new Map();
+const inFlight = new Map();
+const atdInFlight = new Map();
+const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v2/${kind}/${encodeURIComponent(key)}`);
 
 // Anytime-TD-scorer comes from The Odds API (1 credit per game), so cache it hard
 // per game: a 15-min fresh window keeps credit use low even as the league opens
@@ -39,15 +21,15 @@ let cache = { ts: 0, key: "", data: null };
 // market. Keys are per week+game.
 const ATD_TTL_S = 15 * 60;
 const ATD_LASTGOOD_TTL_S = 6 * 3600;
-const atdKey = (week, away, home, kind) =>
-  new Request(`https://lock-league.internal/cache/atd/${kind}/${week}/${encodeURIComponent(away)}@${encodeURIComponent(home)}`);
+const atdKey = (period, away, home, kind) =>
+  new Request(`https://lock-league.internal/cache/atd/${kind}/${period}/${encodeURIComponent(away)}@${encodeURIComponent(home)}`);
 
 // Fetch (or serve cached) the anytime-TD market for one game. Fail-soft: returns
 // null on any error so an Odds API hiccup never breaks the SharpAPI prop menu.
-async function getAnytimeTd(env, week, away, home, edge, waitUntil) {
+async function fetchCachedAnytimeTd(env, period, away, home, edge, waitUntil) {
   if (!env.ODDS_API_KEY) return null;
-  const freshK = atdKey(week, away, home, "fresh");
-  const lastK = atdKey(week, away, home, "last");
+  const freshK = atdKey(period, away, home, "fresh");
+  const lastK = atdKey(period, away, home, "last");
   try {
     const hit = await edge.match(freshK);
     if (hit) return await hit.json();
@@ -80,39 +62,148 @@ function pickWeek(env) {
   return { season: cur.season || 2026, week };
 }
 
-// Pull the week's props from SharpAPI and normalize. Scoped to the current pick
-// week's kickoff window, mirroring the odds path.
-async function fetchWeekProps(env) {
-  if (!env.SHARPAPI_KEY) return { source: "none", props: [] };
-  // SharpAPI groups ALL player props under market=`props` (confirmed live:
-  // receptions, passing/rushing/receiving yards, and TD markets all arrive under
-  // it; `player_props` returns 0). SHARP_PROP_MARKET can still override without a
-  // redeploy — re-probe values via /api/odds?debug=props&market=<v>.
-  const primaryMarket = env.SHARP_PROP_MARKET || "props";
-  // Cap the paginated pull at 4 pages: the full week's props land in ~3, and
-  // every page is one request against a ~12/min budget shared with the odds
-  // board. There is deliberately NO unfiltered fallback fetch here — it doubled
-  // our request count (and thus 429s) for no gain now that the market string is
-  // confirmed. fetchSharpRaw returns a partial slate (not an error) on a
-  // mid-pagination 429, so we degrade gracefully instead of blanking.
-  let rows;
+async function getJson(url, init, timeout) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
-    rows = await fetchSharpRaw(env, 4, { market: primaryMarket });
-  } catch (e) {
-    // Page-0 failure (nothing salvageable), typically a 429. Surface it so the
-    // caller serves last-good instead of caching an empty menu.
-    console.warn("props: SharpAPI fetch failed:", String((e && e.message) || e));
-    return { source: "error", props: [] };
+    const response = await fetch(url, { ...init, signal: ctrl.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally { clearTimeout(timer); }
+}
+
+// One overall budget covers board discovery and all pages. A partial response
+// is explicit, so it can retain missing last-good markets without pretending
+// the provider removed them. No independent global-week scan is ever needed.
+async function fetchGameProps(env, request, away, home, week) {
+  const empty = { source: "unavailable", props: [], complete: false, ids: [], pages: 0 };
+  if (!env.SHARPAPI_KEY) return empty;
+  const deadline = Date.now() + 3500;
+  let board;
+  try { board = await getJson(new URL("/api/odds", request.url), {}, 1200); }
+  catch { return empty; }
+  const game = board.games?.find(g => sameTeam(g.away, away) && sameTeam(g.home, home));
+  const ids = [...new Set((game?.sharp_event_ids || []).map(String).filter(id => /^[A-Za-z0-9_-]+$/.test(id)))];
+  if (!ids.length) return empty; // ESPN event IDs are not SharpAPI IDs
+  const raw = [];
+  let cursor = null, complete = false, pages = 0;
+  for (let page = 0; page < 4; page++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    const url = new URL("https://api.sharpapi.io/api/v1/odds");
+    for (const [key, value] of Object.entries({ league: "nfl", sportsbook: "fanduel,draftkings",
+      market: env.SHARP_PROP_MARKET || "props", event_id: ids.join(","), limit: "200", ...(cursor ? { cursor } : {}) })) {
+      url.searchParams.set(key, value);
+    }
+    try {
+      const data = await getJson(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } }, remaining);
+      pages++;
+      const rows = Array.isArray(data) ? data : (data.data ?? data.odds ?? data.results ?? []);
+      if (!Array.isArray(rows)) break;
+      // Reject unrelated rows even if a vendor ignores its filter.
+      raw.push(...rows.filter(row => ids.includes(String(row.event_id))));
+      if (!data.pagination?.has_more) { complete = true; break; }
+      if (!data.pagination.next_cursor || data.pagination.next_cursor === cursor) break;
+      cursor = data.pagination.next_cursor;
+    } catch { break; }
   }
-  const props = normalizeSharpProps(rows);
-  // Scope to the current pick week by kickoff, when the rows carry a time.
-  const win = weekWindow(pickWeek(env).week, env);
-  const from = Date.parse(win.from), to = Date.parse(win.to);
-  const scoped = props.filter((p) => {
-    const t = Date.parse(p.kickoff || "");
-    return !Number.isFinite(t) || (t >= from && t < to);
+  const window = weekWindow(week, env), from = Date.parse(window.from), to = Date.parse(window.to);
+  const props = normalizeSharpProps(raw).filter(p => {
+    const t = Date.parse(p.kickoff);
+    return (!Number.isFinite(t) || (t >= from && t < to)) &&
+      sameTeam(p.away, away) && sameTeam(p.home, home);
   });
-  return { source: "sharpapi", props: scoped };
+  return { source: props.length ? "sharpapi" : "unavailable", props, complete, ids, pages };
+}
+
+// Retain omitted players/books/alternates only through an incomplete provider
+// pull. Never splice prices from two different main lines within one book.
+export function mergePartialProps(previous, fresh) {
+  const key = p => `${p.market}:${p.player.toLowerCase()}`;
+  const merged = new Map(previous.map(p => [key(p), p]));
+  for (const p of fresh) {
+    const old = merged.get(key(p));
+    if (!old) { merged.set(key(p), p); continue; }
+    const next = { ...old, ...p };
+    for (const book of ["fanduel", "draftkings"]) {
+      const cur = p[book], prev = old[book];
+      if (!cur) next[book] = prev;
+      else if (prev && cur.line === prev.line) {
+        next[book] = { ...cur, over: cur.over ?? prev.over, under: cur.under ?? prev.under, yes: cur.yes ?? prev.yes };
+      }
+    }
+    const alts = new Map((old.alts || []).map(a => [a.line, a]));
+    for (const alt of p.alts || []) {
+      const prev = alts.get(alt.line);
+      alts.set(alt.line, { ...alt, fanduel: alt.fanduel ?? prev?.fanduel ?? null,
+        draftkings: alt.draftkings ?? prev?.draftkings ?? null });
+    }
+    next.alts = [...alts.values()].filter(a => a.line > next.line).sort((a, b) => a.line - b.line);
+    merged.set(key(p), next);
+  }
+  return [...merged.values()];
+}
+
+async function edgeRead(edge, key) {
+  try { const hit = await edge.match(key); return hit ? await hit.json() : null; }
+  catch { return null; }
+}
+function persist(edge, key, payload, seconds, waitUntil) {
+  const job = edge.put(key, new Response(JSON.stringify(payload), { headers: {
+    "Content-Type": "application/json", "Cache-Control": `public, max-age=${seconds}`,
+  } })).catch(() => {});
+  waitUntil(job);
+}
+async function bounded(promise, timeout) {
+  let timer;
+  try { return await Promise.race([promise, new Promise(resolve => { timer = setTimeout(() => resolve(null), timeout); })]); }
+  finally { clearTimeout(timer); }
+}
+
+async function loadGame(context, key, away, home, season, week) {
+  const { request, env } = context;
+  const waitUntil = context.waitUntil ? context.waitUntil.bind(context) : () => {};
+  const edge = caches.default;
+  const hit = cache.get(key);
+  if (hit && Date.now() < hit.expires) return hit.data;
+  const stored = await edgeRead(edge, propKey(key, "fresh"));
+  if (stored?.key === key && Date.now() < stored.expires) {
+    cache.set(key, stored);
+    return stored.data;
+  }
+  const old = await edgeRead(edge, propKey(key, "last"));
+  const last = old?.key === key && Date.now() - old.ts < LASTGOOD_TTL_S * 1000 ? old.props : [];
+  // Both sources work in parallel. A slow ATD request finishes in waitUntil and
+  // populates its own cache; it cannot hold up the SharpAPI menu indefinitely.
+  let atdJob = atdInFlight.get(key);
+  if (!atdJob) {
+    atdJob = fetchCachedAnytimeTd(env, `${season}:${week}`, away, home, edge, waitUntil).catch(() => null)
+      .finally(() => atdInFlight.delete(key));
+    atdInFlight.set(key, atdJob);
+  }
+  waitUntil(atdJob);
+  const [result, atd] = await Promise.all([
+    fetchGameProps(env, request, away, home, week), bounded(atdJob, 3500),
+  ]);
+  const stale = !result.complete || !result.props.length;
+  const props = stale ? mergePartialProps(last || [], result.props) : result.props;
+  const markets = menuForGame(props, away, home);
+  if (atd?.players?.length) {
+    const duplicate = markets.findIndex(m => m.market === "anytime_td");
+    if (duplicate >= 0) markets.splice(duplicate, 1);
+    markets.unshift(atd);
+  }
+  const source = stale && props.length ? "stale" : result.source;
+  const data = { game_key: `${away}@${home}`, away, home, season, week, source, stale,
+    complete: result.complete, live: markets.length > 0, markets, fetched_at: new Date().toISOString(),
+    sharp_event_ids: result.ids, pages: result.pages };
+  const entry = { key, ts: Date.now(), expires: Date.now() + (stale ? RETRY_MS : TTL_MS), data };
+  cache.set(key, entry);
+  persist(edge, propKey(key, "fresh"), entry, stale ? RETRY_MS / 1000 : TTL_MS / 1000, waitUntil);
+  if (result.complete && props.length) persist(edge, propKey(key, "last"), { key, ts: Date.now(), props }, LASTGOOD_TTL_S, waitUntil);
+  // Bound memory when anonymous callers supply many distinct game keys.
+  if (cache.size > 64) cache.delete(cache.keys().next().value);
+  return data;
 }
 
 // Shape one game's props into the picker menu: markets in PROP_ORDER, each with
@@ -140,119 +231,23 @@ export function menuForGame(props, away, home) { // exported for tests; CF ignor
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const waitUntil = context.waitUntil ? context.waitUntil.bind(context) : () => {};
   const url = new URL(request.url);
+  if (url.searchParams.has("debug") && (!env.CRON_SECRET || request.headers.get("X-Cron-Secret") !== env.CRON_SECRET)) {
+    return json({ error: "unauthorized" }, { status: 401 });
+  }
   const gameKey = url.searchParams.get("game_key") || "";
-  const [away, home] = gameKey.split("@");
-
-  // Diagnostic: trace every pipeline stage so we can see exactly where props
-  // vanish (raw fetch -> normalize -> week-scope -> per-game menu). Read-only,
-  // gated behind ?debug=1. Bypasses the cache to reflect a fresh pull.
-  if (url.searchParams.get("debug") === "1") {
-    if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
-    const out = {};
-    try {
-      const primaryMarket = env.SHARP_PROP_MARKET || "props";
-      out.market = primaryMarket;
-      let rawErr = null;
-      let rows = await fetchSharpRaw(env, 12, { market: primaryMarket }).catch((e) => { rawErr = String(e && e.message || e); return []; });
-      out.rawCount = rows.length;
-      out.rawErr = rawErr;
-      const mt = {};
-      let propRows = 0;
-      for (const r of rows) { const k = String(r.market_type || "?"); mt[k] = (mt[k] || 0) + 1; if (r.is_player_prop === true) propRows++; }
-      out.rawMarketTypes = mt;
-      out.rawPlayerPropRows = propRows;
-      let normalized = normalizeSharpProps(rows);
-      out.normalizedCount = normalized.length;
-      out.normalizedSample = normalized.slice(0, 3).map((p) => ({ market: p.market, player: p.player, line: p.line, home: p.home, away: p.away, kickoff: p.kickoff }));
-      // Did the fallback path need to run?
-      if (!normalized.length) {
-        let fbErr = null;
-        const fbRows = await fetchSharpRaw(env, 12, { market: undefined }).catch((e) => { fbErr = String(e && e.message || e); return []; });
-        out.fallbackRawCount = fbRows.length;
-        out.fallbackErr = fbErr;
-        normalized = normalizeSharpProps(fbRows);
-        out.fallbackNormalizedCount = normalized.length;
-      }
-      const win = weekWindow(pickWeek(env).week, env);
-      out.window = win;
-      const from = Date.parse(win.from), to = Date.parse(win.to);
-      const scoped = normalized.filter((p) => { const t = Date.parse(p.kickoff || ""); return !Number.isFinite(t) || (t >= from && t < to); });
-      out.scopedCount = scoped.length;
-      out.distinctGames = [...new Set(scoped.map((p) => `${p.away}@${p.home}`))].slice(0, 20);
-      if (away && home) {
-        const markets = menuForGame(scoped, away, home);
-        out.gameKey = gameKey;
-        out.gameMarkets = markets.map((m) => ({ market: m.market, players: m.players.length }));
-      }
-    } catch (e) {
-      out.error = String(e && e.message || e);
-    }
-    return json(out, { headers: { "Cache-Control": "no-store" } });
+  const parts = gameKey.split("@");
+  const [away, home] = parts;
+  if (parts.length !== 2 || !away || !home || gameKey.length > 160) {
+    return json({ error: "missing-game_key", markets: [] }, { status: 400 });
   }
-
-  if (!away || !home) return json({ error: "missing-game_key", markets: [] }, { status: 400 });
-
-  const { week } = pickWeek(env);
-  const cacheKey = `props:${week}`;
-  const edge = caches.default;
-
-  // Serve the week's normalized props from L1/L2, then filter to this game.
-  let weekProps = null, source = "cache", stale = false;
-  if (cache.data && cache.key === cacheKey && Date.now() - cache.ts < TTL_MS) {
-    weekProps = cache.data;
-  } else {
-    try {
-      const hit = await edge.match(EDGE_KEY);
-      if (hit) {
-        const payload = await hit.json();
-        if (payload.key === cacheKey) { weekProps = payload.props; cache = { ts: Date.now(), key: cacheKey, data: weekProps }; }
-      }
-    } catch { /* fall through */ }
+  const { season, week } = pickWeek(env);
+  const key = `${season}:${week}:${away}@${home}`;
+  let job = inFlight.get(key);
+  if (!job) {
+    job = loadGame(context, key, away, home, season, week).finally(() => inFlight.delete(key));
+    inFlight.set(key, job);
   }
-
-  // Cache miss or expiry: pull fresh. A non-empty pull becomes the new truth
-  // (fresh cache + long-lived last-good). An empty/failed pull (SharpAPI 429 /
-  // throttled colo / props not posted yet) must NOT overwrite good data — fall
-  // back to the last-good props so one rate-limited fetch never blanks the menu
-  // league-wide. Mirrors the odds board's stale-serving behavior.
-  if (!weekProps) {
-    const res = await fetchWeekProps(env).catch(() => ({ source: "error", props: [] }));
-    if (res.props && res.props.length) {
-      weekProps = res.props; source = res.source;
-      cache = { ts: Date.now(), key: cacheKey, data: weekProps };
-      const body = JSON.stringify({ key: cacheKey, props: weekProps, ts: Date.now() });
-      try {
-        waitUntil(edge.put(EDGE_KEY, new Response(body, {
-          headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${TTL_MS / 1000}` },
-        })));
-        waitUntil(edge.put(EDGE_LASTGOOD, new Response(body, {
-          headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${LASTGOOD_TTL_S}` },
-        })));
-      } catch { /* best-effort */ }
-    } else {
-      try {
-        const lg = await edge.match(EDGE_LASTGOOD);
-        if (lg) {
-          const payload = await lg.json();
-          if (payload.key === cacheKey && payload.props && payload.props.length) {
-            weekProps = payload.props; source = "stale"; stale = true;
-          }
-        }
-      } catch { /* fall through */ }
-      if (!weekProps) { weekProps = []; source = res.source; }
-    }
-  }
-
-  const markets = menuForGame(weekProps || [], away, home);
-  // Anytime TD (from The Odds API — SharpAPI doesn't carry it). Lazy per game,
-  // cached, fail-soft. Prepend so it leads the menu (it's first in PROP_ORDER).
-  const atd = await getAnytimeTd(env, week, away, home, edge, waitUntil).catch(() => null);
-  if (atd && atd.players.length) markets.unshift(atd);
-  return json({
-    game_key: gameKey, away, home, week, source, stale,
-    live: markets.length > 0,
-    markets, fetched_at: new Date().toISOString(),
-  }, { headers: { "Cache-Control": "no-store", "X-Prop-Source": source } });
+  const data = await job;
+  return json(data, { headers: { "Cache-Control": "no-store", "X-Prop-Source": data.source } });
 }

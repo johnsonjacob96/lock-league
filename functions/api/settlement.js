@@ -25,7 +25,7 @@ const DEFAULT_PRIZE = 40;
 // winner push always agree. `picks` must be ALL of a season's picks
 // (graded + pending), not filtered to result IS NOT NULL, so a genuinely
 // unfilled slot can be told apart from one still awaiting a manual grade.
-function computeWeeklyWinners(picks, memberIds, season, env) {
+export function computeWeeklyWinners(picks, memberIds, season, env) {
   const byWeek = new Map();
   for (const p of picks) {
     if (!byWeek.has(p.week)) byWeek.set(p.week, []);
@@ -35,7 +35,7 @@ function computeWeeklyWinners(picks, memberIds, season, env) {
   for (const [week, rows] of byWeek) {
     const locked = Date.now() >= pickCutoff(season, week, env).getTime();
     const records = weeklyMemberRecords(memberIds, rows, { locked });
-    const win = weeklyWinner(records);
+    const win = locked ? weeklyWinner(records) : null;
     winners[week] = win ? { member_id: win.member_id, w: win.w, l: win.l } : null;
   }
   return winners;

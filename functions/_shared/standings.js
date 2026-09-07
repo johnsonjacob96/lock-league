@@ -34,6 +34,7 @@ export function weeklyMemberRecords(memberIds, picks, { locked }) {
 
 // Unique best W (fewest L breaks ties); ties leave the week with no winner.
 export function weeklyWinner(records) {
+  if ([...records.values()].some(r => r.pending > 0)) return null;
   let best = null, tied = false;
   for (const [member_id, r] of records) {
     if (!(r.W || r.L || r.P || r.pending)) continue; // no activity this week

@@ -1081,7 +1081,7 @@
 // re-downloading ~270KB of history every load.
 const DATA_URL = "data/seasons.json";
 const SEASONS_ORDER = ["2023", "2024", "2025", "2026"];
-const SEASON_2026_KICKOFF_MS = Date.UTC(2026, 8, 10, 0, 0, 0);
+const SEASON_2026_KICKOFF_MS = Date.UTC(2026, 8, 10, 0, 20, 0);
 function seasonsVisible() {
   const now = Date.now();
   return SEASONS_ORDER.filter(y => y !== "2026" || now >= SEASON_2026_KICKOFF_MS);
@@ -1193,10 +1193,14 @@ function mergeLiveSeason(rows) {
     }
   }
 
-  // Provisional weekly winners: unique best W (fewest L breaks ties) among
-  // graded picks. Ties stay open - no winner shown for that week.
+  // Crown only locked, fully graded weeks; pending props can change the winner.
   const weeklyWinners = {};
   for (let wk = 1; wk <= WEEK_COUNT; wk++) {
+    if (!isLocked(wk)) continue;
+    if (names.some(name => BET_TYPES_ORDER.some(bt => {
+      const slot = byMember[name]?.[bt]?.[wk];
+      return slot && !["W", "L", "P"].includes(slot.result);
+    }))) continue;
     let best = null, tied = false;
     for (const name of names) {
       let w = 0, l = 0, any = false;
@@ -3490,10 +3494,10 @@ async function lockStructuredProp() {
         : j.error === "super-lock-price" ? "ODDS MUST BE -120 OR LONGER"
         : j.error === "prop-not-offered" ? "THAT LINE IS NO LONGER OFFERED"
         : j.error === "game-started" ? "GAME ALREADY STARTED"
-        : "ERROR · " + (j.error || "");
+        : j.detail || ("ERROR · " + (j.error || ""));
       return;
     }
-    currentMyPicks["Super Lock"] = { pick_text: propTextClient(prop, m), prop, book: best.book, price: best.price, locked_at: new Date().toISOString() };
+    currentMyPicks["Super Lock"] = j.picks?.find(p => p.bet_type === "Super Lock") || { pick_text: propTextClient(prop, m), prop, book: best.book, price: best.price, locked_at: new Date().toISOString() };
     slEditing = false; slDraft = { market: "", player: "", side: "", line: null };
     showToast("SUPER LOCK LOCKED");
     refreshMyCard();
@@ -3521,11 +3525,11 @@ async function lockGameLine() {
         : j.error === "line-not-offered" ? "THAT LINE IS NO LONGER OFFERED"
         : j.error === "game-not-on-board" ? "GAME NOT ON THE BOARD"
         : j.error === "game-started" ? "GAME ALREADY STARTED"
-        : "ERROR · " + (j.error || "");
+        : j.detail || ("ERROR · " + (j.error || ""));
       return;
     }
     const meta = { kind: bet === "Over" || bet === "Under" ? "total" : "spread", bet, side: info.side, line: info.line, book: info.book, price: info.price, game_key: slGameKey };
-    currentMyPicks["Super Lock"] = { pick_text: info.text, prop: meta, book: info.book, price: info.price, locked_at: new Date().toISOString() };
+    currentMyPicks["Super Lock"] = j.picks?.find(p => p.bet_type === "Super Lock") || { pick_text: info.text, prop: meta, book: info.book, price: info.price, locked_at: new Date().toISOString() };
     slEditing = false; slDraft = { market: "", player: "", side: "" };
     showToast("SUPER LOCK LOCKED");
     refreshMyCard();
@@ -3545,7 +3549,7 @@ async function saveSuperLockText(raw) {
     const j = await r.json();
     if (!r.ok) {
       if (msg) msg.textContent = j.error === "locked" ? "LOCKED · CUTOFF PASSED"
-        : j.error === "super-lock-price" ? "ODDS MUST BE -120 OR LONGER" : "ERROR · " + (j.error || "");
+        : j.error === "super-lock-price" ? "ODDS MUST BE -120 OR LONGER" : j.detail || ("ERROR · " + (j.error || ""));
       return;
     }
     // Free-text overwrites any prior structured pick, so clear prop metadata.
@@ -4057,13 +4061,13 @@ async function clickPickButton(btn) {
     if (!r.ok) {
       showToast(j.error === "locked" ? "PICKS LOCKED FOR THIS WEEK"
         : j.error === "game-started" ? "GAME STARTED, PICK LOCKED"
-        : "ERROR: " + (j.error || "unknown"), "err");
+        : j.detail || ("ERROR: " + (j.error || "unknown")), "err");
     } else {
       document.querySelectorAll(`.pick-btn[data-bet="${bet_type}"]`).forEach(b => b.classList.remove("picked"));
       btn.classList.add("picked");
-      currentMyPicks[bet_type] = { pick_text, game_key, side, book, line, price, locked_at: new Date().toISOString() };
+      currentMyPicks[bet_type] = j.picks?.find(p => p.bet_type === bet_type) || { pick_text, game_key, side, book, line, price, locked_at: new Date().toISOString() };
       refreshMyCard();
-      showToast(`LOCKED ${BET_META[bet_type].short}: ${pick_text}`);
+      showToast(`LOCKED ${BET_META[bet_type].short}: ${currentMyPicks[bet_type].pick_text}`);
     }
   } catch (e) {
     showToast("NETWORK ERROR", "err");
@@ -4083,7 +4087,7 @@ async function unpick(btn, bet_type, season, week) {
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-      showToast(j.error === "locked" ? "PICKS LOCKED FOR THIS WEEK" : "ERROR: " + (j.error || "unknown"), "err");
+      showToast(j.error === "locked" ? "PICKS LOCKED FOR THIS WEEK" : j.detail || ("ERROR: " + (j.error || "unknown")), "err");
     } else {
       btn.classList.remove("picked");
       delete currentMyPicks[bet_type];

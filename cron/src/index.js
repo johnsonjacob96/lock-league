@@ -23,13 +23,16 @@ const CRON_TYPES = {
 };
 
 async function fireNotify(env, type, { dryrun = false } = {}) {
+  if (!env.CRON_SECRET || !env.SITE_URL) throw new Error("Missing scheduler configuration");
   const qs = dryrun ? "&dryrun=1" : "";
   const res = await fetch(`${env.SITE_URL}/api/notify?type=${type}${qs}`, {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     headers: { "X-Cron-Secret": env.CRON_SECRET },
   });
   const body = await res.text();
   console.log(`[${type}] dryrun=${dryrun} status=${res.status} ${body}`);
+  if (!res.ok) throw new Error(`Notification endpoint failed (${res.status})`);
   return { status: res.status, body };
 }
 
@@ -48,7 +51,7 @@ export default {
   // secret. ?type=reminder|line-moves (default reminder). ?dryrun=1 computes
   // recipients without sending.
   async fetch(request, env) {
-    if (request.headers.get("x-cron-secret") !== env.CRON_SECRET) {
+    if (!env.CRON_SECRET || request.headers.get("x-cron-secret") !== env.CRON_SECRET) {
       return new Response("unauthorized", { status: 401 });
     }
     const url = new URL(request.url);

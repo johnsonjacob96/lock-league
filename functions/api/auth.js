@@ -15,8 +15,8 @@ export async function onRequest({ request, env }) {
   }
 
   if (request.method === "POST" && action === "login") {
-    const { name, passphrase } = await request.json().catch(() => ({}));
-    if (!name || !passphrase) return json({ error: "missing" }, { status: 400 });
+    const { name, passphrase } = (await request.json().catch(() => ({}))) || {};
+    if (typeof name !== "string" || typeof passphrase !== "string" || !name || !passphrase) return json({ error: "missing" }, { status: 400 });
     const rows = await sql(env)`SELECT id, name, passphrase_h FROM members WHERE name = ${name}`;
     const m = rows[0];
     if (!m) return json({ error: "no-member" }, { status: 401 });
@@ -36,8 +36,8 @@ export async function onRequest({ request, env }) {
   if (request.method === "POST" && action === "change-pass") {
     const id = await verifyCookie(env, request.headers.get("cookie"));
     if (!id) return json({ error: "not-authenticated" }, { status: 401 });
-    const { current, next } = await request.json().catch(() => ({}));
-    if (!current || !next) return json({ error: "missing" }, { status: 400 });
+    const { current, next } = (await request.json().catch(() => ({}))) || {};
+    if (typeof current !== "string" || typeof next !== "string" || !current || !next) return json({ error: "missing" }, { status: 400 });
     if (String(next).length < 8) return json({ error: "too-short", min: 8 }, { status: 400 });
     const rows = await sql(env)`SELECT id, passphrase_h FROM members WHERE id = ${id}`;
     const m = rows[0];
