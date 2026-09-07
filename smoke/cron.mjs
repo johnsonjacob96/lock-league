@@ -16,3 +16,9 @@ test('shared schedule fires both configured handlers; verification remains dry r
  let pending;await cron.scheduled({cron:'0 16 * * *'},{...env,VERIFY_CRON:'0 16 * * *'},{waitUntil:p=>pending=p});await pending;
  assert.equal(requests.length,2);assert.ok(requests.every(r=>r.url.includes('dryrun=1')&&r.init.headers['X-Cron-Secret']===env.CRON_SECRET));
 });
+
+test('evening scheduler includes the Wednesday kickoff reminder without another cron slot',async t=>{
+ const urls=[];t.mock.method(globalThis,'fetch',async url=>{urls.push(url);return Response.json({ok:true});});
+ let pending;await cron.scheduled({cron:'0 23 * * *'},env,{waitUntil:p=>pending=p});await pending;
+ assert.equal(urls.length,2);assert.ok(urls.some(url=>url.includes('type=kickoff-reminder')));
+});

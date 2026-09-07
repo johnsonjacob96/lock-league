@@ -14,6 +14,7 @@ export async function run(base='https://lock-league.pages.dev') {
  s.ok('every upcoming eligible Week 1 game appears',missing.length===0,missing.map(key).join(', '));
  for(const g of games){
   const books=Object.values(g.books||{});
+  s.ok(`${key(g)} has both FanDuel and DraftKings`,["fanduel","draftkings"].every(k=>Number.isFinite(g.books?.[k]?.spread?.line)&&Number.isFinite(g.books?.[k]?.total?.point)));
   s.ok(`${key(g)} has spread and game-total lines`,books.some(b=>Number.isFinite(b.spread?.line))&&books.some(b=>Number.isFinite(b.total?.point)&&b.total.point>=30));
   const pr=await j(`${base}/api/props?game_key=${encodeURIComponent(key(g))}`);
   s.ok(`${key(g)} prop endpoint is JSON`,pr.status===200&&Array.isArray(pr.body?.markets));

@@ -32,7 +32,7 @@ compatibility_date = "2025-01-01"
 crons = [
   "0 16 * * *",     # reminder (Sundays only, app-guarded) + line-moves, shared slot
   "0 17 * * SUN",   # reminder, second DST bracket
-  "0 23 * * *",     # line-moves, evening check
+  "0 23 * * *",     # line-moves + upcoming early-week kickoff reminder
 ]
 
 [vars]

@@ -4,9 +4,10 @@
 // Auth: X-Cron-Secret header must match env.CRON_SECRET.
 import { sql } from "../_shared/db.js";
 import { currentNflWeek, pickCutoff } from "../_shared/nfl.js";
-import { pushPersonalized, ensurePushTables } from "../_shared/push-notify.js";
+import { pushPersonalized, ensurePushTables, claimSend } from "../_shared/push-notify.js";
 import { pushWeekResults, sameTeam } from "../_shared/grader.js";
 import { ensureExtras } from "../_shared/migrations.js";
+import { makeVapidJwt, encryptPayload } from "../_shared/webpush.js";
 
 function json(body, init = {}) {
   return new Response(JSON.stringify(body), {
@@ -75,6 +76,44 @@ function sideHint(game, side) {
   return nick(side === "fav" ? sp.fav : other);
 }
 
+async function recipientPreview(env, ids, kind) {
+  if (!ids.length) return [];
+  const rows = await sql(env)`SELECT m.id, m.name, m.notif_prefs, COUNT(s.id)::int AS devices
+    FROM members m LEFT JOIN push_subscriptions s ON s.member_id = m.id
+    WHERE m.id = ANY(${ids}) GROUP BY m.id, m.name, m.notif_prefs`;
+  return rows.filter(r => r.devices > 0 && r.notif_prefs?.[kind] !== false);
+}
+
+// Checks cryptographic configuration locally. It never contacts a push service
+// and returns only booleans/counts, never endpoints, keys, or signed tokens.
+async function pushHealth(env) {
+  let keyPairValid = false;
+  try {
+    const endpoint = "https://push.example.invalid/check";
+    const jwt = await makeVapidJwt(endpoint, env.VAPID_SUBJECT || "mailto:johnsonjacob96@gmail.com", env.VAPID_PUBLIC, env.VAPID_PRIVATE);
+    const bytes = value => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey("raw", bytes(env.VAPID_PUBLIC), { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+    const [header, payload, signature] = jwt.split(".");
+    keyPairValid = await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key,
+      bytes(signature), new TextEncoder().encode(`${header}.${payload}`));
+  } catch { /* invalid or missing pair */ }
+  const rows = await sql(env)`SELECT s.member_id, s.p256dh, s.auth, m.notif_prefs
+    FROM push_subscriptions s JOIN members m ON m.id = s.member_id`;
+  let validSubscriptionKeys = 0;
+  for (const row of rows) {
+    try { await encryptPayload("local health verification", row.p256dh, row.auth); validSubscriptionKeys++; }
+    catch { /* malformed stored key */ }
+  }
+  const subjectValid = /^(mailto:|https:\/\/)/.test(env.VAPID_SUBJECT || "mailto:johnsonjacob96@gmail.com");
+  return { ok: keyPairValid && subjectValid && validSubscriptionKeys === rows.length, dryrun: true,
+    vapidConfigured: !!env.VAPID_PUBLIC && !!env.VAPID_PRIVATE, keyPairValid,
+    subjectValid,
+    subscribedMembers: new Set(rows.map(r => r.member_id)).size, subscriptions: rows.length,
+    validSubscriptionKeys, invalidSubscriptionKeys: rows.length - validSubscriptionKeys,
+    enabledMembers: Object.fromEntries(["reminder", "lineMoves", "results"].map(kind => [kind,
+      new Set(rows.filter(r => r.notif_prefs?.[kind] !== false).map(r => r.member_id)).size])) };
+}
+
 export async function onRequest({ request, env }) {
   const secret = request.headers.get("x-cron-secret");
   if (!env.CRON_SECRET || secret !== env.CRON_SECRET) {
@@ -82,6 +121,11 @@ export async function onRequest({ request, env }) {
   }
   const url = new URL(request.url);
   const type = url.searchParams.get("type") || "reminder";
+  const dryrun = url.searchParams.get("dryrun") === "1";
+  if (type === "health") {
+    if (!dryrun) return json({ error: "dryrun-required" }, { status: 400 });
+    return json(await pushHealth(env), { headers: { "Cache-Control": "no-store" } });
+  }
   const cur = currentNflWeek(new Date(), env);
   if (!cur.week) return json({ ok: true, note: cur.status });
 
@@ -89,7 +133,6 @@ export async function onRequest({ request, env }) {
     const cutoff = pickCutoff(cur.season, cur.week, env);
     // ?dryrun=1 computes recipients but sends nothing — used to verify the
     // (Cloudflare-cron) automated path fires on schedule without buzzing phones.
-    const dryrun = url.searchParams.get("dryrun") === "1";
     // Fire only inside the ~1-hour-before-lock window. Cron is fixed-UTC and can't
     // follow DST, but the noon-CT lock shifts (17:00 UTC in CDT, 18:00 in CST). So
     // the scheduler fires BOTH 16:00 and 17:00 UTC every Sunday and this window
@@ -133,13 +176,55 @@ export async function onRequest({ request, env }) {
       };
     }
     if (dryrun) {
-      return json({ ok: true, dryrun: true, week: cur.week, wouldRemind: behind.map((b) => b.name) });
+      const recipients = await recipientPreview(env, behind.map(b => b.id), "reminder");
+      return json({ ok: true, dryrun: true, week: cur.week, wouldRemind: recipients.map(r => r.name),
+        devices: recipients.reduce((n, r) => n + r.devices, 0), missingPicks: behind.map(b => b.name) });
     }
     const res = await pushPersonalized(env, byMemberId, "reminder");
     return json({ ok: true, week: cur.week, reminded: behind.map((b) => b.name), ...res });
   }
 
+  if (type === "kickoff-reminder") {
+    const cutoff = pickCutoff(cur.season, cur.week, env);
+    if (Date.now() >= cutoff.getTime()) return json({ ok: true, note: "past cutoff" });
+    const games = await fetchBoard(request);
+    if (!games) return json({ ok: true, note: "odds unavailable" });
+    const upcoming = games.filter(game => {
+      const kickoff = Date.parse(game.kickoff), minutes = (kickoff - Date.now()) / 60000;
+      const monday = new Date(kickoff).toLocaleDateString("en-US", { weekday: "short", timeZone: "America/Chicago" }) === "Mon";
+      return Number.isFinite(kickoff) && minutes > 0 && minutes <= 120 && kickoff < cutoff.getTime() && !monday;
+    });
+    if (!upcoming.length) return json({ ok: true, ...(dryrun ? { dryrun: true } : {}), note: "no upcoming kickoff" });
+    const rows = await sql(env)`SELECT m.id, m.name, COUNT(p.id)::int AS picks
+      FROM members m LEFT JOIN picks p ON p.member_id=m.id AND p.season=${cur.season} AND p.week=${cur.week}
+      GROUP BY m.id, m.name`;
+    const recipients = await recipientPreview(env, rows.filter(r => r.picks < 5).map(r => r.id), "reminder");
+    if (dryrun) return json({ ok: true, dryrun: true, week: cur.week, games: upcoming.length,
+      wouldRemind: recipients.map(r => r.name), devices: recipients.reduce((n, r) => n + r.devices, 0) });
+    if (!recipients.length) return json({ ok: true, note: "no subscribed members need picks" });
+    const results = [];
+    for (const game of upcoming) {
+      const kind = `kickoff:${game.away}@${game.home}:${game.kickoff}`;
+      if (!(await claimSend(env, cur.season, cur.week, kind))) continue;
+      const time = new Date(game.kickoff).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
+      const byMemberId = Object.fromEntries(recipients.map(r => [r.id, {
+        title: `${nick(game.away)} at ${nick(game.home)} tonight`,
+        body: `Game picks lock at ${time} CT. Your Week ${cur.week} card still has open slots.`,
+        url: "/", tag: `ll-kickoff-${cur.season}-${cur.week}-${game.id || game.home}`,
+      }]));
+      results.push(await pushPersonalized(env, byMemberId, "reminder"));
+    }
+    return json({ ok: true, week: cur.week, games: results.length, results });
+  }
+
   if (type === "results") {
+    if (dryrun) {
+      const picks = await sql(env)`SELECT member_id, result FROM picks WHERE season=${cur.season} AND week=${cur.week}`;
+      const recipients = await recipientPreview(env, [...new Set(picks.map(p => p.member_id))], "results");
+      return json({ ok: true, dryrun: true, week: cur.week, pending: picks.filter(p => !p.result).length,
+        ready: picks.length > 0 && picks.every(p => p.result) && Date.now() >= pickCutoff(cur.season, cur.week, env).getTime(),
+        eligibleMembers: recipients.length, devices: recipients.reduce((n, r) => n + r.devices, 0) });
+    }
     // On-demand winner/results push. Grading fires this automatically once every
     // game is final; this lets a test (or a re-run) trigger it directly.
     // ?reset=1 clears the once-per-week guard so it can be re-fired.
@@ -157,7 +242,7 @@ export async function onRequest({ request, env }) {
     // they can re-lock before the Sunday cutoff. Skips once picks are locked.
     const cutoff = pickCutoff(cur.season, cur.week, env);
     if (Date.now() >= cutoff.getTime()) return json({ ok: true, note: "past cutoff, picks locked" });
-    await ensureExtras(env);
+    if (!dryrun) await ensureExtras(env);
     const games = await fetchBoard(request);
     if (!games) return json({ ok: true, note: "odds unavailable" });
 
@@ -172,7 +257,7 @@ export async function onRequest({ request, env }) {
     const toMark = [];   // { id, line } — record what we alerted so we don't repeat
     for (const p of rows) {
       const g = findGame(games, p.game_key);
-      if (!g) continue;
+      if (!g || !Number.isFinite(Date.parse(g.kickoff)) || Date.parse(g.kickoff) <= Date.now()) continue;
       const best = bestCurrentLine(g, p.side);
       const lockedV = perspVal(p.side, p.line);
       if (!best || lockedV == null) continue;
@@ -201,6 +286,11 @@ export async function onRequest({ request, env }) {
       const body = items.map((it) => `${it.hint} now ${it.bestFmt} on ${it.book} (you have ${it.lockedFmt})`).join(" · ")
         + `. Re-lock before ${timeStr} CT Sunday.`;
       byMemberId[mid] = { title, body, url: "/", tag: `ll-linemove-${cur.season}-${cur.week}` };
+    }
+    if (dryrun) {
+      const recipients = await recipientPreview(env, Object.keys(byMemberId).map(Number), "lineMoves");
+      return json({ ok: true, dryrun: true, week: cur.week, wouldAlert: recipients.map(r => r.name),
+        devices: recipients.reduce((n, r) => n + r.devices, 0), picks: toMark.length });
     }
     const res = await pushPersonalized(env, byMemberId, "lineMoves");
     await Promise.all(toMark.map((m) => sql(env)`UPDATE picks SET alert_line = ${m.line} WHERE id = ${m.id}`));

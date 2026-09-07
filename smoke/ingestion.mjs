@@ -296,3 +296,21 @@ test('live player progress uses boxscore stats and leaves unreported markets una
   assert.equal(players[0].markets.pass_yds, undefined);
   assert.deepEqual(parsePlayerProgress({}), []);
 });
+
+test('backup fills missing book markets without overwriting primary or accepting old quotes', async () => {
+  const { mergeBookSupplement, needsBookSupplement } = await import('../functions/api/odds.js');
+  const now = Date.parse('2026-09-11T12:00Z');
+  const spread = {fav:'Seattle Seahawks',line:-3.5,favPrice:-110,dogPrice:-110};
+  const total = {point:44.5,overPrice:-110,underPrice:-110};
+  const primary = {games:[{away:'New England Patriots',home:'Seattle Seahawks',kickoff:'2026-09-10T00:20Z',books:{fanduel:{spread,total}}}]};
+  const backup = {fetched_at:new Date(now).toISOString(),games:[{...primary.games[0],books:{fanduel:{spread:{...spread,line:-7},total,updated:new Date(now).toISOString()},draftkings:{spread,total,updated:new Date(now).toISOString()}}}]};
+  assert.equal(needsBookSupplement(primary),true);
+  const merged = mergeBookSupplement(primary,backup,now);
+  assert.equal(needsBookSupplement(merged),false);
+  assert.equal(merged.games[0].books.fanduel.spread.line,-3.5);
+  assert.equal(merged.games[0].books.draftkings.supplemental,true);
+  assert.equal(primary.games[0].books.draftkings,undefined);
+  assert.equal(mergeBookSupplement(primary,backup,now+16*60000),primary);
+  backup.games[0].kickoff='2026-09-20T17:00Z';
+  assert.equal(mergeBookSupplement(primary,backup,now).games[0].books.draftkings,undefined);
+});

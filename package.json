@@ -12,7 +12,7 @@
     "smoke:render": "node smoke/run.mjs --render",
     "smoke:live": "node smoke/run.mjs --live",
     "smoke:all": "node smoke/run.mjs --all",
-    "test": "node --experimental-test-module-mocks --test smoke/handlers.mjs smoke/ingestion.mjs smoke/prop-fetch.mjs smoke/cron.mjs",
+    "test": "node --experimental-test-module-mocks --test smoke/handlers.mjs smoke/ingestion.mjs smoke/prop-fetch.mjs smoke/cron.mjs smoke/notifications.mjs",
     "smoke:browser": "RUN_BROWSER=1 node --experimental-test-module-mocks --test smoke/handlers.mjs"
   },
   "dependencies": {
