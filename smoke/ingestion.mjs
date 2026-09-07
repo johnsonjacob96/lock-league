@@ -334,3 +334,34 @@ test('primary outage keeps a recent two-book backup ahead of ESPN consensus', as
   assert.equal(body.games[0].books.draftkings.supplemental,true);
   assert.equal(espnCalls,0);
 });
+
+test('conflicting main totals require independent confirmation, including cached payloads',async()=>{
+ const {mergeBookSupplement,needsBookSupplement,quarantineConflictingTotals}=await import('../functions/api/odds.js');
+ const now=Date.parse('2026-09-07T14:00Z');
+ const book=point=>({total:{point,overPrice:-115,underPrice:-115},spread:{fav:'Chicago Bears',line:-3,favPrice:-110,dogPrice:-110},updated:new Date(now).toISOString()});
+ const game={away:'Chicago Bears',home:'Carolina Panthers',kickoff:'2026-09-13T17:00Z',books:{fanduel:book(47.5),draftkings:book(73.5)}};
+ const primary={source:'sharpapi',games:[game]};
+ const backup={fetched_at:new Date(now).toISOString(),games:[{...game,books:{fanduel:book(47.5),draftkings:book(46.5)}}]};
+ assert.equal(needsBookSupplement(primary),true);
+ const good=mergeBookSupplement(primary,backup,now);
+ assert.equal(good.games[0].books.draftkings.total.point,46.5);
+ assert.equal(good.games[0].books.fanduel.total.point,47.5);
+ assert.equal(good.games[0].books.draftkings.supplemental,true);
+ assert.equal(primary.games[0].books.draftkings.total.point,73.5,'does not mutate cached input');
+ for(const bad of [null,{...backup,fetched_at:'2026-09-07T13:00Z'},{...backup,games:[{...game,kickoff:'2026-09-20T17:00Z'}]},{...backup,games:[game]}]) {
+  const withheld=mergeBookSupplement(primary,bad,now);
+  assert.equal(withheld.games[0].books.draftkings.total,null);
+  assert.equal(withheld.games[0].books.fanduel.total,null);
+  assert.ok(withheld.games[0].books.draftkings.spread);
+ }
+ assert.equal(quarantineConflictingTotals(primary).games[0].books.draftkings.total,null);
+ assert.equal(needsBookSupplement(good),false);
+ const oneBook={...primary,games:[{...game,books:{draftkings:book(73.5)}}]};
+ assert.equal(mergeBookSupplement(oneBook,backup,now).games[0].books.draftkings.total.point,46.5);
+});
+test('Sharp main board ignores alternate, inactive and flagged-invalid selections',()=>{
+ const base={away_team:'Chicago Bears',home_team:'Carolina Panthers',event_start_time:'2026-09-13T17:00Z',sportsbook:'draftkings',market_type:'total_points',is_main_line:true,odds_american:-110};
+ const rows=[{...base,line:46.5,selection_type:'over'},{...base,line:46.5,selection_type:'under'}];
+ for(const flag of [{is_alternate_line:true},{is_active:false},{is_impossible_scoreline:true},{is_stale_pregame_price:true}]) rows.push({...base,...flag,line:73.5,selection_type:'over'},{...base,...flag,line:73.5,selection_type:'under'});
+ assert.equal(normalizeSharp(rows)[0].books.draftkings.total.point,46.5);
+});
