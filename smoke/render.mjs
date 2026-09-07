@@ -124,6 +124,30 @@ export async function run() {
       s.ok(`[${vw}px] locked Super Lock card shows odds`, r.checks.lockedOdds === true);
       s.ok(`[${vw}px] locked Over/Under slot shows its line, not truncated`, r.checks.overSlotShowsLine === true);
       for (const key of ["livePush","finalPush","propProgress","propMissing","sourceAge","noTimestampRerender","refreshFocus","liveNoOverflow","deferActive","deferredCatchesUp","keepLastGood","refreshReenabled","backupBookVisible"]) s.ok(`[${vw}px] ${key}`, r.checks[key] === true);
+      const payments = await page.evaluate(() => {
+        const roster = [{id:1,name:'Jacob',paid:false},{id:2,name:'Jared',paid:false}];
+        state.pot = {season:2026,can_configure:true,
+          season_pot:{entry_amount:100,pot_total:200,roster,payout:[{place:1,amount:500}],payouts:[{place:1,amount:500,member_id:1,name:'Jacob',venmo_handle:'jacob-test',paid:false}]},
+          weekly:{buyin:90,prize:40,collector:{id:2,name:'Jared',venmo_handle:'jared-test'},roster,progress:{paid_count:0,member_count:2,collected:0,total:180},me:{id:2,is_collector:true,paid:false}}};
+        const root = document.getElementById('root');
+        root.innerHTML = potCardHtml(); bindPotCard();
+        const award = [...root.querySelectorAll('a')].find(a => a.textContent.includes('500'));
+        const awardUrl = award && new URL(award.href);
+        const checks = { seasonAward: awardUrl?.pathname === '/jacob-test' && awardUrl.searchParams.get('amount') === '500' && awardUrl.searchParams.get('note').includes('season payout'),
+          separateControls: root.querySelectorAll('[data-fund="season"]').length === 2,
+          noOverflow: document.documentElement.scrollWidth <= innerWidth + 1 };
+        state.pot.can_configure=false; state.pot.weekly.me={id:1,is_collector:false,paid:false};
+        root.innerHTML=potCardHtml();
+        const urls=[...root.querySelectorAll('a')].map(a=>new URL(a.href));
+        checks.collectionLinks=urls.some(u=>u.pathname==='/jared-test' && u.searchParams.get('amount')==='100') && urls.some(u=>u.pathname==='/jared-test' && u.searchParams.get('amount')==='90');
+        checks.memberPermissions=!root.querySelector('.season-recipient-save') && root.querySelector('.season-paid')?.textContent==='Mark received';
+        state.pot.weekly.collector.venmo_handle=null;
+        root.innerHTML=potCardHtml();
+        checks.missingHandle=!root.querySelector('a[href*="venmo.com"]') && root.textContent.includes('Venmo handle in Account');
+        return checks;
+      });
+      for (const [key,ok] of Object.entries(payments)) s.ok(`[${vw}px] payments ${key}`,ok);
+      if (process.env.PAYMENT_SCREENSHOT && vw === 390) await page.screenshot({path:process.env.PAYMENT_SCREENSHOT,fullPage:true});
       await page.close();
     }
   } finally {

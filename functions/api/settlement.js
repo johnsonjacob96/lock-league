@@ -5,7 +5,7 @@
 // that week's winner the weekly prize. This endpoint computes the weekly winners
 // and tracks whether the collector has paid each one yet (`weekly_payouts`). The
 // site never touches money — it just says who the collector owes and builds the
-// one-tap Venmo link. The season pot ($100 entry) is held + paid by LeagueSafe.
+// one-tap Venmo link. Season entries and payouts use Venmo through /api/pot.
 //
 //   GET  ?season=            -> weekly winners + amount owed + paid status + handles
 //   POST ?action=set-venmo   -> caller sets their own Venmo handle

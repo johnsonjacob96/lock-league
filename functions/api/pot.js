@@ -1,20 +1,5 @@
-// /api/pot — league money dashboard. Two flows, NEITHER custodied by the app:
-//
-//  1. Season pot (Article 11: $100 entry, $500/$200/$100) — held + paid out by
-//     LeagueSafe. The app just links to the league (`leaguesafe_url`) and shows
-//     the entry + payout for reference. No in-app payment tracking; LeagueSafe
-//     owns that (it carries the money-transmitter licensing to custody a pot).
-//
-//  2. Weekly game — runs on Venmo, PRE-FUNDED. Every member sends the collector
-//     (Jared) a season buy-in (`weekly_buyin`, default $90) at the start of the
-//     year; the collector banks it and Venmos each week's winner the weekly prize
-//     (`weekly_prize`, default $40, paid via /api/settlement). This endpoint
-//     tracks who has paid the buy-in and gives a one-tap Venmo link to the
-//     collector. The app never holds the money — it moves P2P to the collector.
-//
-//   GET  ?season=          -> season-pot info + weekly-fund config, roster, progress
-//   POST ?action=set-paid  -> mark a member's buy-in paid/unpaid (self, or collector)
-//   POST ?action=config    -> set url/amounts/collector/deadline (collector; or anyone if unset)
+// Venmo collection and season payouts. Weekly buy-ins remain in pot_entries;
+// season entries and confirmed season prize recipients have separate ledgers.
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
 import { currentNflWeek } from "../_shared/nfl.js";
@@ -56,14 +41,13 @@ function seasonOf(env, url, body) {
 
 async function loadConfig(env, season) {
   const row = (await sql(env)`
-    SELECT season, entry_amount, collector_id, deadline, payout, leaguesafe_url, weekly_buyin, weekly_prize
+    SELECT season, entry_amount, collector_id, deadline, payout, weekly_buyin, weekly_prize
     FROM pot_config WHERE season = ${season} LIMIT 1`)[0];
   return {
     entry_amount: row?.entry_amount != null ? Number(row.entry_amount) : DEFAULT_ENTRY,
     collector_id: row?.collector_id ?? null,
     deadline: row?.deadline ?? null,
     payout: Array.isArray(row?.payout) ? row.payout : DEFAULT_PAYOUT,
-    leaguesafe_url: row?.leaguesafe_url ?? null,
     weekly_buyin: row?.weekly_buyin != null ? Number(row.weekly_buyin) : DEFAULT_BUYIN,
     weekly_prize: row?.weekly_prize != null ? Number(row.weekly_prize) : DEFAULT_PRIZE,
     configured: !!row,
@@ -85,6 +69,8 @@ export async function onRequest({ request, env }) {
     const unset = cfg.collector_id == null; // no collector yet -> any member may set up
 
     if (action === "set-paid") {
+      if (body.fund !== undefined && !["season", "weekly"].includes(body.fund)) return json({ error: "bad-fund" }, { status: 400 });
+      if (typeof body.paid !== "boolean") return json({ error: "bad-paid" }, { status: 400 });
       const targetId = Number(body.member_id);
       const paid = !!body.paid;
       if (!targetId) return json({ error: "bad-body" }, { status: 400 });
@@ -96,11 +82,47 @@ export async function onRequest({ request, env }) {
         return json({ error: "no-such-member" }, { status: 404 });
       }
       const at = paid ? new Date().toISOString() : null;
-      await sql(env)`
+      if (body.fund === "season") await sql(env)`
+        INSERT INTO season_entries (season, member_id, paid, paid_at)
+        VALUES (${season}, ${targetId}, ${paid}, ${at})
+        ON CONFLICT (season, member_id) DO UPDATE SET paid = ${paid}, paid_at = ${at}`;
+      else await sql(env)`
         INSERT INTO pot_entries (season, member_id, paid, paid_at)
         VALUES (${season}, ${targetId}, ${paid}, ${at})
         ON CONFLICT (season, member_id) DO UPDATE SET paid = ${paid}, paid_at = ${at}`;
       return json({ ok: true, member_id: targetId, paid });
+    }
+
+    if (action === "season-recipient" || action === "season-paid") {
+      const place = Number(body.place);
+      const prize = cfg.payout.find(p => p.place === place);
+      if (!prize) return json({ error: "bad-place" }, { status: 400 });
+      if (action === "season-recipient") {
+        if (!isCollector) return json({ error: "forbidden" }, { status: 403 });
+        const target = Number(body.member_id);
+        if (!Number.isInteger(target) || !(await sql(env)`SELECT 1 FROM members WHERE id = ${target}`).length)
+          return json({ error: "bad-recipient" }, { status: 400 });
+        try {
+          const rows = await sql(env)`INSERT INTO season_payouts (season, place, member_id, amount)
+            VALUES (${season}, ${place}, ${target}, ${prize.amount})
+            ON CONFLICT (season, place) DO UPDATE SET member_id = ${target}, amount = ${prize.amount}
+            WHERE season_payouts.paid = FALSE RETURNING place`;
+          if (!rows.length) return json({ error: "already-paid", detail: "Undo paid status before changing the recipient." }, { status: 409 });
+        } catch (e) {
+          if (e.code === "23505") return json({ error: "duplicate-recipient", detail: "This member already has a season prize assigned." }, { status: 409 });
+          throw e;
+        }
+      } else {
+        if (typeof body.paid !== "boolean") return json({ error: "bad-paid" }, { status: 400 });
+        // Recipient identity is included to reject stale clicks after reassignment.
+        const target = Number(body.member_id);
+        if (!isCollector && target !== memberId) return json({ error: "forbidden" }, { status: 403 });
+        const rows = await sql(env)`UPDATE season_payouts SET paid = ${body.paid},
+          paid_at = ${body.paid ? new Date().toISOString() : null}
+          WHERE season = ${season} AND place = ${place} AND member_id = ${target} RETURNING place`;
+        if (!rows.length) return json({ error: "recipient-changed", detail: "Refresh payments and try again." }, { status: 409 });
+      }
+      return json({ ok: true });
     }
 
     if (action === "config") {
@@ -136,13 +158,6 @@ export async function onRequest({ request, env }) {
           deadline = d.toISOString();
         }
       }
-      let leaguesafeUrl = cfg.leaguesafe_url;
-      if (body.leaguesafe_url !== undefined) {
-        const u = String(body.leaguesafe_url || "").trim();
-        if (!u) leaguesafeUrl = null;
-        else if (/^https?:\/\/[^\s]+$/i.test(u)) leaguesafeUrl = u;
-        else return json({ error: "bad-url", detail: "must start with http(s)://" }, { status: 400 });
-      }
       let payout = cfg.payout;
       if (Array.isArray(body.payout)) {
         payout = body.payout
@@ -151,11 +166,11 @@ export async function onRequest({ request, env }) {
           .sort((a, b) => a.place - b.place);
       }
       await sql(env)`
-        INSERT INTO pot_config (season, entry_amount, collector_id, deadline, payout, leaguesafe_url, weekly_buyin, weekly_prize)
-        VALUES (${season}, ${entry}, ${collectorId}, ${deadline}, ${JSON.stringify(payout)}::jsonb, ${leaguesafeUrl}, ${buyin}, ${prize})
+        INSERT INTO pot_config (season, entry_amount, collector_id, deadline, payout, weekly_buyin, weekly_prize)
+        VALUES (${season}, ${entry}, ${collectorId}, ${deadline}, ${JSON.stringify(payout)}::jsonb, ${buyin}, ${prize})
         ON CONFLICT (season) DO UPDATE SET
           entry_amount = ${entry}, collector_id = ${collectorId}, deadline = ${deadline},
-          payout = ${JSON.stringify(payout)}::jsonb, leaguesafe_url = ${leaguesafeUrl},
+          payout = ${JSON.stringify(payout)}::jsonb,
           weekly_buyin = ${buyin}, weekly_prize = ${prize}`;
       return json({ ok: true });
     }
@@ -166,9 +181,11 @@ export async function onRequest({ request, env }) {
   if (request.method === "GET") {
     const season = seasonOf(env, url, null);
     const cfg = await loadConfig(env, season);
-    const [members, entries] = await Promise.all([
+    const [members, entries, seasonEntries, seasonPayouts] = await Promise.all([
       sql(env)`SELECT id, name, venmo_handle FROM members ORDER BY name`,
       sql(env)`SELECT member_id, paid, paid_at FROM pot_entries WHERE season = ${season}`,
+      sql(env)`SELECT member_id, paid, paid_at FROM season_entries WHERE season = ${season}`,
+      sql(env)`SELECT place, member_id, amount, paid, paid_at FROM season_payouts WHERE season = ${season}`,
     ]);
     const paidBy = Object.fromEntries(entries.map((e) => [e.member_id, e]));
     const collector = cfg.collector_id ? members.find((m) => m.id === cfg.collector_id) : null;
@@ -186,8 +203,15 @@ export async function onRequest({ request, env }) {
       season_pot: {
         entry_amount: cfg.entry_amount,
         payout: cfg.payout,
-        leaguesafe_url: cfg.leaguesafe_url,
         pot_total: cfg.entry_amount * members.length,
+        roster: members.map(m => ({ id: m.id, name: m.name, paid: !!seasonEntries.find(e => e.member_id === m.id)?.paid })),
+        payouts: cfg.payout.map(p => {
+          const row = seasonPayouts.find(r => r.place === p.place);
+          const recipient = members.find(m => m.id === row?.member_id);
+          return { place: p.place, amount: row ? Number(row.amount) : p.amount,
+            member_id: recipient?.id || null, name: recipient?.name || null,
+            venmo_handle: recipient?.venmo_handle || null, paid: !!row?.paid, paid_at: row?.paid_at || null };
+        }),
       },
       weekly: {
         buyin: cfg.weekly_buyin,
