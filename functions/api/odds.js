@@ -18,7 +18,7 @@ import { saveScoreboardSeed, saveSummarySeed, loadScoreboardSeed } from "../_sha
 
 const API_BASE = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds";
 // Synthetic, cookie-free key for the shared Cache API entry.
-const EDGE_KEY = new Request("https://lock-league.internal/cache/odds");
+const EDGE_KEY = new Request("https://lock-league.internal/cache/odds-v2");
 let cache = { ts: 0, data: null };
 
 function ttlSeconds(env) {
@@ -100,14 +100,32 @@ let backupReady = false;
 const completeMarket = (m, type) => !!m && (type === "spread"
   ? Number.isFinite(m.line) && Number.isFinite(m.favPrice) && Number.isFinite(m.dogPrice)
   : Number.isFinite(m.point) && Number.isFinite(m.overPrice) && Number.isFinite(m.underPrice));
+// Main totals should not differ by ten points between books. Do not guess
+// which is right: confirm from the independent feed or withhold both totals.
+function conflictingTotals(g) {
+  const a = g.books?.fanduel?.total?.point, b = g.books?.draftkings?.total?.point;
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) >= 10;
+}
+export function quarantineConflictingTotals(payload) {
+  if (!payload?.games?.some(conflictingTotals)) return payload;
+  return { ...payload, games: payload.games.map(g => !conflictingTotals(g) ? g : { ...g,
+    books: Object.fromEntries(Object.entries(g.books || {}).map(([key,book]) =>
+      [key, ["fanduel","draftkings"].includes(key) ? { ...book, total: null, total_unavailable_reason: "conflicting-provider-lines" } : book]))
+  }) };
+}
+const freshBook = (book, now) => !!book && Number.isFinite(Date.parse(book.updated)) && now - Date.parse(book.updated) <= BACKUP_TTL_MS;
+function corroboratedTotals(g, now) {
+  const a = g.books?.fanduel, b = g.books?.draftkings;
+  return freshBook(a, now) && freshBook(b, now) && completeMarket(a.total,"total") && completeMarket(b.total,"total") && Math.abs(a.total.point-b.total.point) <= 3;
+}
 export function needsBookSupplement(payload) {
-  return (payload.games || []).some(g => ["fanduel", "draftkings"].some(b =>
+  return (payload.games || []).some(g => conflictingTotals(g) || ["fanduel", "draftkings"].some(b =>
     ["spread", "total"].some(m => !completeMarket(g.books?.[b]?.[m], m))));
 }
 export function mergeBookSupplement(primary, backup, now = Date.now()) {
-  if (!backup || now - Date.parse(backup.fetched_at) > BACKUP_TTL_MS || !Number.isFinite(Date.parse(backup.fetched_at))) return primary;
+  if (!backup || now - Date.parse(backup.fetched_at) > BACKUP_TTL_MS || !Number.isFinite(Date.parse(backup.fetched_at))) return quarantineConflictingTotals(primary);
   const byGame = new Map((backup.games || []).map(g => [`${g.away}@${g.home}`, g]));
-  return { ...primary, games: primary.games.map(g => {
+  return quarantineConflictingTotals({ ...primary, games: primary.games.map(g => {
     const extra = byGame.get(`${g.away}@${g.home}`);
     if (!extra || !Number.isFinite(Date.parse(extra.kickoff)) || !Number.isFinite(Date.parse(g.kickoff)) || Math.abs(Date.parse(extra.kickoff) - Date.parse(g.kickoff)) > 3600000) return g;
     const books = { ...g.books };
@@ -115,13 +133,13 @@ export function mergeBookSupplement(primary, backup, now = Date.now()) {
       const candidate = extra.books?.[key];
       if (!candidate || !Number.isFinite(Date.parse(candidate.updated)) || now - Date.parse(candidate.updated) > BACKUP_TTL_MS) continue;
       for (const market of ["spread", "total"]) {
-        if (!completeMarket(books[key]?.[market], market) && completeMarket(candidate[market], market)) {
+        if ((!completeMarket(books[key]?.[market], market) || (market === "total" && conflictingTotals(g) && corroboratedTotals(extra, now))) && completeMarket(candidate[market], market)) {
           books[key] = { ...books[key], [market]: candidate[market], updated: candidate.updated, supplemental: true };
         }
       }
     }
     return { ...g, books };
-  }) };
+  }) });
 }
 async function fetchSharedBackup(env) {
   if (!env.ODDS_API_KEY || !env.DATABASE_URL) return null;
@@ -328,7 +346,7 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
   // First pass: bucket every spread/total selection (main + alternate) per game+book.
   const games = new Map();
   for (const row of rows || []) {
-    if (row.is_player_prop === true) continue;
+    if (row.is_player_prop === true || row.is_active === false || row.is_alternate_line === true || row.is_stale_pregame_price === true || row.is_impossible_scoreline === true) continue;
     const mt = String(row.market_type ?? row.market ?? "").toLowerCase();
     // SharpAPI's spread,total feed also carries derivative markets that share the
     // same keywords and would otherwise pollute the board: team totals (~20-24
@@ -487,7 +505,7 @@ export function scopedPayload(payload, env) {
     const t = Date.parse(g.kickoff);
     return Number.isFinite(t) && t >= start && t < end;
   });
-  return games.length ? { ...payload, season, week, games } : null;
+  return games.length ? quarantineConflictingTotals({ ...payload, season, week, games }) : null;
 }
 
 // ── Mock (dev / screenshots) ────────────────────────────────────────────────
@@ -607,7 +625,9 @@ export async function onRequestGet(context) {
     if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
     try {
       const raw = await fetchSharpRaw(env);
-      return json({ count: raw.length, sample: raw.slice(0, 8), parsedGames: normalizeSharp(raw).slice(0, 2) }, { headers: { "Cache-Control": "no-store" } });
+      const team = url.searchParams.get("team")?.toLowerCase();
+      const selected = team ? raw.filter(r => `${r.away_team} ${r.home_team}`.toLowerCase().includes(team)) : raw;
+      return json({ count: raw.length, sample: selected.slice(0, team ? 40 : 8), parsedGames: normalizeSharp(selected).slice(0, 2) }, { headers: { "Cache-Control": "no-store" } });
     } catch (e) {
       return json({ error: String(e && e.message || e) }, { status: 502, headers: { "Cache-Control": "no-store" } });
     }
@@ -674,6 +694,7 @@ export async function onRequestGet(context) {
     try {
       let payload = await fetchPrimary(env, primary);
       if (primary === "sharpapi") payload = await supplementMissingBooks(env, payload);
+      payload = quarantineConflictingTotals(payload);
       // An empty board means "no lines posted yet" or a malformed response,
       // never "no games this week" — always fall through to the ESPN board
       // instead of returning/snapshotting a blank one. (This used to only
