@@ -1127,11 +1127,42 @@ function isMe(name) { return !!(state.user && state.user.name === name); }
 function memberColor(name) { return isMe(name) ? YOU_ACCENT : NAME_NEUTRAL; }
 function memberDot() { return ""; } // per-member rainbow dots retired
 
-// Units at -110: win = +1, loss = -1.1, push = 0.
+// Unit returns use saved odds from 2026 onward; imported history keeps its estimate.
 function fmtUnits(u) {
-  if (Math.abs(u) < 0.05) return "0.0";
+  if (Math.abs(u) < 0.005) return "0.00";
   const sign = u > 0 ? "+" : "−";
-  return sign + Math.abs(u).toFixed(1);
+  return sign + Math.abs(u).toFixed(2);
+}
+
+// Flat 1u risk for actual bets. Missing submissions are standings penalties,
+// not wagers; pending bets and unpriced settlements do not invent returns.
+function pickUnits(pick, season) {
+  if (!pick || !["W", "L", "P"].includes(pick.result)) return null;
+  if (Number(season) < 2026) return pick.result === "W" ? 1 : pick.result === "L" ? -1.1 : 0;
+  if (pick.missing || pick.result === "P") return 0;
+  const price = Number(pick.price);
+  if (!Number.isFinite(price) || Math.abs(price) < 100) return null;
+  return pick.result === "L" ? -1 : price > 0 ? price / 100 : 100 / Math.abs(price);
+}
+function memberUnits(md, season) {
+  let units = 0, settled = 0, unpriced = 0;
+  for (const bt of BET_TYPES_ORDER) for (const pick of Object.values(md?.byType?.[bt]?.picks || {})) {
+    if (!pick || !["W", "L", "P"].includes(pick.result) || (Number(season) >= 2026 && pick.missing)) continue;
+    const value = pickUnits(pick, season);
+    if (value === null) unpriced++;
+    else { units += value; settled++; }
+  }
+  return { units, settled, unpriced };
+}
+function unitsSummary(md, season) {
+  const u = memberUnits(md, season);
+  return `${fmtUnits(u.units)}u${u.unpriced ? ` · ${u.unpriced} missing odds` : ""}`;
+}
+function seasonLeader(rows) {
+  const top = rows[0];
+  if (!top || !rows.some(r => r.seasonRec.w + r.seasonRec.l > 0)) return null;
+  const second = rows[1];
+  return second && top.seasonRec.w === second.seasonRec.w && top.seasonRec.l === second.seasonRec.l && top.weeksWon === second.weeksWon ? null : top;
 }
 
 // Loose team matching, mirrors the server ("Chiefs" ↔ "Kansas City Chiefs").
@@ -1147,10 +1178,12 @@ function sameTeamName(a, b) {
 // Merge it into DATA so standings / ticker / lifetime render it identically.
 let DATA_VERSION = 0;
 let live2026Promise = null;
+let live2026FetchedAt = 0;
 
 function ensureLive2026() {
   if (!seasonsVisible().includes("2026")) return Promise.resolve();
-  if (!live2026Promise) {
+  if (!live2026Promise || Date.now() - live2026FetchedAt > 60000) {
+    live2026FetchedAt = Date.now();
     live2026Promise = fetch("/api/picks?season=2026", { credentials: "include" })
       .then(r => (r.ok ? r.json() : { picks: [] }))
       .then(j => { mergeLiveSeason(j.picks || []); normalizeRecords(DATA); DATA_VERSION++; })
@@ -1159,13 +1192,13 @@ function ensureLive2026() {
   return live2026Promise;
 }
 
-function mergeLiveSeason(rows) {
+function mergeLiveSeason(rows, season = 2026) {
   const byMember = {};
   for (const p of rows) {
-    if (!p.member_name || p.season !== 2026) continue;
+    if (!p.member_name || Number(p.season) !== Number(season)) continue;
     const m = byMember[p.member_name] || (byMember[p.member_name] = {});
     const bt = m[p.bet_type] || (m[p.bet_type] = {});
-    bt[p.week] = { text: p.pick_text || "", result: p.result || "" };
+    bt[p.week] = { text: p.pick_text || "", result: p.result || "", price: p.price ?? p.prop?.price ?? p.prop_meta?.price ?? null, book: p.book || null };
   }
   const names = [...new Set([...MEMBERS_ALL, ...Object.keys(byMember)])].sort();
 
@@ -1177,7 +1210,7 @@ function mergeLiveSeason(rows) {
   // one once its cutoff has passed, are locked, so future weeks aren't penalized.
   const cur = currentNflWeekClient();
   const curLocked = !!(state.serverConfig && state.serverConfig.cutoff && Date.now() >= Date.parse(state.serverConfig.cutoff));
-  const isLocked = (wk) => !!cur.week && (wk < cur.week || (wk === cur.week && curLocked));
+  const isLocked = (wk) => Number(season) < Number(cur.season) || (Number(season) === Number(cur.season) && !!cur.week && (wk < cur.week || (wk === cur.week && curLocked)));
   const contested = new Set();
   for (const nm of Object.keys(byMember))
     for (const bt of BET_TYPES_ORDER)
@@ -1234,9 +1267,9 @@ function mergeLiveSeason(rows) {
       W += w; L += l; P += t;
     }
     if (!DATA.members[name]) DATA.members[name] = {};
-    DATA.members[name]["2026"] = { seasonRecord: `${W}-${L}${P ? "-" + P : ""}`, byType };
+    DATA.members[name][String(season)] = { seasonRecord: `${W}-${L}${P ? "-" + P : ""}`, byType };
   }
-  DATA.seasons["2026"] = { members: names, weeklyWinners, live: true };
+  DATA.seasons[String(season)] = { members: names, weeklyWinners, live: true };
 }
 
 // Every pick is made under a bet type, so sum(byType) must equal the season
@@ -1491,8 +1524,11 @@ function computeSeasonStats(season) {
         // pushes neither extend nor break a streak
       }
     }
-    const units = W - 1.1 * L;
-    if ((W + L) && (!unitsLeader || units > unitsLeader.units)) unitsLeader = { name, units };
+    const { units, settled, unpriced } = memberUnits(md, season);
+    if (settled && (W + L) && !unpriced) {
+      if (!unitsLeader || units > unitsLeader.units + 1e-9) unitsLeader = { name, units };
+      else if (Math.abs(units - unitsLeader.units) < 1e-9) unitsLeader.tied = true;
+    }
     if (!streakLeader || best > streakLeader.len) streakLeader = { name, len: best };
     const sr = parseRecord(md.byType?.["Super Lock"]?.record);
     const sTot = sr.w + sr.l;
@@ -1510,6 +1546,7 @@ function computeSeasonStats(season) {
     const p = a.W / tot;
     if (!bestBt || p > bestBt.pct) bestBt = { bt, pct: p, rec: a };
   }
+  if (info.members.some(name => memberUnits(DATA.members[name]?.[season], season).unpriced)) unitsLeader = null;
   if (!unitsLeader && !bestBt && !streakLeader?.len && !superKing) return null;
   return { unitsLeader, bestBt, streakLeader, superKing };
 }
@@ -1531,8 +1568,8 @@ function renderSeasonStatTiles(season) {
   if (!st) return "";
   const tiles = [];
   if (st.unitsLeader) {
-    tiles.push(statTile("payments", "Units Leader", escapeHtml(st.unitsLeader.name),
-      `${fmtUnits(st.unitsLeader.units)} u at −110`, `style="color:${memberColor(st.unitsLeader.name)}"`));
+    tiles.push(statTile("payments", "Units Leader", st.unitsLeader.tied ? "Tied" : escapeHtml(st.unitsLeader.name),
+      `${fmtUnits(st.unitsLeader.units)}u · ${Number(season) >= 2026 ? "saved odds · 1u risk" : "estimated at −110"}`, `style="color:${memberColor(st.unitsLeader.name)}"`));
   }
   if (st.streakLeader?.len) {
     tiles.push(statTile("local_fire_department", "Hot Streak", escapeHtml(st.streakLeader.name),
@@ -1890,8 +1927,9 @@ function renderStandings() {
   const rows = buildStandings(season);
   const seasonInfo = DATA.seasons[season];
   const winners = seasonInfo?.weeklyWinners || {};
-  const champ = rows[0];
   const isLive = !!seasonInfo?.live;
+  const champ = isLive ? seasonLeader(rows) : rows[0];
+  const hasResults = rows.some(r => r.seasonRec.w + r.seasonRec.l > 0);
 
   const champPct = champ && (champ.seasonRec.w + champ.seasonRec.l) ? pct(champ.seasonRec) + "%" : "-";
   const champSuper = champ ? parseRecord(champ.md?.byType?.["Super Lock"]?.record) : { w: 0, l: 0, t: 0 };
@@ -1925,9 +1963,9 @@ function renderStandings() {
         <div class="min-w-0 flex-1">
           <div class="inline-flex items-center px-2.5 py-0.5 bg-tertiary-fixed-dim text-on-tertiary-fixed font-label-caps text-[10px] rounded-sm mb-2 uppercase">
             <span class="material-symbols-outlined text-xs mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
-            ${season} ${isLive ? "Leader" : "Champion"}
+            ${season} ${isLive ? (champ ? "Leader" : "Season underway") : "Champion"}
           </div>
-          <h2 class="font-display-lg text-3xl md:text-5xl leading-none uppercase mb-3 break-words" style="color:#46e08a">${escapeHtml(champ ? champ.name : "-")}</h2>
+          <h2 class="font-display-lg text-3xl md:text-5xl leading-none uppercase mb-3 break-words" style="color:#46e08a">${escapeHtml(champ ? champ.name : hasResults ? "Tied at the top" : "Awaiting first results")}</h2>
           <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div class="flex items-baseline gap-2">
               <span class="text-on-surface-variant font-label-caps text-[10px]">RECORD</span>
@@ -1966,6 +2004,7 @@ function renderStandings() {
         ${yearPills}
       </div>
 
+      <p class="font-data-tabular text-[11px] text-on-surface-variant mb-3">${Number(season) >= 2026 ? "Units use saved odds with 1u risk per pick. Pushes return 0u; missed picks and bets missing odds are excluded." : "Historical units estimated at −110: +1u per win, −1.1u per loss."}</p>
       <div class="overflow-x-auto hide-scrollbar glass-card rounded-lg">
         <table class="w-full text-left border-collapse min-w-[640px]">
           <thead>
@@ -1973,7 +2012,7 @@ function renderStandings() {
               <th class="px-4 md:px-6 py-4">Rank</th>
               <th class="px-4 md:px-6 py-4">Member</th>
               <th class="px-4 md:px-6 py-4">Record (W-L)</th>
-              <th class="px-4 md:px-6 py-4">Win %</th>
+              <th class="px-4 md:px-6 py-4">Win %</th><th class="px-4 md:px-6 py-4">Units</th>
               <th class="px-4 md:px-6 py-4 hidden lg:table-cell">Weekly Heat (1-18)</th>
               <th class="px-4 md:px-6 py-4 text-right">Weeks Won</th>
             </tr>
@@ -2023,7 +2062,7 @@ function renderStandings() {
 
 function renderMemberRow(r, i, season, movement) {
   const isExp = state.expanded === r.name;
-  const isTop = i === 0;
+  const isTop = DATA.seasons[season]?.live ? seasonLeader(buildStandings(season))?.name === r.name : i === 0;
   const mine = isMe(r.name);
   const move = movement ? moveIndicator(movement[r.name]) : "";
   // Per-week outcome class: green if member won the week, W/L/P majority
@@ -2064,10 +2103,12 @@ function renderMemberRow(r, i, season, movement) {
           ${isTop ? '<span class="material-symbols-outlined text-tertiary-fixed-dim text-base" style="font-variation-settings: \'FILL\' 1;">workspace_premium</span>' : ""}
           ${mine ? '<span class="you-pill">You</span>' : ""}
         </div>
+        <div class="font-data-tabular text-[10px] text-on-surface-variant mt-1 lg:hidden">${unitsSummary(r.md, season)}</div>
         <div class="flex gap-[2px] mt-1.5 lg:hidden">${heatMini}</div>
       </td>
       <td class="px-4 md:px-6 py-5">${recordHtml(r.seasonRec)}</td>
       <td class="px-4 md:px-6 py-5 text-primary-fixed-dim">${pct(r.seasonRec)}${r.seasonRec.w + r.seasonRec.l ? "%" : ""}</td>
+      <td class="px-4 md:px-6 py-5">${unitsSummary(r.md, season)}</td>
       <td class="px-4 md:px-6 py-5 hidden lg:table-cell">
         <div class="flex gap-1">${heat}</div>
       </td>
@@ -2077,7 +2118,7 @@ function renderMemberRow(r, i, season, movement) {
     </tr>
     ${isExp ? `
       <tr class="bg-surface-container-lowest/50 border-b border-outline-variant">
-        <td colspan="6" class="py-5 px-3 md:px-6">${renderMemberDetail(r)}</td>
+        <td colspan="7" class="py-5 px-3 md:px-6">${renderMemberDetail(r)}</td>
       </tr>
     ` : ""}
   `;
@@ -2117,7 +2158,11 @@ function renderMemberDetail(r) {
       const pick = info.picks?.[wk];
       if (!pick) return `<div class="week-cell" aria-hidden="true"></div>`;
       const cls = pick.result || "";
-      const safe = (pick.text || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      const value = pickUnits(pick, state.season);
+      const price = Number(pick.price);
+      const oddsDetail = Number(state.season) >= 2026 && !pick.missing
+        ? ` · ${Number.isFinite(price) && Math.abs(price) >= 100 ? (price > 0 ? "+" : "") + price : "odds unavailable"}${value !== null ? " · " + fmtUnits(value) + "u" : ""}` : "";
+      const safe = ((pick.text || "") + oddsDetail).replace(/"/g, "&quot;").replace(/</g, "&lt;");
       const alab = `${isSuper ? "Super Lock" : bt}, week ${wk}: ${safe || "no pick"}, ${RES_LBL[pick.result] || "not graded"}`;
       return `<div class="week-cell ${cls}" tabindex="0" aria-label="${alab}" data-week="${wk}" data-bet="${bt}" data-text="${safe}" data-result="${pick.result || ""}">${pick.result || ""}</div>`;
     }).join("");
@@ -2148,6 +2193,7 @@ function renderMemberDetail(r) {
           return `
         <div class="md-foot">
           <span class="md-stat"><span class="md-lab">Season</span><span class="md-val">${recordHtmlFromString(md?.seasonRecord || "0-0")}</span></span>
+          <span class="md-stat"><span class="md-lab">Units</span><span class="md-val">${unitsSummary(md, state.season)}</span></span>
           <span class="md-stat"><span class="md-lab">Lifetime</span><span class="md-val">${recordHtmlFromString(md?.lifetimeRecord || "0-0")}</span></span>
         </div>
         <div class="md-bt-foot">
@@ -2162,21 +2208,24 @@ function renderMemberDetail(r) {
 
 // ---- View: Lifetime ----
 function renderLifetime() {
+  const accountingSeasons = [...new Set([...SEASONS_ORDER, ...Object.keys(DATA.seasons)])].sort();
   const members = Object.keys(DATA.members).sort();
   // Compute each season's standings once instead of once per member.
   const standingsBySeason = {};
-  for (const s of SEASONS_ORDER) standingsBySeason[s] = buildStandings(s);
+  for (const s of accountingSeasons) standingsBySeason[s] = buildStandings(s);
   const agg = members.map(name => {
     const totals = { W: 0, L: 0, P: 0 };
     const byType = {};
     let weeksWon = 0;
     let seasonsAsChamp = 0;
-    let seasonsPlayed = 0;
+    let seasonsPlayed = 0, units = 0, unpriced = 0;
     for (const bt of BET_TYPES_ORDER) byType[bt] = { W: 0, L: 0, P: 0 };
-    for (const season of SEASONS_ORDER) {
+    for (const season of accountingSeasons) {
       const md = DATA.members[name]?.[season];
       if (!md) continue;
       seasonsPlayed++;
+      const seasonUnits = memberUnits(md, season);
+      units += seasonUnits.units; unpriced += seasonUnits.unpriced;
       const winners = DATA.seasons[season]?.weeklyWinners || {};
       for (const wk of Object.keys(winners)) if (winners[wk] === name) weeksWon++;
       // A live season has no champion yet - only count finished seasons.
@@ -2191,16 +2240,14 @@ function renderLifetime() {
         }
       }
     }
-    // Units at -110: win = +1, loss = -1.1, push = 0
-    const units = totals.W - 1.1 * totals.L;
-    return { name, totals, byType, weeksWon, seasonsAsChamp, seasonsPlayed, units };
+    return { name, totals, byType, weeksWon, seasonsAsChamp, seasonsPlayed, units, unpriced };
   });
   agg.sort((a, b) => b.totals.W - a.totals.W || a.totals.L - b.totals.L || b.weeksWon - a.weeksWon);
   const groupUnits = agg.reduce((s, m) => s + m.units, 0);
 
   // Find historical champions, one card per season
   const champBySeason = [];
-  for (const season of SEASONS_ORDER) {
+  for (const season of accountingSeasons) {
     if (season === "2026") continue; // in progress
     const rows = standingsBySeason[season];
     if (!rows.length) continue;
@@ -2209,10 +2256,11 @@ function renderLifetime() {
 
   // Live race for the current season
   const liveSeason = "2026";
-  const liveLeader = standingsBySeason[liveSeason][0] || null;
+  const liveLeader = seasonLeader(standingsBySeason[liveSeason] || []);
 
   // Filter toggle (visual only for now)
   return `
+    <p class="font-data-tabular text-[11px] text-on-surface-variant mb-4">* Units: 2023–25 estimated at −110; 2026 onward uses saved odds with 1u risk per pick. Missing odds and missed picks are excluded from 2026+ units.</p>
     <!-- Hall of Champions -->
     <section class="mb-12">
       <div class="flex items-center gap-4 mb-6">
@@ -2269,7 +2317,7 @@ function renderLifetime() {
               <h3 class="font-headline-lg text-headline-lg-mobile text-on-surface/60 uppercase mb-3">TBD</h3>
               <div class="border-t border-outline-variant pt-3">
                 <p class="text-xs text-on-surface-variant italic">
-                  ${liveLeader ? `Current leader: <span class="text-primary-fixed">${escapeHtml(liveLeader.name)}</span>` : "Season starts Sept 2026"}
+                  ${liveLeader ? `Current leader: <span class="text-primary-fixed">${escapeHtml(liveLeader.name)}</span>` : (isPreseason() ? "Season starts Sept 2026" : "Awaiting a clear leader")}
                 </p>
               </div>
             </div>
@@ -2285,7 +2333,7 @@ function renderLifetime() {
           <div class="space-y-6">
             <div class="flex justify-between items-end border-b border-outline-variant pb-2">
               <div>
-                <p class="text-[10px] font-label-caps text-on-surface-variant uppercase">Group Units (−110)</p>
+                <p class="text-[10px] font-label-caps text-on-surface-variant uppercase">Group Units*</p>
                 <p class="text-on-surface font-body-md">Total ± across league</p>
               </div>
               <p class="font-data-tabular ${groupUnits >= 0 ? "text-primary-fixed" : "text-live-red"} text-xl">${fmtUnits(groupUnits)}</p>
@@ -2334,7 +2382,7 @@ function renderLifetime() {
               <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase">Record</th>
               <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase text-center">Win %</th>
               <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase text-center">Weeks Won</th>
-              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase text-right">Units (−110)</th>
+              <th class="py-4 px-6 font-label-caps text-label-caps text-on-surface-variant uppercase text-right">Units*</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-outline-variant">
@@ -2360,7 +2408,7 @@ function renderLifetime() {
                     <span class="font-data-tabular text-xs text-on-surface-variant mt-1 inline-block">${pctV}${tot ? "%" : ""}</span>
                   </td>
                   <td class="py-4 px-6 font-data-tabular ${m.weeksWon ? "text-on-surface" : "text-on-surface-variant opacity-50"} text-center">${m.weeksWon}</td>
-                  <td class="py-4 px-6 font-data-tabular ${m.units >= 0 ? "text-primary-fixed" : "text-live-red"} text-right text-base">${fmtUnits(m.units)}</td>
+                  <td class="py-4 px-6 font-data-tabular ${m.units >= 0 ? "text-primary-fixed" : "text-live-red"} text-right text-base">${fmtUnits(m.units)}${m.unpriced ? `<span class="block text-[10px] text-on-surface-variant">${m.unpriced} missing odds</span>` : ""}</td>
                 </tr>
               `;
             }).join("")}
@@ -3274,7 +3322,7 @@ function slLockedHtml(p) {
       <button class="sl-mark-btn L ${res === "L" ? "current" : ""}" data-result="L">Miss · L</button>
       <button class="sl-mark-btn P ${res === "P" ? "current" : ""}" data-result="P">Push · P</button>
     </div>`;
-  return `<div class="sl-locked"><span class="sl-locked-txt">${txt}</span>${lockedTs ? `<div class="lp-meta">${lockedTs}</div>` : ""}</div>${markHtml}${repick}`;
+  return `<div class="sl-locked"><span class="sl-locked-txt">${txt}</span>${p.price != null ? `<span class="lp-odds">${fmtPrice(p.price)}</span>` : `<span class="sl-hint">Saved odds missing · excluded from units</span>`}${lockedTs ? `<div class="lp-meta">${lockedTs}</div>` : ""}</div>${markHtml}${repick}`;
 }
 
 function slCustomHtml(p) {
@@ -3284,7 +3332,9 @@ function slCustomHtml(p) {
       <input class="pick-input flex-1" id="mycard-superlock" autocapitalize="none" value="${txt}" placeholder="Player prop / specialty bet">
       <button class="btn-primary" id="mycard-sl-save">Save</button>
     </div>
-    <div class="sl-hint mt-2">Graded by hand (Hit/Miss/Push). Use this for anything the books don't post as a prop.</div>`;
+    <label class="sl-hint block mt-2" for="mycard-sl-price">American odds (required, e.g. -110 or +200)</label>
+    <input class="pick-input w-full mt-1" id="mycard-sl-price" type="number" step="1" value="${p?.price != null ? escapeHtml(String(p.price)) : ''}" placeholder="Enter the book’s odds">
+    <div class="sl-hint mt-2">Custom odds are self-reported; graded by hand (Hit/Miss/Push). Units use the odds saved here.</div>`;
 }
 
 function slCurrentGame() {
@@ -3573,14 +3623,16 @@ async function lockGameLine() {
   } catch { if (msg) msg.textContent = "NETWORK ERROR"; }
 }
 async function saveSuperLockText(raw) {
+  const price = Number(document.getElementById("mycard-sl-price")?.value);
   const text = (raw || "").trim();
   const msg = document.getElementById("mycard-sl-msg");
   if (!text) { if (msg) msg.textContent = "ENTER A SUPER LOCK FIRST"; return; }
+  if (!Number.isInteger(price) || Math.abs(price) < 100 || price < -120) { if (msg) msg.textContent = "ENTER ODDS: -120 TO -100, OR +100 AND UP"; return; }
   try {
     const r = await fetch("/api/picks", {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ season: 2026, week: myCardWeek(), picks: [{ bet_type: "Super Lock", pick_text: text }] }),
+      body: JSON.stringify({ season: 2026, week: myCardWeek(), picks: [{ bet_type: "Super Lock", pick_text: text, price }] }),
     });
     const j = await r.json();
     if (!r.ok) {
@@ -3589,7 +3641,7 @@ async function saveSuperLockText(raw) {
       return;
     }
     // Free-text overwrites any prior structured pick, so clear prop metadata.
-    currentMyPicks["Super Lock"] = { pick_text: text, locked_at: new Date().toISOString() };
+    currentMyPicks["Super Lock"] = { pick_text: text, price, locked_at: new Date().toISOString() };
     slEditing = false;
     showToast("SUPER LOCK SAVED");
     refreshMyCard();

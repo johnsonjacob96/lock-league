@@ -255,3 +255,22 @@ test('season Venmo collections and payouts remain separate and enforce ledger pe
  assert.equal((await call(1,'season-paid',{place:1,member_id:2,paid:true})).status,403);
  assert.equal((await call(1,'season-paid',{place:1,member_id:1,paid:true})).status,409);
 });
+
+test('new custom locks require valid saved American odds for units',async()=>{
+ for(const price of [undefined,0,-90,99,-121,100.5]) {
+  const r=await request({season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text:'Test custom prop',price}]});
+  assert.equal(r.status,400);
+ }
+ const r=await request({season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text:'Test custom prop',price:250}]});
+ assert.equal(r.status,200);
+ assert.equal((await db.query("SELECT price FROM picks WHERE bet_type='Super Lock'")).rows[0].price,250);
+});
+test('board picks cannot save without a provider price',async()=>{
+ const total=liveGames[1].books.fanduel.total;
+ const previous=total.underPrice;
+ try {
+  total.underPrice=null;
+  assert.equal((await request({season:2026,week:1,picks:[pick('Under')]})).status,503);
+  assert.equal((await db.query('SELECT * FROM picks')).rows.length,0);
+ } finally {total.underPrice=previous;}
+});
