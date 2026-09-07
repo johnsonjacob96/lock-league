@@ -110,7 +110,7 @@ test('ESPN summary and prop boxscore fall back to persisted runner data', async 
   });
   mockDb(t, ({ query }) => query.includes('SELECT summary') ? dbRows('summary', summary) : dbRows());
   assert.deepEqual(await espnBoxscore('1', env), summary.boxscore);
-  assert.deepEqual(await espnSummary('1', env), summary);
+  assert.deepEqual(await espnSummary('1', env), { ...summary, source_updated_at: null });
 });
 
 test('hanging ESPN attempt aborts and moves to fallback', async t => {
@@ -269,4 +269,30 @@ test('game board requests exact full-game markets and preserves both books event
  const row={away_team:'New England Patriots',home_team:'Seattle Seahawks',market_type:'point_spread',selection_type:'home',line:-3.5,odds_american:-110,event_start_time:'2026-09-10T00:20Z'};
  const games=normalizeSharp([{...row,event_id:'fd-event',sportsbook:'fanduel'},{...row,event_id:'dk-event',sportsbook:'draftkings'}]);
  assert.deepEqual(games[0].sharp_event_ids,['fd-event','dk-event']);
+});
+
+
+test('seeded score and summary timestamps preserve data age through fallback', async t => {
+  const stamp = '2026-09-13T17:00:00.000Z';
+  t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 403 }));
+  mockDb(t, ({ query }) => {
+    if (query.includes('SELECT events')) { return json({fields:[{name:'events',dataTypeID:3802},{name:'updated_at',dataTypeID:25}],rows:[[JSON.stringify([event()]),stamp]]}); }
+    if (query.includes('SELECT summary')) { return json({fields:[{name:'summary',dataTypeID:3802},{name:'updated_at',dataTypeID:25}],rows:[[JSON.stringify(summary),stamp]]}); }
+    return dbRows();
+  });
+  const { loadScoreboardSeed } = await import('../functions/_shared/scoreseed.js');
+  assert.equal((await loadScoreboardSeed(env, 2026, 1, 2)).source_updated_at, stamp);
+  assert.equal((await espnSummary('freshness-test', env)).source_updated_at, stamp);
+});
+
+
+test('live player progress uses boxscore stats and leaves unreported markets unavailable', async () => {
+  const { parsePlayerProgress } = await import('../functions/api/game.js');
+  const players = parsePlayerProgress({boxscore:{players:[{statistics:[{keys:['receptions','receivingYards','receivingTouchdowns'],athletes:[{athlete:{displayName:'Cooper Kupp'},stats:['3','42','0']}]}]}]}});
+  assert.equal(players[0].name, 'Cooper Kupp');
+  assert.deepEqual(players[0].markets.receptions, {actual:3,unit:'rec'});
+  assert.equal(players[0].markets.rec_yds.actual, 42);
+  assert.equal(players[0].markets.anytime_td.actual, 0);
+  assert.equal(players[0].markets.pass_yds, undefined);
+  assert.deepEqual(parsePlayerProgress({}), []);
 });

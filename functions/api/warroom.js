@@ -139,6 +139,7 @@ export async function onRequest({ request, env, waitUntil }) {
         const gameLive = !!ev && (ev.state === "in" || ev.state === "post");
         m.picks.push({
           bet_type: bt, kind: "pick", pick_text: p.pick_text,
+          prop: safeJson(p.prop_meta),
           price: p.price ?? null, book: p.book ?? null, // odds shown on the Super Lock chip
           game_key: p.game_key || null, // lets the client open the live game drill-down
           status: s.status, final: !!s.final, state: s.state || null,
@@ -192,7 +193,7 @@ export async function onRequest({ request, env, waitUntil }) {
     recap = { complete: true, winner, tie, perfect };
   }
 
-  const data = { season: cur.season, week: cur.week, revealed: true, fetched_at: new Date().toISOString(), anyLive, members, recap };
+  const data = { season: cur.season, week: cur.week, revealed: true, source_updated_at: events[0]?.source_updated_at || null, fetched_at: new Date().toISOString(), anyLive, members, recap };
   cache = { ts: Date.now(), key, data };
   return json(data);
 }

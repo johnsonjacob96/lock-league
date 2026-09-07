@@ -6,6 +6,7 @@
 import { verifyCookie, json } from "../_shared/auth.js";
 import { currentNflWeek, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, sameTeam } from "../_shared/grader.js";
+import { PROP_DEFS, playerStatMap } from "../_shared/props.js";
 import { espnSummary } from "../_shared/espn.js";
 
 const TTL_MS = 25 * 1000;
@@ -33,6 +34,20 @@ function parseLeaders(gp) {
   return groups;
 }
 
+export function parsePlayerProgress(gp) {
+  const names = new Set((gp.boxscore?.players || []).flatMap(t => (t.statistics || []).flatMap(c => (c.athletes || []).map(a => a.athlete?.displayName).filter(Boolean))));
+  return [...names].map(name => {
+    const stats = playerStatMap(gp.boxscore, name) || {};
+    const markets = {};
+    for (const [market, def] of Object.entries(PROP_DEFS)) {
+      if (def.stat.some(k => Number.isFinite(stats[k]))) {
+        markets[market] = { actual: def.stat.reduce((sum, k) => sum + (Number.isFinite(stats[k]) ? stats[k] : 0), 0), unit: def.unit };
+      }
+    }
+    return { name, markets };
+  });
+}
+
 export async function onRequest({ request, env }) {
   const memberId = await verifyCookie(env, request.headers.get("cookie"));
   if (!memberId) return json({ error: "not-authenticated" }, { status: 401 });
@@ -55,11 +70,15 @@ export async function onRequest({ request, env }) {
     if (!ev) return json({ found: false, key });
 
     const gameLive = ev.state === "in" || ev.state === "post";
-    let leaders = [], situation = null, lastPlay = null;
+    let leaders = [], situation = null, lastPlay = null, players = [], statsUpdatedAt = null, statsFinal = false;
     if (gameLive && ev.id) {
       const gp = await espnSummary(ev.id, env).catch(() => null);
       if (gp) {
         leaders = parseLeaders(gp);
+        statsUpdatedAt = gp.source_updated_at || null;
+        const summaryStatus = gp.header?.competitions?.[0]?.status?.type;
+        statsFinal = gp._seedFinal === true || summaryStatus?.completed === true || summaryStatus?.state === "post";
+        players = parsePlayerProgress(gp);
         const sit = gp.situation || gp.header?.competitions?.[0]?.situation;
         situation = sit?.downDistanceText || null;
         lastPlay = sit?.lastPlay?.text || null;
@@ -71,7 +90,8 @@ export async function onRequest({ request, env }) {
       kickoff: ev.kickoff || null,
       away: { name: ev.away, score: ev.away_score },
       home: { name: ev.home, score: ev.home_score },
-      leaders, situation, lastPlay,
+      leaders, situation, lastPlay, players, stats_updated_at: statsUpdatedAt, stats_final: statsFinal,
+      source_updated_at: ev.source_updated_at || null,
       fetched_at: new Date().toISOString(),
     };
     cache.set(cacheKey, { ts: Date.now(), data });

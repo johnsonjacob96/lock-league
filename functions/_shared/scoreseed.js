@@ -40,9 +40,13 @@ export async function loadScoreboardSeed(env, season, week, seasontype) {
   try {
     await ensure(env);
     const rows = await sql(env)`
-      SELECT events FROM scoreboard_snapshot
+      SELECT events, updated_at FROM scoreboard_snapshot
       WHERE season = ${season} AND week = ${week} AND seasontype = ${seasontype}`;
-    if (rows.length) return rows[0].events;
+    if (rows.length) {
+      const events = rows[0].events;
+      events.source_updated_at = rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : null;
+      return events;
+    }
   } catch { /* none yet */ }
   return null;
 }
@@ -72,7 +76,7 @@ export async function loadSummarySeed(env, eventId) {
   if (!env) return null;
   try {
     await ensureSummaries(env);
-    const rows = await sql(env)`SELECT summary FROM game_summary_snapshot WHERE event_id = ${String(eventId)}`;
-    return rows[0]?.summary || null;
+    const rows = await sql(env)`SELECT summary, updated_at FROM game_summary_snapshot WHERE event_id = ${String(eventId)}`;
+    return rows[0]?.summary ? { ...rows[0].summary, source_updated_at: rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : null } : null;
   } catch { return null; }
 }

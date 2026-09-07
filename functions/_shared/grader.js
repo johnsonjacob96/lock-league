@@ -37,12 +37,14 @@ export async function fetchScoreboard(season, week, seasontype = 2, env = null) 
   if (cached && Date.now() - cached.ts < SB_TTL_MS) return cached.events;
 
   let raw = null;
+  let sourceUpdatedAt = new Date().toISOString();
   try {
     raw = await espnScoreboardEvents(season, seasontype, week);
   } catch (e) {
     // Re-read the runner snapshot before falling back to expired isolate data.
     // Otherwise a sustained ESPN outage freezes this isolate's scores forever.
     if (env) raw = await loadScoreboardSeed(env, season, week, seasontype);
+    sourceUpdatedAt = raw?.source_updated_at || null;
     if (!raw?.length) {
       if (cached) return cached.events;
       throw e;
@@ -55,6 +57,7 @@ export async function fetchScoreboard(season, week, seasontype = 2, env = null) 
     const away = competitors.find((c) => c.homeAway === "away");
     const status = (comp?.status?.type?.completed || ev.status?.type?.completed) ? "final" : (ev.status?.type?.name || "scheduled");
     return {
+      source_updated_at: sourceUpdatedAt,
       id: ev.id, // ESPN event id, for the box-score summary (prop grading)
       home: home?.team?.displayName,
       away: away?.team?.displayName,

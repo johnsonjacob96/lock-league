@@ -799,6 +799,7 @@
   .wr-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
   .wr-title { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 28px; text-transform: uppercase; letter-spacing: 0.01em; color: #e6e8e8; line-height: 1; }
   .wr-sub2 { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #9aa4a2; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .wr-freshness { font-size: 11px; color: #9aa4a2; margin: 6px 0; }
   .wr-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .wr-livetag { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; color: #46e08a; text-transform: uppercase; }
   .wr-livetag.idle { color: #9aa4a2; }
@@ -2799,7 +2800,7 @@ function seasonPrepInner() {
         <span class="sp-count-num font-display-lg">${days}</span>
         <span class="sp-count-unit font-label-caps">${days === 1 ? "DAY" : "DAYS"} TO KICKOFF</span>
       </div>
-      <div class="sp-count-sub">2026 season · Week 1 lines drop soon</div>
+      <div class="sp-count-sub">Week 1 picks are open · Wed kickoff 7:20 PM CT<br>Picks due Sunday noon CT · earlier games lock at kickoff</div>
     </div>`;
 
   // Readiness is account-level: if alerts reach this member anywhere, we're
@@ -2809,7 +2810,7 @@ function seasonPrepInner() {
     const canEnableHere = !pushState.subscribed && supported && signedIn && !(ios && !installed);
     return `<div class="sp-head">${countdown}
       <div class="sp-ready-wrap">
-        <div class="sp-ready"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">verified</span> You're set for Week 1</div>
+        <div class="sp-ready"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">verified</span> Your alerts are ready</div>
         ${canEnableHere ? `<button class="sp-alsohere" data-sp="notify">Also alert this device</button>` : ""}
       </div>
     </div>`;
@@ -4258,6 +4259,7 @@ function shownBookFor(gameKey, g) {
   return g.books?.fanduel ? "fanduel" : (g.books?.draftkings ? "draftkings" : (Object.keys(g.books || {})[0] || null));
 }
 
+const deferredOdds = new Map();
 function applyLiveOdds(prev, next) {
   dropMondayGames(next); // MNF games are never pickable — keep them off the board
   state.thisWeekData = next;
@@ -4268,12 +4270,12 @@ function applyLiveOdds(prev, next) {
   const newGames = next.games || [];
   // If the slate itself changed (games added/removed), rebuild the board section.
   const sameSlate = newGames.length === oldByKey.size && newGames.every(g => oldByKey.has(gameKeyOf(g)));
-  if (!sameSlate) { render(); return; }
+  if (!sameSlate) { deferredOdds.clear(); render(); return; }
 
   let touched = false;
   for (const g of newGames) {
     const key = gameKeyOf(g);
-    const prevG = oldByKey.get(key);
+    const prevG = deferredOdds.get(key) || oldByKey.get(key);
     const bk = shownBookFor(key, g);
     if (!bk) continue;
     const nb = g.books?.[bk], pb = prevG?.books?.[bk];
@@ -4288,7 +4290,8 @@ function applyLiveOdds(prev, next) {
 
     const card = document.querySelector(`.game-card[data-game-key="${CSS.escape(key)}"]`);
     // Don't yank a card out from under someone actively using it; catch it next cycle.
-    if (!card || card.matches(":hover") || card.contains(document.activeElement)) continue;
+    if (!card || card.matches(":hover") || card.contains(document.activeElement)) { deferredOdds.set(key, prevG); continue; }
+    deferredOdds.delete(key);
 
     const spreadDir = spreadMoved ? Math.sign(Math.abs(nb.spread.line) - Math.abs(pb.spread.line)) : 0;
     const totalDir = totalMoved ? Math.sign(nb.total.point - pb.total.point) : 0;
@@ -4360,30 +4363,45 @@ async function loadWarRoom() {
   try {
     const r = await fetch("/api/warroom", { credentials: "include" });
     if (r.status === 401) { state.warRoom = { needLogin: true }; return; }
+    if (!r.ok) throw new Error("Board temporarily unavailable");
     state.warRoom = await r.json();
   } catch (e) {
-    state.warRoom = { error: e.message };
+    state.warRoom = state.warRoom?.members ? { ...state.warRoom, stale: true } : { error: e.message };
   }
 }
 function rerenderWarRoom() {
   if (state.view !== "warroom") return;
-  document.getElementById("root").innerHTML = renderWarRoom();
+  const root = document.getElementById("root");
+  const active = document.activeElement;
+  const focusSelector = active?.dataset.exp ? `[data-exp="${CSS.escape(active.dataset.exp)}"]` : active?.id ? `#${CSS.escape(active.id)}` : null;
+  const top = root.scrollTop, windowTop = window.scrollY;
+  const html = renderWarRoom();
+  if (root._warRoomHtml === html) return;
+  root.innerHTML = html;
+  root._warRoomHtml = html;
   attachWarRoomHandlers();
+  if (focusSelector) root.querySelector(focusSelector)?.focus({ preventScroll: true });
+  root.scrollTop = top;
+  window.scrollTo(0, windowTop);
 }
 function startWarRoomPoll() {
   clearInterval(warRoomTimer);
   warRoomTimer = setInterval(async () => {
     if (state.view !== "warroom") { clearInterval(warRoomTimer); warRoomTimer = null; return; }
-    const before = JSON.stringify(state.warRoom || null);
+    if (document.hidden) return;
     await loadWarRoom();
-    if (state.view === "warroom" && JSON.stringify(state.warRoom || null) !== before) rerenderWarRoom();
+    if (state.view === "warroom") rerenderWarRoom();
     // Keep an open game drill-down fresh (refetch past its 20s cache).
     if (state.view === "warroom" && state.wrExpandedKey) loadWrGame(state.wrExpandedKey, { force: true });
   }, 45000);
 }
 function attachWarRoomHandlers() {
   const btn = document.getElementById("wr-refresh");
-  if (btn) btn.onclick = async () => { btn.disabled = true; await loadWarRoom(); rerenderWarRoom(); };
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true;
+    try { await loadWarRoom(); rerenderWarRoom(); }
+    finally { btn.disabled = false; }
+  };
   const signin = document.getElementById("wr-signin");
   if (signin) signin.onclick = openLogin;
   const share = document.getElementById("wr-share");
@@ -4486,15 +4504,38 @@ async function loadWrGame(key, { force = false } = {}) {
   wrGameInflight[key] = true;
   try {
     const r = await fetch(`/api/game?key=${encodeURIComponent(key)}`, { credentials: "include" });
-    wrGameCache[key] = { ts: Date.now(), data: r.ok ? await r.json() : { found: false } };
+    if (!r.ok) throw new Error("Game temporarily unavailable");
+    const data = await r.json();
+    if (!data.found && c?.data?.found) throw new Error("Game temporarily unavailable");
+    wrGameCache[key] = { ts: Date.now(), data };
   } catch {
-    wrGameCache[key] = { ts: Date.now(), data: { found: false } };
+    wrGameCache[key] = { ts: Date.now(), data: c?.data?.found ? { ...c.data, stale: true } : { found: false } };
   } finally {
     wrGameInflight[key] = false;
   }
   if (state.view === "warroom") rerenderWarRoom();
 }
 // How the member's pick is tracking against the live score (context, not grading).
+function sourceAgeLabel(timestamp, stale = false) {
+  const age = Date.now() - new Date(timestamp || "").getTime();
+  if (!Number.isFinite(age)) return "Update time unavailable";
+  const mins = Math.max(0, Math.floor(age / 60000));
+  return `${stale || mins >= 3 ? "Delayed · " : ""}updated ${mins ? mins + " min ago" : "just now"}`;
+}
+function wrPropTrack(p, d) {
+  if (!p.prop?.market) return "";
+  const norm = s => String(s || "").toLowerCase().replace(/[.'-]/g, " ").replace(/\b(jr|sr|ii|iii|iv|v)\b/g, " ").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+  const matches = (d.players || []).filter(x => norm(x.name) === norm(p.prop.player));
+  const stat = matches.length === 1 ? matches[0].markets?.[p.prop.market] : null;
+  if (!stat || !Number.isFinite(stat.actual)) return "Selected player stats not available yet";
+  const actual = stat.actual, line = Number(p.prop.line);
+  const prefix = d.stats_final ? "Final stats" : "Live progress";
+  if (p.prop.market === "anytime_td") return `${prefix} · ${actual > 0 ? "touchdown recorded" : "no touchdown recorded"}`;
+  if (!Number.isFinite(line)) return `${prefix} · ${actual} ${stat.unit}`;
+  const over = p.prop.side !== "under";
+  const progress = actual === line ? "on the number" : (over ? actual > line : actual < line) ? "ahead of target" : over ? `needs ${Math.max(1, Math.floor(line - actual) + 1)} more` : "over the limit";
+  return `${prefix} · ${actual} ${stat.unit} · ${d.stats_final ? "locked target " + (over ? "over " : "under ") + line : progress}`;
+}
 function wrPickTrack(p, d) {
   if (!d || !d.away || d.away.score == null || d.home.score == null) return "";
   const a = d.away.score, h = d.home.score, txt = p.pick_text || "", bt = p.bet_type;
@@ -4505,8 +4546,9 @@ function wrPickTrack(p, d) {
       const total = a + h;
       if (Number.isNaN(line)) return `${total} total points`;
       const diff = Math.round((total - line) * 10) / 10;
-      if (bt === "Over") return diff >= 0 ? `${total} pts — Over ${line} cashed (+${diff})` : `${total} pts — Over ${line} needs ${Math.abs(diff)} more`;
-      return diff <= 0 ? `${total} pts — Under ${line} good by ${Math.abs(diff)}` : `${total} pts — Under ${line} down by ${diff}`;
+      if (diff === 0) return `${total} pts — ${bt} ${line} · ${d.state === "post" ? "push" : "on the number"}`;
+      if (bt === "Over") return diff > 0 ? `${total} pts — Over ${line} ${d.state === "post" ? "won" : "ahead"} (+${diff})` : `${total} pts — Over ${line} ${d.state === "post" ? "lost" : "needs " + Math.abs(diff) + " more"}`;
+      return diff < 0 ? `${total} pts — Under ${line} ${d.state === "post" ? "won" : "ahead"} by ${Math.abs(diff)}` : `${total} pts — Under ${line} ${d.state === "post" ? "lost" : "down by " + diff}`;
     }
     if (bt === "Favorite" || bt === "Dog") {
       const m = txt.match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?)/);
@@ -4538,7 +4580,7 @@ function wrGamePanel(p) {
     : `<span class="wrg-pill pre">${d.kickoff ? escapeHtml(`${fmtKickoffDay(d.kickoff)} ${fmtKickoffTime(d.kickoff)}`) : "Scheduled"}</span>`;
   const atom = `${aAbbr} ${aS}, ${hAbbr} ${hS}${live && d.detail ? `, ${d.detail}` : post ? ", final" : ""}`;
   const sit = live && d.situation ? `<div class="wrg-sit">${escapeHtml(d.situation)}</div>` : "";
-  const track = wrPickTrack(p, d);
+  const track = wrPropTrack(p, d) || wrPickTrack(p, d);
   const trackEl = track ? `<div class="wrg-track">${escapeHtml(track)}</div>` : "";
   const cols = (d.leaders || []).slice(0, 2).map((g) => `
       <div class="wrg-lcol">
@@ -4547,8 +4589,10 @@ function wrGamePanel(p) {
       </div>`).join("");
   const leadersEl = cols
     ? `<div class="wrg-leaders">${cols}</div>`
-    : (live || post ? `<div class="wrg-empty" style="margin-top:10px">Player stats not posted yet.</div>` : "");
+    : ((live || post) && !d.players?.length ? `<div class="wrg-empty" style="margin-top:10px">Player stats not posted yet.</div>` : "");
   return `<div class="wr-detail">
+    <div class="wrg-track">${escapeHtml(p.pick_text || "")}</div>
+    <div class="wr-freshness">Scores: ${escapeHtml(sourceAgeLabel(d.source_updated_at, d.stale))}${p.prop?.market ? " · Stats: " + escapeHtml(sourceAgeLabel(d.stats_updated_at, d.stale)) : ""}</div>
     <div class="wrg-score" role="status" aria-atomic="true" aria-label="${escapeHtml(atom)}">
       <div class="wrg-team away"><span class="wrg-abbr">${escapeHtml(aAbbr)}</span><span class="wrg-pts">${aS}</span></div>
       <div class="wrg-status">${pill}${sit}</div>
@@ -4606,7 +4650,7 @@ function renderWarRoom() {
   const wr = state.warRoom;
   const cur = currentNflWeekClient();
   const head = (extra) => `<div class="wr-wrap"><div class="wr-topbar">
-      <div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Week ${wr?.week || cur.week || "-"} · live board</div></div>
+      <div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Week ${wr?.week || cur.week || "-"} · live board</div>${wr?.revealed ? `<div class="wr-freshness">${escapeHtml(sourceAgeLabel(wr.source_updated_at, wr.stale))}</div>` : ""}</div>
       ${extra || ""}
     </div>`;
   if (!wr) return renderWarRoomSkeleton();
@@ -4700,6 +4744,7 @@ async function render() {
   // season change) keep the view the same, so they don't jump the page.
   if (render._lastView !== state.view) {
     render._lastView = state.view;
+    root._warRoomHtml = null;
     scrollAppToTop();
     // Entering Picks fresh always defaults to the current week (the dispatch
     // fills in curWeek); in-tab week navigation keeps its selection.
