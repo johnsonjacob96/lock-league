@@ -288,12 +288,13 @@ test('seeded score and summary timestamps preserve data age through fallback', a
 
 test('live player progress uses boxscore stats and leaves unreported markets unavailable', async () => {
   const { parsePlayerProgress } = await import('../functions/api/game.js');
-  const players = parsePlayerProgress({boxscore:{players:[{statistics:[{keys:['receptions','receivingYards','receivingTouchdowns'],athletes:[{athlete:{displayName:'Cooper Kupp'},stats:['3','42','0']}]}]}]}});
+  const players = parsePlayerProgress({boxscore:{players:[{statistics:[{keys:['receptions','receivingYards','receivingTouchdowns'],athletes:[{athlete:{displayName:'Cooper Kupp',headshot:{href:'https://a.espncdn.com/i/headshots/nfl/players/full/test.png'}},stats:['3','42','0']}]}]}]}});
   assert.equal(players[0].name, 'Cooper Kupp');
   assert.deepEqual(players[0].markets.receptions, {actual:3,unit:'rec'});
   assert.equal(players[0].markets.rec_yds.actual, 42);
   assert.equal(players[0].markets.anytime_td.actual, 0);
   assert.equal(players[0].markets.pass_yds, undefined);
+  assert.equal(players[0].headshot,'https://a.espncdn.com/i/headshots/nfl/players/full/test.png');
   assert.deepEqual(parsePlayerProgress({}), []);
 });
 

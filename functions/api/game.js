@@ -35,7 +35,8 @@ function parseLeaders(gp) {
 }
 
 export function parsePlayerProgress(gp) {
-  const names = new Set((gp.boxscore?.players || []).flatMap(t => (t.statistics || []).flatMap(c => (c.athletes || []).map(a => a.athlete?.displayName).filter(Boolean))));
+  const athletes = (gp.boxscore?.players || []).flatMap(t => (t.statistics || []).flatMap(c => (c.athletes || []).map(a => a.athlete).filter(Boolean)));
+  const names = new Set(athletes.map(a => a.displayName).filter(Boolean));
   return [...names].map(name => {
     const stats = playerStatMap(gp.boxscore, name) || {};
     const markets = {};
@@ -44,7 +45,13 @@ export function parsePlayerProgress(gp) {
         markets[market] = { actual: def.stat.reduce((sum, k) => sum + (Number.isFinite(stats[k]) ? stats[k] : 0), 0), unit: def.unit };
       }
     }
-    return { name, markets };
+    const athlete = athletes.find(a => a.displayName === name && a.headshot);
+    let headshot = null;
+    try {
+      const url = new URL(athlete?.headshot?.href || athlete?.headshot || "");
+      if (url.protocol === "https:" && /(^|\.)espncdn\.com$/.test(url.hostname)) headshot = url.href;
+    } catch { /* A missing photo leaves the existing text/logo layout intact. */ }
+    return { name, markets, headshot };
   });
 }
 

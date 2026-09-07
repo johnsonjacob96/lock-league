@@ -29,15 +29,29 @@ for(const width of [375,390,844,1440]){
  const members=names.map((name,i)=>({member_id:i+1,name,live:{W:3,L:1,P:0,fW:2,fL:1,fP:0,pending:1},picks:BET_TYPES_ORDER.map((bt,j)=>({bet_type:bt,kind:'pick',pick_text:rows[i*5+j].pick_text,price:rows[i*5+j].price,book:'fanduel',status:j===1?'lose':j<3?'win':'pending',final:j<3,state:j<3?'post':'in',game_key:j===4?'Dallas Cowboys@Philadelphia Eagles':'Chicago Bears@Carolina Panthers',score:{away:j===4?'Dallas Cowboys':'Chicago Bears',home:j===4?'Philadelphia Eagles':'Carolina Panthers',away_score:j===4?17:17,home_score:j===4?21:14},detail:j===4?'Q4 · 11:06':'Q3 · 08:42',...(j===4?{prop:{market:'passing_yards',player:'Jalen Hurts',line:224.5,side:'over'}}:{})}))}));
  state.pot={season:2026,weekly:{prize:40}};
  state.warRoom={season:2026,week:1,revealed:true,anyLive:true,members,source_updated_at:new Date().toISOString()};
- wrGameCache['Dallas Cowboys@Philadelphia Eagles']={ts:Date.now(),data:{found:true,away:{name:'Dallas Cowboys',score:17},home:{name:'Philadelphia Eagles',score:21},state:'in',detail:'Q4 · 11:06',source_updated_at:new Date().toISOString(),stats_updated_at:new Date().toISOString(),players:[{name:'Jalen Hurts',markets:{passing_yards:{actual:186,unit:'pass yds'}}}]}};
+ wrGameCache['Dallas Cowboys@Philadelphia Eagles']={ts:Date.now(),data:{found:true,away:{name:'Dallas Cowboys',score:17},home:{name:'Philadelphia Eagles',score:21},state:'in',detail:'Q4 · 11:06',source_updated_at:new Date().toISOString(),stats_updated_at:new Date().toISOString(),players:[{name:'Jalen Hurts',headshot:'https://a.espncdn.com/i/headshots/nfl/players/full/4040715.png',markets:{passing_yards:{actual:186,unit:'pass yds'}}}]}};
  },JSON.parse(readFileSync(dir+'/public/data/seasons.json','utf8')));
  for(const [view,name] of [['standings','home'],['thisweek','picks'],['warroom','live']]){
- await p.evaluate(view=>{state.view=view;syncNavActive();renderUserArea();document.getElementById('root').innerHTML=view==='standings'?renderStandings():view==='thisweek'?renderThisWeek():renderWarRoom();document.getElementById('root').scrollTop=0;},view);
+ await p.evaluate(view=>{state.view=view;syncNavActive();renderUserArea();document.getElementById('root').innerHTML=view==='standings'?renderStandings():view==='thisweek'?renderThisWeek():renderWarRoom();if(view==='warroom') attachWarRoomHandlers();document.getElementById('root').scrollTop=0;},view);
  await p.waitForTimeout(350);await p.screenshot({path:`${output}/${name}-${width}.png`});
  const overflows=await p.evaluate(()=>document.getElementById('root').scrollWidth>document.getElementById('root').clientWidth+1);
  if(overflows) throw new Error(`Overflow ${view} at ${width}px`);
  console.log(JSON.stringify({width,view,...await p.evaluate(()=>({overflow:document.getElementById('root').scrollWidth>document.getElementById('root').clientWidth,firstGame:document.querySelector('.game-card')?.getBoundingClientRect().top,text:document.getElementById('root').innerText.slice(0,160)}))}));
  }
+ await p.selectOption('#live-member','4');
+ await p.waitForTimeout(100);
+ if(!await p.locator('.comparison-anchor').count()) throw new Error('Own card missing during comparison');
+ await p.screenshot({path:`${output}/compare-${width}.png`});
+ await p.evaluate(()=>{state.season='2025';state.view='standings';syncNavActive();document.getElementById('root').innerHTML=renderStandings();document.getElementById('root').scrollTop=0;});
+ if(!await p.locator('.champion-glow').count())throw new Error('Champion hero missing');
+ await p.screenshot({path:`${output}/champion-${width}.png`});
+ if(width<768) {
+   await p.evaluate(()=>document.documentElement.style.setProperty('--safe-top','47px'));
+   const headerHeight=await p.locator('header.below-ticker').evaluate(el=>el.getBoundingClientRect().height);
+   if(headerHeight<103)throw new Error('Header clips content beneath the iPhone safe area');
+   await p.evaluate(()=>document.documentElement.style.removeProperty('--safe-top'));
+ }
+ if(width<768 && await p.locator('#mobile-nav').evaluate(el=>getComputedStyle(el).paddingBottom)!=='0px')throw new Error('Bottom padding lifts navigation');
  await p.locator('.bottom-nav-link[data-view=more]').evaluate(el=>el.click());
  await p.waitForTimeout(50);
  if(await p.locator('.more-list [data-go]').count()!==3) throw new Error('Missing secondary navigation');
