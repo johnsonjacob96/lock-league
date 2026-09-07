@@ -664,7 +664,6 @@
   .pot-collector-l b { color:#e6e8e8; }
   .pot-pay { display:inline-flex; align-items:center; gap:6px; background:#3d95ce; color:#fff; font-family:'Inter',sans-serif; font-weight:700; font-size:13px; padding:9px 15px; border-radius:8px; text-decoration:none; transition:filter 0.12s; white-space:nowrap; }
   .pot-pay:hover { filter:brightness(1.08); }
-  .pot-pay.ls { background:#1fd97b; color:#0e1011; }
   .pot-paid-tag { font-family:'JetBrains Mono',monospace; font-size:12px; color:#46e08a; }
   .pot-note { font-family:'JetBrains Mono',monospace; font-size:11px; color:#868f8c; }
   .pot-setup { margin-top:16px; padding:13px; background:#14171a; border:1px solid #222827; border-radius:9px; }
@@ -1563,18 +1562,14 @@ async function loadSettlement() {
 }
 
 // Prefilled one-tap Venmo pay link. The site never moves money; this just opens
-// Venmo to a pay screen with the recipient, $5, and week note filled in.
+// Venmo to a pay screen with the recipient, amount, and payment note filled in.
 function venmoPayLink(handle, amount, note) {
   if (!handle) return null;
   return `https://venmo.com/${encodeURIComponent(handle)}?txn=pay&amount=${amount}&note=${encodeURIComponent(note)}`;
 }
 
 // ---- Season pot tracker (Article 11) ----------------------------------------
-// LeagueSafe-style dashboard for the $100 season entry: who's paid, collection
-// progress, payout structure, and a one-tap Venmo link to the collector. The
-// app has NO custody — money moves P2P to the collector's own Venmo. Real escrow
-// (holding + auto-paying the pot) needs a licensed money-transmitter rail, which
-// is exactly what LeagueSafe itself is; that stays off the app by design.
+// Separate season and weekly ledgers; payments open directly in Venmo.
 async function loadPot() {
   if (!state.user) { state.pot = null; return; }
   try {
@@ -1596,11 +1591,28 @@ function potCardHtml() {
   const sp = p.season_pot, wk = p.weekly, canCfg = p.can_configure;
   const payout = (sp.payout || []).map((x) => `${ordinal(x.place)} ${fmt(x.amount)}`).join(" · ");
 
-  // ---- Season Pot (held + paid out by LeagueSafe) ----
-  const lsBtn = sp.leaguesafe_url
-    ? `<a class="pot-pay ls" href="${escapeHtml(sp.leaguesafe_url)}" target="_blank" rel="noopener">Open in LeagueSafe</a>`
-    : canCfg ? `<span class="pot-note">Add the LeagueSafe link in settings</span>`
-             : `<span class="pot-note">On LeagueSafe</span>`;
+  const collector = wk.collector;
+  const isBanker = wk.me.is_collector;
+  const seasonRoster = sp.roster || [];
+  const seasonMe = seasonRoster.find(r => r.id === wk.me.id);
+  const entryLink = collector && !isBanker && !seasonMe?.paid
+    ? venmoPayLink(collector.venmo_handle, sp.entry_amount, `Lock League ${p.season} season entry`) : null;
+  const entryAction = seasonMe?.paid ? '<span class="pot-chip paid">Entry paid</span>'
+    : entryLink ? `<a class="pot-pay" href="${entryLink}" target="_blank" rel="noopener">Pay ${fmt(sp.entry_amount)} to ${escapeHtml(collector.name)}</a>`
+    : `<span class="pot-note">${isBanker ? "Record your entry below" : collector ? escapeHtml(collector.name) + " needs to add a Venmo handle in Account" : "Choose a banker in payment settings"}</span>`;
+  const seasonRows = seasonRoster.map(r => `<div class="pot-row"><span class="pot-name">${escapeHtml(r.name)}</span><span class="pot-row-r"><span class="pot-chip ${r.paid ? 'paid' : 'unpaid'}">${r.paid ? 'Paid' : 'Unpaid'}</span>${isBanker || r.id === wk.me.id ? `<button class="pot-toggle" data-fund="season" data-member="${r.id}" data-paid="${r.paid ? 1 : 0}">${r.paid ? 'Undo' : 'Mark paid'}</button>` : ''}</span></div>`).join('');
+  const seasonAwards = (sp.payouts || []).map(award => {
+    const canMark = isBanker || award.member_id === wk.me.id;
+    const link = isBanker && award.member_id !== wk.me.id && !award.paid ? venmoPayLink(award.venmo_handle, award.amount, `Lock League ${p.season} season payout - ${ordinal(award.place)} place`) : null;
+    return `<div class="py-4 border-t border-outline-variant/20">
+      <div class="pot-payout">${ordinal(award.place)} · ${fmt(award.amount)} · ${award.name ? escapeHtml(award.name) : 'Recipient not set'}${award.member_id ? ' · ' + (award.paid ? 'Paid' : 'Unpaid') : ''}</div>
+      ${isBanker && !award.paid ? `<label class="pot-set-l" for="season-recipient-${award.place}">Confirmed ${ordinal(award.place)} place recipient</label><select id="season-recipient-${award.place}" class="pot-select"><option value="">Select member</option>${wk.roster.map(r => `<option value="${r.id}"${r.id === award.member_id ? ' selected' : ''}>${escapeHtml(r.name)}</option>`).join('')}</select><button class="pot-btn season-recipient-save" data-place="${award.place}">Save recipient</button>` : ''}
+      <div class="stl-actions">
+        ${link ? `<a class="stl-pay" href="${link}" target="_blank" rel="noopener">Pay ${fmt(award.amount)} on Venmo</a>` : isBanker && award.member_id === wk.me.id && !award.paid ? '<span class="pot-note">Your prize stays with you. Mark paid once allocated.</span>' : isBanker && award.member_id && !award.paid ? `<span class="pot-note">${escapeHtml(award.name)} needs to add a Venmo handle in Account</span>` : ''}
+        ${canMark && award.member_id ? `<button class="pot-btn season-paid" data-place="${award.place}" data-member="${award.member_id}" data-paid="${award.paid ? 1 : 0}">${award.paid ? 'Undo paid' : isBanker ? 'Mark paid' : 'Mark received'}</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
   const seasonCard = `<section class="glass-panel p-5 md:p-6 pot-card">
     <div class="pot-head">
       <div>
@@ -1611,9 +1623,14 @@ function potCardHtml() {
         <div class="pot-total">${fmt(sp.pot_total)}<span class="pot-total-sub">pot · ${fmt(sp.entry_amount)} entry</span></div>
         ${payout ? `<div class="pot-payout">${payout}</div>` : ""}
       </div>
-      ${lsBtn}
+      ${entryAction}
     </div>
-    <div class="pot-foot">Held and paid out by LeagueSafe. The app just links to it, nothing to settle here.</div>
+    <div class="pot-foot">Season entries go to ${collector ? escapeHtml(collector.name) : 'the banker'} through Venmo, separately from the weekly fund.</div>
+    <div class="pot-prog-l">${seasonRoster.filter(r => r.paid).length}/${seasonRoster.length} season entries paid</div>
+    <div class="pot-roster">${seasonRows}</div>
+    <h3 class="font-headline-lg text-lg mt-6">End-of-season payouts</h3>
+    <div class="pot-foot">The banker sets recipients after final standings and any ties are resolved. Open Venmo to pay, then mark paid here after sending. Payment status is recorded manually.</div>
+    ${seasonAwards}
   </section>`;
 
   // ---- Weekly Fund (season buy-in to the banker; funds the weekly payouts) ----
@@ -1639,7 +1656,7 @@ function potCardHtml() {
         <select id="pot-collector-sel" class="pot-select">${opts}</select>
         <button id="pot-collector-save" class="pot-btn">Set banker</button>
       </div>
-      <div class="pot-setup-h">Everyone sends this person their season buy-in; they Venmo the weekly winners.</div>
+      <div class="pot-setup-h">Everyone sends this person their season and weekly buy-ins; they Venmo all winners.</div>
     </div>`;
   } else {
     const cName = wk.collector.name, cVenmo = wk.collector.venmo_handle;
@@ -1672,8 +1689,6 @@ function potCardHtml() {
 
   const settings = canCfg ? `<details class="pot-settings"><summary>Payment settings</summary>
     <div class="pot-set-body">
-      <label class="pot-set-l">LeagueSafe league URL</label>
-      <input type="url" id="pot-lsurl" class="pot-input" placeholder="https://www.leaguesafe.com/..." value="${sp.leaguesafe_url ? escapeHtml(sp.leaguesafe_url) : ""}">
       <label class="pot-set-l">Weekly buy-in ($ to the banker)</label>
       <input type="number" min="0" step="5" id="pot-buyin" class="pot-input" value="${wk.buyin}">
       <label class="pot-set-l">Weekly prize ($ to each winner)</label>
@@ -1682,7 +1697,7 @@ function potCardHtml() {
       <input type="date" id="pot-deadline" class="pot-input" value="${wk.deadline ? new Date(wk.deadline).toISOString().slice(0, 10) : ""}">
       <label class="pot-set-l">Banker</label>
       <select id="pot-collector-sel2" class="pot-select">${roster.map((r) => `<option value="${r.id}"${wk.collector && r.id === wk.collector.id ? " selected" : ""}>${escapeHtml(r.name)}</option>`).join("")}</select>
-      <label class="pot-set-l">Season pot entry ($, display)</label>
+      <label class="pot-set-l">Season pot entry ($)</label>
       <input type="number" min="0" step="5" id="pot-entry" class="pot-input" value="${sp.entry_amount}">
       <button id="pot-settings-save" class="pot-btn">Save settings</button>
     </div></details>` : "";
@@ -1707,13 +1722,20 @@ function potCardHtml() {
 }
 
 function bindPotCard() {
+  document.querySelectorAll('.season-recipient-save').forEach(b => b.onclick = () => {
+    const member = Number(document.getElementById(`season-recipient-${b.dataset.place}`).value);
+    if (!member) { showToast("SELECT A RECIPIENT", "err"); return; }
+    saveSeasonPayout(b, "season-recipient", { place: Number(b.dataset.place), member_id: member });
+  });
+  document.querySelectorAll('.season-paid').forEach(b => b.onclick = () => saveSeasonPayout(b, "season-paid", {
+    place: Number(b.dataset.place), member_id: Number(b.dataset.member), paid: b.dataset.paid !== "1"
+  }));
   document.getElementById("pot-collector-save")?.addEventListener("click", () => {
     const v = document.getElementById("pot-collector-sel")?.value;
     if (v) savePotConfig({ collector_id: Number(v) });
   });
   document.getElementById("pot-settings-save")?.addEventListener("click", () => {
     savePotConfig({
-      leaguesafe_url: document.getElementById("pot-lsurl")?.value ?? "",
       weekly_buyin: Number(document.getElementById("pot-buyin")?.value),
       weekly_prize: Number(document.getElementById("pot-prize")?.value),
       deadline: document.getElementById("pot-deadline")?.value || null,
@@ -1722,7 +1744,20 @@ function bindPotCard() {
     });
   });
   document.querySelectorAll(".pot-toggle").forEach((b) => b.addEventListener("click", () =>
-    markPotPaid(Number(b.dataset.member), b.dataset.paid !== "1")));
+    markPotPaid(Number(b.dataset.member), b.dataset.paid !== "1", b.dataset.fund || "weekly")));
+}
+
+async function saveSeasonPayout(button, action, data) {
+  button.disabled = true;
+  try {
+    const r = await fetch(`/api/pot?action=${action}`, { method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ season: state.pot.season, ...data }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || j.error || "Could not save");
+    await refreshPotCard();
+    showToast("SEASON PAYMENT UPDATED");
+  } catch (e) { showToast(e.message || "NETWORK ERROR", "err"); }
+  finally { button.disabled = false; }
 }
 
 async function refreshPotCard() {
@@ -1737,12 +1772,12 @@ async function refreshPotCard() {
   }
 }
 
-async function markPotPaid(memberId, paid) {
+async function markPotPaid(memberId, paid, fund = "weekly") {
   try {
     const r = await fetch("/api/pot?action=set-paid", {
       method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ season: state.pot?.season, member_id: memberId, paid }),
+      body: JSON.stringify({ season: state.pot?.season, member_id: memberId, paid, fund }),
     });
     if (!r.ok) { const j = await r.json().catch(() => ({})); showToast((j.detail || "COULDN'T UPDATE").toUpperCase(), "err"); return; }
     await refreshPotCard();
@@ -4201,7 +4236,7 @@ async function renderPayments() {
     <section class="mb-stack-lg">
       <div class="font-label-caps text-label-caps text-primary-fixed uppercase">Season Pot + Weekly Fund</div>
       <h1 class="font-display-lg text-4xl md:text-display-lg leading-tight text-primary-fixed uppercase">Payments</h1>
-      <p class="text-on-surface-variant text-sm mt-2.5 max-w-xl leading-relaxed">Season pot runs on LeagueSafe. The weekly game runs on Venmo through the banker. The site never holds money, it just tracks who's paid and gives one-tap Venmo links.</p>
+      <p class="text-on-surface-variant text-sm mt-2.5 max-w-xl leading-relaxed">Season entries, weekly buy-ins, and all payouts run on Venmo through the banker. The site never holds money, it just tracks who's paid and gives one-tap Venmo links.</p>
     </section>
     <div id="pot-mount">${potCardHtml()}</div>
     <section class="mb-stack-sm mt-6">

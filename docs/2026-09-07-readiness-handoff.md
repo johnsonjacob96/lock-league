@@ -29,7 +29,7 @@ Cloudflare Pages deploys main automatically. The notification worker is a separa
 
 ## Remaining inputs / constraints
 
-- Need actual LeagueSafe URL and Jared's Venmo account to finish payment destinations.
+- All collections and distributions use Venmo. Jared must add his Venmo handle in Account to enable collection links.
 - Existing backup quota is limited (428 credits remained at the initial coverage audit; a two-market request costs credits). The shared 15-minute lease prevents device-by-device spending. Monitor `odds_backup_snapshot.payload.remaining` if primary gaps persist; no paid upgrade authorized or purchased.
 - ESPN runner seed remains every ten minutes during game windows; display now shows source age. GitHub scheduling may lag. This review did not replace that ingestion host.
 - Preview environment was not production-equivalent during initial readiness review; do not infer live-secret configuration from a passing preview.

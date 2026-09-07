@@ -9,7 +9,7 @@ Status: fixes tested locally; production deployment and post-deploy verification
 - Broad SharpAPI `spread,total` aliases consume pages on derivative markets. The exact-market diagnostic returned 496 full-game spread/total rows. The fix requests `point_spread,total_points`, uses the documented page size, and retains both books' event IDs for per-game props.
 - The regular-season seed job reports success before September 8 while doing no work. Latest stored Week 1 scoreboard was August 23. The new runner starts during preparation and checks persistence acknowledgments.
 - Database contains 14 Week 1 picks, all ungraded, and no Week 2 preseason-test picks. No real picks were changed by this review.
-- Jared is collector; weekly buy-in is $90 and prize is $40. LeagueSafe URL is absent; owner input is required.
+- Jared is collector; weekly buy-in is $90 and prize is $40. Jared's Venmo handle is required for collection links.
 - Four members have push subscriptions across six devices. Chase, Chris, Jared, and Tyler have none. Actual device delivery was not tested or triggered.
 - Deployed notification schedules match configuration: `0 16 * * *`, `0 17 * * SUN`, `0 23 * * *`.
 - Preview lacks SharpAPI/provider and VAPID settings and points to a different, unverified database. A preview deployment cannot establish production provider readiness.
@@ -43,7 +43,7 @@ Status: fixes tested locally; production deployment and post-deploy verification
 3. Dispatch `regular-season-seed`; verify 16 Week 1 events persist and the job acknowledges the write. This refresh must happen before Wednesday kickoff.
 4. Run `npm run smoke:live` against production. Confirm all 15 upcoming eligible games have spread/total lines, and near-kickoff prop menus are populated. Confirm both books appear where offered.
 5. Recheck Wednesday final scores and final boxscore ingestion; ungraded player props must remain pending rather than become guessed losses. Check the Thursday UTC grading run.
-6. Before Sunday noon Central, verify reminder readiness and let members without subscriptions opt in on their devices. Set the LeagueSafe URL once supplied.
+6. Before Sunday noon Central, verify reminder readiness and let members without subscriptions opt in on their devices. Set the banker's Venmo handle in Account.
 
 ## API recommendation
 

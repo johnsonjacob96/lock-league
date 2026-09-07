@@ -32,15 +32,7 @@ export async function ensureExtras(env) {
     paid_at    TIMESTAMPTZ,
     PRIMARY KEY (season, week, member_id)
   )`);
-  // League money config. Two flows, NEITHER custodied by the app:
-  //  - Season pot (Article 11: $100 entry, $500/$200/$100) is held + paid out by
-  //    LeagueSafe; the app just links to it (`leaguesafe_url`) and shows the info.
-  //  - Weekly game runs on Venmo, PRE-FUNDED: every member sends the collector
-  //    (Jared) a season buy-in (`weekly_buyin`, $90); the collector banks it and
-  //    Venmos each week's winner the weekly prize (`weekly_prize`, $40).
-  //    `collector_id` = the weekly banker; `deadline` = the buy-in deadline.
-  //    `entry_amount`/`payout` are the season-pot figures shown on the LeagueSafe
-  //    card (display only). pot_entries tracks who has paid the weekly buy-in.
+  // Both funds use Venmo through the collector. Weekly and season entries stay separate.
   await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS pot_config (
     season       INT PRIMARY KEY,
     entry_amount NUMERIC NOT NULL DEFAULT 100,
@@ -48,7 +40,6 @@ export async function ensureExtras(env) {
     deadline     TIMESTAMPTZ,
     payout       JSONB
   )`);
-  await ignoringConcurrentCreate(s`ALTER TABLE pot_config ADD COLUMN IF NOT EXISTS leaguesafe_url TEXT`);
   await ignoringConcurrentCreate(s`ALTER TABLE pot_config ADD COLUMN IF NOT EXISTS weekly_buyin NUMERIC NOT NULL DEFAULT 90`);
   await ignoringConcurrentCreate(s`ALTER TABLE pot_config ADD COLUMN IF NOT EXISTS weekly_prize NUMERIC NOT NULL DEFAULT 40`);
   await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS pot_entries (
@@ -66,6 +57,17 @@ export async function ensureExtras(env) {
     paid     BOOLEAN NOT NULL DEFAULT FALSE,
     paid_at  TIMESTAMPTZ,
     PRIMARY KEY (season, week)
+  )`);
+  await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS season_entries (
+    season INT NOT NULL, member_id INT NOT NULL REFERENCES members(id),
+    paid BOOLEAN NOT NULL DEFAULT FALSE, paid_at TIMESTAMPTZ,
+    PRIMARY KEY (season, member_id)
+  )`);
+  await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS season_payouts (
+    season INT NOT NULL, place INT NOT NULL,
+    member_id INT NOT NULL REFERENCES members(id), amount NUMERIC NOT NULL,
+    paid BOOLEAN NOT NULL DEFAULT FALSE, paid_at TIMESTAMPTZ,
+    PRIMARY KEY (season, place), UNIQUE (season, member_id)
   )`);
   done = true;
 }

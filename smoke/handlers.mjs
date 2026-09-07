@@ -222,3 +222,36 @@ test('shared backup lease limits concurrent consumers to one provider request', 
  assert.deepEqual(await supplementMissingBooks(config,primary),primary);
  assert.equal(calls,2);
 });
+
+test('season Venmo collections and payouts remain separate and enforce ledger permissions', async () => {
+ const { onRequest: pot } = await import('../functions/api/pot.js');
+ const call = async (id, action='', body=null) => {
+  const r = await pot({env,request:new Request(`https://test.invalid/api/pot?season=2026&action=${action}`,{
+   method:body?'POST':'GET', headers:{cookie:`ll_session=${await sign(env,String(id))}`}, ...(body?{body:JSON.stringify({season:2026,...body})}:{})
+  })}); return {status:r.status,body:await r.json()};
+ };
+ await call(1); // run actual schema migrations
+ await db.exec('DELETE FROM season_payouts; DELETE FROM season_entries; DELETE FROM pot_entries; DELETE FROM pot_config');
+ assert.equal((await call(2,'config',{collector_id:2})).status,200);
+ assert.equal((await call(1,'set-paid',{member_id:1,paid:true,fund:'season'})).status,200);
+ let data=(await call(1)).body;
+ assert.equal(data.season_pot.roster.find(m=>m.id===1).paid,true);
+ assert.equal(data.weekly.me.paid,false,'season entry must not mark weekly buy-in paid');
+ assert.equal((await call(1,'set-paid',{member_id:2,paid:true,fund:'season'})).status,403);
+ assert.equal((await call(1,'set-paid',{member_id:1,paid:true,fund:'typo'})).status,400);
+ assert.equal((await call(1,'season-recipient',{place:1,member_id:1})).status,403);
+ assert.equal((await call(2,'season-recipient',{place:1,member_id:1})).status,200);
+ assert.equal((await call(2,'season-recipient',{place:2,member_id:1})).status,409);
+ assert.equal((await call(2,'season-recipient',{place:4,member_id:1})).status,400);
+ assert.equal((await call(2,'season-paid',{place:1,member_id:2,paid:true})).status,409,'stale recipient rejected');
+ assert.equal((await call(1,'season-paid',{place:1,member_id:1,paid:true})).status,200);
+ assert.equal((await call(2,'season-recipient',{place:1,member_id:2})).status,409,'paid award protected');
+ data=(await call(1)).body;
+ assert.equal(data.season_pot.payouts[0].amount,500);
+ assert.equal(data.season_pot.payouts[0].paid,true);
+ assert.ok(data.season_pot.payouts[0].paid_at);
+ assert.equal((await call(1,'season-paid',{place:1,member_id:1,paid:false})).status,200);
+ assert.equal((await call(2,'season-recipient',{place:1,member_id:2})).status,200);
+ assert.equal((await call(1,'season-paid',{place:1,member_id:2,paid:true})).status,403);
+ assert.equal((await call(1,'season-paid',{place:1,member_id:1,paid:true})).status,409);
+});
