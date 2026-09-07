@@ -133,9 +133,18 @@ export function mergeBookSupplement(primary, backup, now = Date.now()) {
       const candidate = extra.books?.[key];
       if (!candidate || !Number.isFinite(Date.parse(candidate.updated)) || now - Date.parse(candidate.updated) > BACKUP_TTL_MS) continue;
       for (const market of ["spread", "total"]) {
-        if ((!completeMarket(books[key]?.[market], market) || (market === "total" && conflictingTotals(g) && corroboratedTotals(extra, now))) && completeMarket(candidate[market], market)) {
+        if (!completeMarket(books[key]?.[market], market) && completeMarket(candidate[market], market)) {
           books[key] = { ...books[key], [market]: candidate[market], updated: candidate.updated, supplemental: true };
         }
+      }
+    }
+    // Check after filling gaps too: a missing primary book can conceal the
+    // disagreement until its backup quote has been added.
+    if (conflictingTotals({ books }) && corroboratedTotals(extra, now)) {
+      for (const key of ["fanduel", "draftkings"]) {
+        books[key] = { ...books[key], total: extra.books[key].total,
+          updated: extra.books[key].updated, supplemental: true };
+        delete books[key].total_unavailable_reason;
       }
     }
     return { ...g, books };

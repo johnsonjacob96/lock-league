@@ -356,6 +356,8 @@ test('conflicting main totals require independent confirmation, including cached
  }
  assert.equal(quarantineConflictingTotals(primary).games[0].books.draftkings.total,null);
  assert.equal(needsBookSupplement(good),false);
+ const oneBook={...primary,games:[{...game,books:{draftkings:book(73.5)}}]};
+ assert.equal(mergeBookSupplement(oneBook,backup,now).games[0].books.draftkings.total.point,46.5);
 });
 test('Sharp main board ignores alternate, inactive and flagged-invalid selections',()=>{
  const base={away_team:'Chicago Bears',home_team:'Carolina Panthers',event_start_time:'2026-09-13T17:00Z',sportsbook:'draftkings',market_type:'total_points',is_main_line:true,odds_american:-110};
