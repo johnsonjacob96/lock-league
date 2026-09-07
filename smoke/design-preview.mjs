@@ -32,12 +32,20 @@ for(const width of [375,390,844,1440]){
  wrGameCache['Dallas Cowboys@Philadelphia Eagles']={ts:Date.now(),data:{found:true,away:{name:'Dallas Cowboys',score:17},home:{name:'Philadelphia Eagles',score:21},state:'in',detail:'Q4 · 11:06',source_updated_at:new Date().toISOString(),stats_updated_at:new Date().toISOString(),players:[{name:'Jalen Hurts',markets:{passing_yards:{actual:186,unit:'pass yds'}}}]}};
  },JSON.parse(readFileSync(dir+'/public/data/seasons.json','utf8')));
  for(const [view,name] of [['standings','home'],['thisweek','picks'],['warroom','live']]){
- await p.evaluate(view=>{state.view=view;syncNavActive();renderUserArea();document.getElementById('root').innerHTML=view==='standings'?renderStandings():view==='thisweek'?renderThisWeek():renderWarRoom();document.getElementById('root').scrollTop=0;},view);
+ await p.evaluate(view=>{state.view=view;syncNavActive();renderUserArea();document.getElementById('root').innerHTML=view==='standings'?renderStandings():view==='thisweek'?renderThisWeek():renderWarRoom();if(view==='warroom') attachWarRoomHandlers();document.getElementById('root').scrollTop=0;},view);
  await p.waitForTimeout(350);await p.screenshot({path:`${output}/${name}-${width}.png`});
  const overflows=await p.evaluate(()=>document.getElementById('root').scrollWidth>document.getElementById('root').clientWidth+1);
  if(overflows) throw new Error(`Overflow ${view} at ${width}px`);
  console.log(JSON.stringify({width,view,...await p.evaluate(()=>({overflow:document.getElementById('root').scrollWidth>document.getElementById('root').clientWidth,firstGame:document.querySelector('.game-card')?.getBoundingClientRect().top,text:document.getElementById('root').innerText.slice(0,160)}))}));
  }
+ await p.selectOption('#live-member','4');
+ await p.waitForTimeout(100);
+ if(!await p.locator('.comparison-anchor').count()) throw new Error('Own card missing during comparison');
+ await p.screenshot({path:`${output}/compare-${width}.png`});
+ await p.evaluate(()=>{state.season='2025';state.view='standings';syncNavActive();document.getElementById('root').innerHTML=renderStandings();document.getElementById('root').scrollTop=0;});
+ if(!await p.locator('.champion-glow').count())throw new Error('Champion hero missing');
+ await p.screenshot({path:`${output}/champion-${width}.png`});
+ if(width<768 && await p.locator('#mobile-nav').evaluate(el=>getComputedStyle(el).paddingBottom)!=='0px')throw new Error('Bottom padding lifts navigation');
  await p.locator('.bottom-nav-link[data-view=more]').evaluate(el=>el.click());
  await p.waitForTimeout(50);
  if(await p.locator('.more-list [data-go]').count()!==3) throw new Error('Missing secondary navigation');

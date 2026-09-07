@@ -219,6 +219,21 @@ export async function run() {
         const table=root.querySelector('.home-table');
         checks.standingsFit=table.scrollWidth<=table.clientWidth+1;
         checks.homeSeasonSelect=!!root.querySelector('#home-year');
+        const game={away:{name:'Chicago Bears',score:17},home:{name:'Carolina Panthers',score:14},state:'in'};
+        const bar=liveProgressBar({bet_type:'Under',pick_text:'Bears / Panthers U47.5'},game);
+        checks.totalProgress=bar.includes('Total points: 31') && bar.includes('Under 47.5') && bar.includes('pick-progress-target');
+        checks.noFakeProgress=liveProgressBar({bet_type:'Under',pick_text:'Bears / Panthers U47.5'},null)==='';
+        checks.propProgressBar=liveProgressBar({prop:{market:'passing_yards',player:'Jalen Hurts',line:224.5,side:'over'}},{players:[{name:'Jalen Hurts',markets:{passing_yards:{actual:186,unit:'pass yds'}}}]}).includes('pass yds: 186');
+        const other={member_id:2,name:'Jack',live:{W:1,L:0,fW:1,fL:0,pending:1},picks:[{bet_type:'Under',kind:'pick',pick_text:'Bears / Panthers U47.5',state:'in',final:false,status:'pending',score:{away:'Chicago Bears',home:'Carolina Panthers',away_score:17,home_score:14}}, {bet_type:'Super Lock',kind:'hidden'}]};
+        state.warRoom={season:2026,week:1,revealed:true,anyLive:true,members:[me,other]};state.wrMemberId='2';
+        root.innerHTML=renderWarRoom();attachWarRoomHandlers();
+        checks.comparison=root.textContent.includes('Your card') && root.textContent.includes('Jack’s revealed picks') && root.querySelectorAll('.personal-live-card').length===1;
+        checks.selector=!!root.querySelector('#live-member option[value="5"]') && root.querySelector('#live-member').value==='2';
+        root.querySelector('#live-member').value='5';root.querySelector('#live-member').onchange();
+        checks.switchBack=state.wrMemberId==='5';state.wrMemberId=null;
+        state.season='2025';root.innerHTML=renderStandings();
+        checks.championRestored=!!root.querySelector('.champion-glow') && root.textContent.includes('Champion');
+
         return checks;
       });
       for (const [key,ok] of Object.entries(dashboard)) s.ok(`[${vw}px] dashboard ${key}`,ok);

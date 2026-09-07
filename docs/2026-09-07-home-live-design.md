@@ -24,3 +24,13 @@ Illustrative Sunday data, not actual season results:
 - [Live](previews/2026-09-07/live.png)
 
 Regenerate snapshots with `node smoke/design-preview.mjs /tmp/lock-league-design`.
+
+## Owner feedback revision
+
+Restored the original champion hero for completed seasons. Removed added mobile bottom padding, which lifted navigation on the owner's iPhone. Neutralized competing category colors while retaining team-logo matchup cards.
+
+Live now includes target-marked measured progress bars for totals, spreads, and supported props. A participant selector shows another member's revealed picks (active first), with the viewer's own summary above for comparison. Hidden picks remain hidden. Missing stats show no fabricated bar; progress is not a probability or final grade.
+
+244 logic/browser checks passed; expanded four-width preview fixtures verify champion restoration, comparison selection, and zero extra bottom navigation padding. Native iPhone positioning still requires observation on a physical device; browser checks verify the removed padding.
+
+Updated illustrative snapshots: [Live](previews/2026-09-07/polish/live.png), [Compare](previews/2026-09-07/polish/compare.png), [Champion](previews/2026-09-07/polish/champion.png).
