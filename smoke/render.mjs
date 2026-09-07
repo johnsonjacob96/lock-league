@@ -228,6 +228,7 @@ export async function run() {
         state.warRoom={season:2026,week:1,revealed:true,anyLive:true,members:[me,other]};state.wrMemberId='2';
         root.innerHTML=renderWarRoom();attachWarRoomHandlers();
         checks.comparison=root.textContent.includes('Your card') && root.textContent.includes('Jack’s revealed picks') && root.querySelectorAll('.personal-live-card').length===1;
+        checks.comparisonMissingOdds=root.querySelector('.comparison-anchor').textContent.includes('1 missing odds');
         checks.selector=!!root.querySelector('#live-member option[value="5"]') && root.querySelector('#live-member').value==='2';
         root.querySelector('#live-member').value='5';root.querySelector('#live-member').onchange();
         checks.switchBack=state.wrMemberId==='5';
