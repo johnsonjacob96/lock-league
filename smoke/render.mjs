@@ -148,6 +148,44 @@ export async function run() {
       });
       for (const [key,ok] of Object.entries(payments)) s.ok(`[${vw}px] payments ${key}`,ok);
       if (process.env.PAYMENT_SCREENSHOT && vw === 390) await page.screenshot({path:process.env.PAYMENT_SCREENSHOT,fullPage:true});
+      const units = await page.evaluate(() => {
+        const checks = {};
+        const near = (a,b) => Math.abs(a-b) < 1e-10;
+        checks.favorite = near(pickUnits({result:'W',price:-110},2026),100/110);
+        checks.underdog = pickUnits({result:'W',price:200},2026) === 2;
+        checks.loss = pickUnits({result:'L',price:-120},2026) === -1 && pickUnits({result:'L',price:250},2026) === -1;
+        checks.pushPending = pickUnits({result:'P'},2026) === 0 && pickUnits({result:'',price:200},2026) === null;
+        checks.missing = pickUnits({result:'L',missing:true},2026) === 0 && pickUnits({result:'W'},2026) === null && pickUnits({result:'W',price:0},2026) === null;
+        checks.future = pickUnits({result:'W',price:250},2027) === 2.5;
+        checks.history = pickUnits({result:'W',price:200},2025) === 1 && pickUnits({result:'L'},2025) === -1.1;
+        DATA = {seasons:{},members:{}}; state.season='2026';
+        state.serverConfig = {season:2026,week:1,cutoff:'2099-01-01T00:00:00Z'};
+        mergeLiveSeason([]); normalizeRecords(DATA);
+        checks.noFakeLeader = seasonLeader(buildStandings('2026')) === null && renderStandings().includes('Awaiting first results') && !renderStandings().includes('workspace_premium');
+        const rows = [{member_name:'Jacob',season:2026,week:1,bet_type:'Super Lock',result:'W',price:250,pick_text:'Test prop'},
+          {member_name:'Jacob',season:2026,week:1,bet_type:'Favorite',result:'L',price:-120},
+          {member_name:'Jared',season:2026,week:1,bet_type:'Favorite',result:'W',price:-110}];
+        mergeLiveSeason(rows);normalizeRecords(DATA);
+        checks.preservedPrice = DATA.members.Jacob['2026'].byType['Super Lock'].picks[1].price === 250;
+        checks.actualTotal = memberUnits(DATA.members.Jacob['2026'],2026).units === 1.5;
+        checks.soleLeader = seasonLeader(buildStandings('2026'))?.name === 'Jared';
+        rows.push({member_name:'Jared',season:2026,week:1,bet_type:'Dog',result:'L',price:110});
+        mergeLiveSeason(rows);normalizeRecords(DATA);
+        checks.tied = seasonLeader(buildStandings('2026')) === null && renderStandings().includes('Tied at the top');
+        checks.unitsLeader = computeSeasonStats('2026').unitsLeader.name === 'Jacob';
+        DATA.members.Jacob['2026'].byType.Over={picks:{1:{result:'W'}}};normalizeRecords(DATA);
+        checks.unpriced = memberUnits(DATA.members.Jacob['2026'],2026).unpriced === 1 && unitsSummary(DATA.members.Jacob['2026'],2026).includes('missing odds') && computeSeasonStats('2026').unitsLeader === null;
+        delete DATA.members.Jacob['2026'].byType.Over;normalizeRecords(DATA);
+        const historical={byType:{Favorite:{picks:{1:{result:'L'}}}}};
+        DATA.members.Jacob['2025']=historical;DATA.seasons['2025']={members:['Jacob'],weeklyWinners:{}};normalizeRecords(DATA);
+        checks.lifetime = renderLifetime().includes('2026 onward uses saved odds') && renderLifetime().includes('+0.40');
+        checks.detail = renderMemberDetail(buildStandings('2026').find(r=>r.name==='Jacob')).includes('+250 · +2.50u');
+        document.getElementById('root').innerHTML=renderStandings();
+        checks.layout = document.documentElement.scrollWidth <= innerWidth + 1;
+        return checks;
+      });
+      for (const [key,ok] of Object.entries(units)) s.ok(`[${vw}px] units ${key}`,ok);
+      if (process.env.UNITS_SCREENSHOT && vw === 390) await page.screenshot({path:process.env.UNITS_SCREENSHOT,fullPage:true});
       await page.close();
     }
   } finally {

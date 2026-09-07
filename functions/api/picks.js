@@ -396,7 +396,7 @@ export async function onRequest({ request, env }) {
         } else {
           // Free-text Super Lock (manual Hit/Miss/Push, honor system on price).
           if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
-          if (p.price != null && (!hasNumber(p.price) || !(Number(p.price) >= -120))) {
+          if (!hasNumber(p.price) || !Number.isInteger(Number(p.price)) || Math.abs(Number(p.price)) < 100 || !(Number(p.price) >= -120)) {
             return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: p.price }, { status: 400 });
           }
         }
@@ -421,6 +421,7 @@ export async function onRequest({ request, env }) {
           if (!g) return json({ error: "game-not-on-board", game_key: p.game_key, bet_type: p.bet_type }, { status: 422 });
           const d = deriveGradable(g, p.bet_type, p.side, p.book);
           if (!d) return json({ error: "line-not-offered", game_key: p.game_key, bet_type: p.bet_type }, { status: 422 });
+          if (!hasNumber(d.price) || Math.abs(Number(d.price)) < 100) return unavailableOdds();
           p.line = d.line; p.price = d.price; p.book = d.book; p.pick_text = d.pick_text;
 
         }
@@ -436,7 +437,7 @@ export async function onRequest({ request, env }) {
       let d = markets ? deriveProp(markets, p.prop) : null;
       if (markets && !d) return json({ error: "prop-not-offered", game_key: p.game_key, market: p.prop.market, player: p.prop.player }, { status: 422 });
       if (!d) return unavailableOdds();
-      if (!hasNumber(d.price) || (PROP_DEFS[d.market].kind !== "yes" && !hasNumber(d.line))) return unavailableOdds();
+      if (!hasNumber(d.price) || Math.abs(Number(d.price)) < 100 || (PROP_DEFS[d.market].kind !== "yes" && !hasNumber(d.line))) return unavailableOdds();
       if (d.price != null && !(Number(d.price) >= -120)) {
         return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: d.price, player: d.player }, { status: 400 });
       }
@@ -458,10 +459,11 @@ export async function onRequest({ request, env }) {
           if (!g) return json({ error: "game-not-on-board", game_key: lp.game_key, bet_type: "Super Lock" }, { status: 422 });
           const d = deriveGradable(g, lp.bet, lp.side, lp.book);
           if (!d) return json({ error: "line-not-offered", game_key: lp.game_key, bet_type: "Super Lock" }, { status: 422 });
+          if (!hasNumber(d.price) || Math.abs(Number(d.price)) < 100) return unavailableOdds();
           p.line = d.line; p.price = d.price; p.book = d.book; p.pick_text = d.pick_text; p.side = lp.side;
 
         }
-        if (!hasNumber(p.price)) return unavailableOdds();
+        if (!hasNumber(p.price) || Math.abs(Number(p.price)) < 100) return unavailableOdds();
         if (!(Number(p.price) >= -120)) {
           return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: p.price }, { status: 400 });
         }
