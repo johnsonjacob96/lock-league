@@ -108,6 +108,10 @@ export async function run() {
           document.activeElement.blur();
           applyLiveOdds(next,structuredClone(next));
           out.checks.deferredCatchesUp = !document.getElementById("active-line") && host.textContent.includes("5.5");
+          game.books.draftkings = {...structuredClone(game.books.fanduel), updated:new Date().toISOString(), supplemental:true};
+          game.books.draftkings.spread.line = -6.5;
+          host.innerHTML = renderGameCard(game,"draftkings");
+          out.checks.backupBookVisible = host.querySelectorAll(".book-toggle").length === 2 && host.querySelector(".book-toggle.on").dataset.book === "draftkings" && host.textContent.includes("6.5") && host.textContent.includes("every 15 min");
         } catch (e) { out.err = String(e && e.stack || e); }
         return out;
       }, markets);
@@ -119,7 +123,7 @@ export async function run() {
       s.ok(`[${vw}px] War Room Super Lock chip shows odds`, r.checks.wrOdds === true);
       s.ok(`[${vw}px] locked Super Lock card shows odds`, r.checks.lockedOdds === true);
       s.ok(`[${vw}px] locked Over/Under slot shows its line, not truncated`, r.checks.overSlotShowsLine === true);
-      for (const key of ["livePush","finalPush","propProgress","propMissing","sourceAge","noTimestampRerender","refreshFocus","liveNoOverflow","deferActive","deferredCatchesUp","keepLastGood","refreshReenabled"]) s.ok(`[${vw}px] ${key}`, r.checks[key] === true);
+      for (const key of ["livePush","finalPush","propProgress","propMissing","sourceAge","noTimestampRerender","refreshFocus","liveNoOverflow","deferActive","deferredCatchesUp","keepLastGood","refreshReenabled","backupBookVisible"]) s.ok(`[${vw}px] ${key}`, r.checks[key] === true);
       await page.close();
     }
   } finally {

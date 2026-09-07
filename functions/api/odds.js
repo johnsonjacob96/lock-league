@@ -11,7 +11,7 @@
 // Freshness (ODDS_TTL_S, default 60s) is tuned for live line movement — the
 // client polls on top of this while the board is open.
 import { json } from "../_shared/auth.js";
-import { sql } from "../_shared/db.js";
+import { sql, ignoringConcurrentCreate } from "../_shared/db.js";
 import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS, seasonTypeFor, testConfig } from "../_shared/nfl.js";
 import { espnScoreboardEvents } from "../_shared/espn.js";
 import { saveScoreboardSeed, saveSummarySeed, loadScoreboardSeed } from "../_shared/scoreseed.js";
@@ -80,7 +80,7 @@ async function fetchOddsApi(env) {
   apiUrl.searchParams.set("commenceTimeFrom", win.from);
   apiUrl.searchParams.set("commenceTimeTo", win.to);
 
-  const r = await fetch(apiUrl);
+  const r = await fetch(apiUrl, { signal: AbortSignal.timeout(5000) });
   if (!r.ok) throw new Error(`odds-api ${r.status}: ${await r.text()}`);
   const events = await r.json();
   return {
@@ -91,6 +91,65 @@ async function fetchOddsApi(env) {
     used: r.headers.get("x-requests-used"),
     games: normalizeOddsApi(events),
   };
+}
+
+// Supplement incomplete primary coverage without spending backup quota per
+// browser/colo. Postgres grants one refresh attempt per pick week per 15 minutes.
+const BACKUP_TTL_MS = 15 * 60 * 1000;
+let backupReady = false;
+const completeMarket = (m, type) => !!m && (type === "spread"
+  ? Number.isFinite(m.line) && Number.isFinite(m.favPrice) && Number.isFinite(m.dogPrice)
+  : Number.isFinite(m.point) && Number.isFinite(m.overPrice) && Number.isFinite(m.underPrice));
+export function needsBookSupplement(payload) {
+  return (payload.games || []).some(g => ["fanduel", "draftkings"].some(b =>
+    ["spread", "total"].some(m => !completeMarket(g.books?.[b]?.[m], m))));
+}
+export function mergeBookSupplement(primary, backup, now = Date.now()) {
+  if (!backup || now - Date.parse(backup.fetched_at) > BACKUP_TTL_MS || !Number.isFinite(Date.parse(backup.fetched_at))) return primary;
+  const byGame = new Map((backup.games || []).map(g => [`${g.away}@${g.home}`, g]));
+  return { ...primary, games: primary.games.map(g => {
+    const extra = byGame.get(`${g.away}@${g.home}`);
+    if (!extra || !Number.isFinite(Date.parse(extra.kickoff)) || !Number.isFinite(Date.parse(g.kickoff)) || Math.abs(Date.parse(extra.kickoff) - Date.parse(g.kickoff)) > 3600000) return g;
+    const books = { ...g.books };
+    for (const key of ["fanduel", "draftkings"]) {
+      const candidate = extra.books?.[key];
+      if (!candidate || !Number.isFinite(Date.parse(candidate.updated)) || now - Date.parse(candidate.updated) > BACKUP_TTL_MS) continue;
+      for (const market of ["spread", "total"]) {
+        if (!completeMarket(books[key]?.[market], market) && completeMarket(candidate[market], market)) {
+          books[key] = { ...books[key], [market]: candidate[market], updated: candidate.updated, supplemental: true };
+        }
+      }
+    }
+    return { ...g, books };
+  }) };
+}
+export async function supplementMissingBooks(env, primary) {
+  if (!env.ODDS_API_KEY || !env.DATABASE_URL || !needsBookSupplement(primary)) return primary;
+  try {
+    const db = sql(env);
+    if (!backupReady) {
+      await ignoringConcurrentCreate(db`CREATE TABLE IF NOT EXISTS odds_backup_snapshot (
+        cache_key TEXT PRIMARY KEY, payload JSONB, attempted_at TIMESTAMPTZ NOT NULL DEFAULT 'epoch'
+      )`);
+      backupReady = true;
+    }
+    const cur = currentSeasonWeek(env), key = `${cur.season}:${cur.week}`;
+    await db`INSERT INTO odds_backup_snapshot (cache_key) VALUES (${key}) ON CONFLICT DO NOTHING`;
+    const claim = await db`UPDATE odds_backup_snapshot SET attempted_at = NOW()
+      WHERE cache_key = ${key} AND attempted_at <= NOW() - INTERVAL '15 minutes' RETURNING cache_key`;
+    let backup;
+    if (claim.length) {
+      try {
+        backup = await fetchOddsApi(env);
+        await db`UPDATE odds_backup_snapshot SET payload = ${JSON.stringify(backup)}::jsonb WHERE cache_key = ${key}`;
+      } catch { /* The lease also backs off failed/quota-exhausted requests. */ }
+    }
+    if (!backup) {
+      const rows = await db`SELECT payload FROM odds_backup_snapshot WHERE cache_key = ${key}`;
+      backup = rows[0]?.payload;
+    }
+    return mergeBookSupplement(primary, scopedPayload(backup, env));
+  } catch { return primary; } // A backup outage must not erase the primary book.
 }
 
 // ── Source 2: ESPN scoreboard (free consensus line) ─────────────────────────
@@ -291,6 +350,7 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
     if (row.event_id != null && !g.sharp_event_ids.includes(String(row.event_id))) g.sharp_event_ids.push(String(row.event_id));
     if (!g.kickoff) g.kickoff = row.event_start_time ?? row.start_time ?? row.commence_time ?? row.kickoff ?? null;
     const b = g.books[book] || (g.books[book] = { _spread: [], _total: [] });
+    if (Number.isFinite(Date.parse(row.timestamp)) && (!b.updated || Date.parse(row.timestamp) > Date.parse(b.updated))) b.updated = row.timestamp;
     const pt = sharpPoint(row);
     if (pt == null) continue;
     const price = Number.isFinite(Number(row.odds_american)) ? Number(row.odds_american) : null;
@@ -314,7 +374,7 @@ export function normalizeSharp(rows) { // exported for tests; CF ignores non-han
     for (const [bk, b] of Object.entries(g.books)) {
       const spread = resolveSpread(b._spread, g);
       const total = resolveTotal(b._total);
-      if (spread || total) books[bk] = { spread, total, updated: null };
+      if (spread || total) books[bk] = { spread, total, updated: b.updated || null };
     }
     if (Object.keys(books).length) { g.books = books; out.push(g); }
   }
@@ -606,7 +666,8 @@ export async function onRequestGet(context) {
   // Snapshotted so it can be served stale later.
   if (primary) {
     try {
-      const payload = await fetchPrimary(env, primary);
+      let payload = await fetchPrimary(env, primary);
+      if (primary === "sharpapi") payload = await supplementMissingBooks(env, payload);
       // An empty board means "no lines posted yet" or a malformed response,
       // never "no games this week" — always fall through to the ESPN board
       // instead of returning/snapshotting a blank one. (This used to only

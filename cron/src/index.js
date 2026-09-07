@@ -19,7 +19,7 @@
 const CRON_TYPES = {
   "0 16 * * *": ["reminder", "line-moves"],
   "0 17 * * SUN": ["reminder"],
-  "0 23 * * *": ["line-moves"],
+  "0 23 * * *": ["line-moves", "kickoff-reminder"],
 };
 
 async function fireNotify(env, type, { dryrun = false } = {}) {

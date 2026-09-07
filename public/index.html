@@ -3831,6 +3831,11 @@ function bookShort(k) {
   return ({ fanduel: "FD", draftkings: "DK", espn: "ESPN" })[k] || (k ? String(k).toUpperCase() : "");
 }
 
+function bookUpdateLabel(book) {
+  const t = Date.parse(book?.updated);
+  if (!Number.isFinite(t)) return "";
+  return `As of ${new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${book.supplemental ? " · refreshes every 15 min" : ""}`;
+}
 function renderGameCard(g, requestedBook) {
   const gameKey = `${g.away}@${g.home}`;
   const fd = g.books?.fanduel;
@@ -3886,6 +3891,7 @@ function renderGameCard(g, requestedBook) {
         <span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">Pick a line</span>
         ${bookToggle}
       </div>
+      <div class="wr-freshness" data-book-updated>${escapeHtml(bookUpdateLabel(book))}</div>
       <div class="grid grid-cols-4 gap-1.5 book-btns" data-game-key="${escapeHtml(gameKey)}">
         ${renderBookButtons(activeBook || "fanduel", book, g)}
       </div>
@@ -4269,7 +4275,7 @@ function applyLiveOdds(prev, next) {
   const oldByKey = new Map((prev?.games || []).map(g => [gameKeyOf(g), g]));
   const newGames = next.games || [];
   // If the slate itself changed (games added/removed), rebuild the board section.
-  const sameSlate = newGames.length === oldByKey.size && newGames.every(g => oldByKey.has(gameKeyOf(g)));
+  const sameSlate = newGames.length === oldByKey.size && newGames.every(g => oldByKey.has(gameKeyOf(g)) && Object.keys(g.books || {}).sort().join() === Object.keys(oldByKey.get(gameKeyOf(g)).books || {}).sort().join());
   if (!sameSlate) { deferredOdds.clear(); render(); return; }
 
   let touched = false;
@@ -4286,7 +4292,11 @@ function applyLiveOdds(prev, next) {
     const priceMoved =
       (nb.spread && pb.spread && (nb.spread.favPrice !== pb.spread.favPrice || nb.spread.dogPrice !== pb.spread.dogPrice)) ||
       (nb.total && pb.total && (nb.total.overPrice !== pb.total.overPrice || nb.total.underPrice !== pb.total.underPrice));
-    if (!spreadMoved && !totalMoved && !priceMoved) continue;
+    if (!spreadMoved && !totalMoved && !priceMoved) {
+      const label = document.querySelector(`.game-card[data-game-key="${CSS.escape(key)}"] [data-book-updated]`);
+      if (label) label.textContent = bookUpdateLabel(nb);
+      continue;
+    }
 
     const card = document.querySelector(`.game-card[data-game-key="${CSS.escape(key)}"]`);
     // Don't yank a card out from under someone actively using it; catch it next cycle.

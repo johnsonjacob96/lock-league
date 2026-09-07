@@ -202,3 +202,23 @@ test('PostgreSQL clock follows fixture time so deadline tests do not age out',as
  const now=(await db.query('SELECT clock_timestamp() AS now')).rows[0].now;
  assert.ok(Math.abs(Date.parse(now)-Date.now())<1000,`database clock ${now}`);
 });
+
+test('shared backup lease limits concurrent consumers to one provider request', async t => {
+ const { supplementMissingBooks } = await import('../functions/api/odds.js');
+ let calls=0;
+ t.mock.method(globalThis,'fetch',async()=>{
+  calls++;
+  return Response.json([{away_team:events[1].away,home_team:events[1].home,commence_time:events[1].kickoff,bookmakers:[{key:'draftkings',last_update:new Date().toISOString(),markets:[{key:'spreads',outcomes:[{name:events[1].home,point:-3.5,price:-110},{name:events[1].away,point:3.5,price:-110}]},{key:'totals',outcomes:[{name:'Over',point:44.5,price:-110},{name:'Under',point:44.5,price:-110}]}]}]}]);
+ });
+ const primary={games:[liveGames[1]]}, config={...env,DATABASE_URL:'test-db',ODDS_API_KEY:'test-key'};
+ await Promise.all(Array.from({length:6},()=>supplementMissingBooks(config,primary)));
+ const filled=await supplementMissingBooks(config,primary);
+ assert.equal(calls,1);
+ assert.equal(filled.games[0].books.draftkings.total.point,44.5);
+ // A failed fetch also holds the lease; repeated consumers cannot hammer quota.
+ await db.exec("UPDATE odds_backup_snapshot SET attempted_at='epoch',payload=NULL");
+ t.mock.method(globalThis,'fetch',async()=>{calls++;return new Response('',{status:429});});
+ assert.deepEqual(await supplementMissingBooks(config,primary),primary);
+ assert.deepEqual(await supplementMissingBooks(config,primary),primary);
+ assert.equal(calls,2);
+});
