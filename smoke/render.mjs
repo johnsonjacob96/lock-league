@@ -26,13 +26,13 @@ export async function run() {
   const markets = menuForGame(normalizeSharpProps(sharpPropRows()), "New England Patriots", "Seattle Seahawks");
   const browser = await (await chromium()).launch();
   try {
-    for (const vw of [1280, 1024, 500]) {
+    for (const vw of [1280, 1024, 390]) {
       const page = await browser.newPage({ viewport: { width: vw, height: 860 } });
       const errors = [];
       page.on("pageerror", e => errors.push(String(e.message || e)));
       await page.goto(INDEX, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(120);
-      const r = await page.evaluate((mk) => {
+      const r = await page.evaluate(async (mk) => {
         const out = { err: null, checks: {} };
         try {
           if (!state) state = {};
@@ -51,7 +51,7 @@ export async function run() {
           }
           // Mount one and measure horizontal overflow in the narrow sidebar.
           slDraft = { market: "receptions", player: "Cooper Kupp", side: "over", line: null };
-          document.body.innerHTML = `<div style="margin-left:256px;padding:24px"><div class="grid grid-cols-1 lg:grid-cols-12 gap-6"><aside id="a" class="picks-aside lg:col-span-4 self-start"><div class="glass-card p-5"><div id="c">${superLockEditorHtml()}</div></div></aside></div></div>`;
+          document.body.innerHTML = `<div style="margin-left:${innerWidth >= 1024 ? 256 : 0}px;padding:24px"><div class="grid grid-cols-1 lg:grid-cols-12 gap-6"><aside id="a" class="picks-aside lg:col-span-4 self-start"><div class="glass-card p-5"><div id="c">${superLockEditorHtml()}</div></div></aside></div></div>`;
           if (typeof bindSuperLockEditor === "function") { const el = document.getElementById("c"); el.id = "my-card-sl"; bindSuperLockEditor(); el.id = "c"; }
           const card = document.querySelector(".glass-card");
           out.checks.cardNoHOverflow = card.scrollWidth <= card.clientWidth + 1;
@@ -68,6 +68,46 @@ export async function run() {
           document.body.insertAdjacentHTML("beforeend", `<div id="mcb" style="width:230px">${renderMyCardBody()}</div>`);
           const ov = [...document.querySelectorAll("#mcb .slot-val")].find(v => /New Orleans/.test(v.textContent));
           out.checks.overSlotShowsLine = !!ov && /O49\.5/.test(ov.textContent) && getComputedStyle(ov).whiteSpace !== "nowrap";
+          const score = { away: { score: 14 }, home: { score: 17 }, state: "in" };
+          out.checks.livePush = /on the number/.test(wrPickTrack({bet_type:"Over",pick_text:"NE / SEA O31"}, score));
+          out.checks.finalPush = /push/.test(wrPickTrack({bet_type:"Over",pick_text:"NE / SEA O31"}, {...score,state:"post"}));
+          const prop = {prop:{market:"receptions",player:"Cooper Kupp",side:"over",line:3.5}};
+          const progress = {...score,players:[{name:"Cooper Kupp",markets:{receptions:{actual:3,unit:"rec"}}}]};
+          out.checks.propProgress = /3 rec.*needs 1 more/.test(wrPropTrack(prop,progress));
+          out.checks.propMissing = /not available/.test(wrPropTrack(prop,score));
+          out.checks.sourceAge = /Delayed.*10 min/.test(sourceAgeLabel(new Date(Date.now()-600000).toISOString()));
+          document.body.innerHTML = '<main id="root"></main>';
+          state.view = "warroom";
+          state.warRoom = {week:1,revealed:true,anyLive:true,source_updated_at:new Date(Date.now()-600000).toISOString(),members:[{member_id:1,name:"Smoke",live:{W:0,L:0,P:0,pending:1},picks:[]}]};
+          rerenderWarRoom();
+          const refresh = document.getElementById("wr-refresh"); refresh.focus();
+          state.warRoom.fetched_at = new Date().toISOString(); rerenderWarRoom();
+          out.checks.noTimestampRerender = refresh === document.getElementById("wr-refresh");
+          state.warRoom.members[0].name = "Updated"; rerenderWarRoom();
+          out.checks.refreshFocus = document.activeElement.id === "wr-refresh";
+          const originalFetch = window.fetch;
+          window.fetch = async () => { throw new Error("offline"); };
+          await loadWarRoom();
+          out.checks.keepLastGood = state.warRoom.members[0].name === "Updated" && state.warRoom.stale;
+          rerenderWarRoom();
+          const retry = document.getElementById("wr-refresh"); await retry.onclick();
+          out.checks.refreshReenabled = !document.getElementById("wr-refresh").disabled;
+          window.fetch = originalFetch;
+          out.checks.liveNoOverflow = document.getElementById("root").scrollWidth <= innerWidth;
+          // An actively focused card defers a changed line, then catches up on
+          // the next response even if the provider line has stopped moving.
+          state.view = "thisweek";
+          const old = structuredClone(state.thisWeekData), next = structuredClone(old);
+          const game = next.games[0], key = gameKeyOf(game);
+          game.books.fanduel.spread.line = -5.5;
+          const host = document.getElementById("root");
+          host.innerHTML = `<div class="game-card" data-game-key="${key}" data-book="fanduel"><button id="active-line">old line</button></div>`;
+          document.getElementById("active-line").focus();
+          applyLiveOdds(old,next);
+          out.checks.deferActive = !!document.getElementById("active-line");
+          document.activeElement.blur();
+          applyLiveOdds(next,structuredClone(next));
+          out.checks.deferredCatchesUp = !document.getElementById("active-line") && host.textContent.includes("5.5");
         } catch (e) { out.err = String(e && e.stack || e); }
         return out;
       }, markets);
@@ -79,6 +119,7 @@ export async function run() {
       s.ok(`[${vw}px] War Room Super Lock chip shows odds`, r.checks.wrOdds === true);
       s.ok(`[${vw}px] locked Super Lock card shows odds`, r.checks.lockedOdds === true);
       s.ok(`[${vw}px] locked Over/Under slot shows its line, not truncated`, r.checks.overSlotShowsLine === true);
+      for (const key of ["livePush","finalPush","propProgress","propMissing","sourceAge","noTimestampRerender","refreshFocus","liveNoOverflow","deferActive","deferredCatchesUp","keepLastGood","refreshReenabled"]) s.ok(`[${vw}px] ${key}`, r.checks[key] === true);
       await page.close();
     }
   } finally {

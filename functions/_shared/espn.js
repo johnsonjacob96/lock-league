@@ -63,7 +63,7 @@ export async function espnSummary(eventId, env = null) {
     for (const u of urls) {
       const d = await getJson(u);
       const gp = d && (d.gamepackageJSON || d);
-      if (gp && (gp.leaders || gp.boxscore)) return gp;
+      if (gp && (gp.leaders || gp.boxscore)) return { ...gp, source_updated_at: new Date().toISOString() };
     }
   }
   return loadSummarySeed(env, eventId);
