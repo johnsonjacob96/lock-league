@@ -185,6 +185,43 @@ export async function run() {
         return checks;
       });
       for (const [key,ok] of Object.entries(units)) s.ok(`[${vw}px] units ${key}`,ok);
+      const dashboard = await page.evaluate(async () => {
+        const checks = {}, root = document.getElementById('root');
+        state.user={id:5,name:'Jacob'};
+        const picks=[{bet_type:'Favorite',kind:'pick',pick_text:'Chicago Bears +3',status:'win',final:false,state:'in',price:250},
+          {bet_type:'Dog',kind:'pick',pick_text:'Test +2',status:'win',final:true,price:200},
+          {bet_type:'Over',kind:'pick',pick_text:'Test O45',status:'lose',final:true,price:null},
+          {bet_type:'Under',kind:'hidden'}, {bet_type:'Super Lock',kind:'missing',final:true,status:'lose'}];
+        const me={member_id:5,name:'Jacob',live:{W:2,L:2,P:0,fW:1,fL:2,fP:0,pending:1},picks};
+        const u=liveMemberSummary(me,2026);
+        checks.onlySettledUnits=u.units===2 && u.unpriced===1 && u.live===1;
+        const chips=pickStatusChips(picks);
+        checks.projectedWinStaysLive=chips.includes('Favorite: LIVE') && !chips.includes('Favorite: W');
+        checks.hiddenAndMissed=chips.includes('HIDDEN') && chips.includes('MISSED');
+        currentMyPicks={Favorite:{pick_text:'Bears +3',price:-110}};state.myCardOpen=false;
+        root.innerHTML=renderMyCardPanel();refreshMyCard();
+        const card=root.querySelector('#my-card');
+        checks.collapsed=card.tagName==='DETAILS' && !card.open && root.querySelectorAll('.card-chip').length===5;
+        card.querySelector('summary').click();await new Promise(r=>setTimeout(r,20));
+        checks.opens=card.open && state.myCardOpen;
+        const editor=root.querySelector('#my-card-sl');
+        editor.innerHTML='<input id="design-draft" value="Unsaved custom prop">';
+        currentMyPicks.Over={pick_text:'Bears / Panthers O46.5'};refreshMyCard();
+        checks.refreshPreservesDraft=root.querySelector('#design-draft').value==='Unsaved custom prop' && card.open && root.querySelector('#mycard-progress').textContent==='2 of 5 selected';
+        state.warRoom={season:2026,week:1,revealed:true,anyLive:true,members:[me],source_updated_at:new Date().toISOString()};
+        root.innerHTML=renderWarRoom();
+        checks.personalCard=root.textContent.includes('Your live picks') && root.textContent.includes('+2.00u') && root.textContent.includes('1 missing odds');
+        const longPick={bet_type:'Super Lock',kind:'pick',pick_text:'Jalen Hurts over 224.5 passing yards',game_key:'Dallas Cowboys@Philadelphia Eagles',status:'pending',state:'in',price:-110};
+        checks.fullTitle=wrChip(longPick,{...me,personal:true}).includes(longPick.pick_text);
+        state.warRoom.revealed=false;
+        checks.noEarlyReveal=!renderWarRoom().includes('Chicago Bears +3');
+        state.view='standings';root.innerHTML=renderStandings();
+        const table=root.querySelector('.home-table');
+        checks.standingsFit=table.scrollWidth<=table.clientWidth+1;
+        checks.homeSeasonSelect=!!root.querySelector('#home-year');
+        return checks;
+      });
+      for (const [key,ok] of Object.entries(dashboard)) s.ok(`[${vw}px] dashboard ${key}`,ok);
       if (process.env.UNITS_SCREENSHOT && vw === 390) await page.screenshot({path:process.env.UNITS_SCREENSHOT,fullPage:true});
       await page.close();
     }

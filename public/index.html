@@ -905,6 +905,91 @@
   .preseason-banner { margin: 12px 16px 0; background: rgba(244, 207, 90, 0.1); border: 1px solid rgba(244, 207, 90, 0.32); color: #f4cf5a; border-radius: 10px; padding: 9px 13px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.03em; line-height: 1.4; display: flex; align-items: center; gap: 8px; }
   .preseason-banner .pb-dot { width: 7px; height: 7px; border-radius: 50%; background: #f4cf5a; flex-shrink: 0; box-shadow: 0 0 0 0 rgba(244, 207, 90, 0.5); animation: pulse-amber 1.8s infinite; }
   @keyframes pulse-amber { 0% { box-shadow: 0 0 0 0 rgba(244, 207, 90, 0.5); } 70% { box-shadow: 0 0 0 6px rgba(244, 207, 90, 0); } 100% { box-shadow: 0 0 0 0 rgba(244, 207, 90, 0); } }
+
+  /* Compact league dashboard: preserve the existing team-logo odds cards. */
+  .compact-panel { background:#141819; border:1px solid #2b3431; border-radius:12px; padding:16px; margin-bottom:18px; }
+  .compact-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .compact-heading h2,.compact-heading h3 { font-family:Oswald, sans-serif; font-size:22px; text-transform:uppercase; }
+  .quiet-copy { color:#adb8b4; font:13px/1.5 Inter,sans-serif; }
+  .text-action { color:#46e08a; min-height:44px; font-size:13px; }
+  .card-chips { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin-top:12px; }
+  .card-chip { border:1px solid #3b4541; border-radius:7px; padding:8px 2px; text-align:center; font:11px/1.5 Inter,sans-serif; color:#bec7c3; }
+  .card-chip strong { display:block; font-size:12px; }
+  .card-chip.selected,.card-chip.W { color:#58e69a; border-color:#327550; background:#163326; }
+  .card-chip.L { color:#f59a9a; }
+  .card-chip.P { color:#edce7a; }
+  #my-card { padding:16px; }
+  #my-card > summary { cursor:pointer; list-style:none; min-height:44px; }
+  #my-card > summary::-webkit-details-marker { display:none; }
+  #my-card .card-chevron { transition:transform .15s; }
+  #my-card[open] .card-chevron { transform:rotate(180deg); }
+  #my-card-body { margin-top:16px; }
+  .home-overview { margin-bottom:18px; }
+  .home-record { font:600 26px/1.4 Oswald,sans-serif; margin-top:8px; }
+  .home-record span { margin-left:20px; color:#e6e8e8; }
+  .home-table table { min-width:0; }
+  .home-table th,.home-table td { padding:12px 14px; }
+  .home-table .member-row { height:58px; }
+  .home-secondary { margin-top:24px; }
+  .home-secondary > summary { cursor:pointer; padding:14px 0; color:#adb8b4; }
+  .home-champion { padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
+  .home-champion strong { font:600 22px Oswald,sans-serif; }
+  .picks-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; }
+  .picks-layout .picks-aside { min-width:0; }
+  .picks-whos { min-width:0; }
+  .picks-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+  .picks-deadline { margin-bottom:16px; }
+  .personal-live-grid { display:grid; gap:12px; margin:12px 0 24px; }
+  .personal-live-card { border:1px solid #344139; border-radius:10px; padding:16px; background:#151b18; }
+  .personal-live-card .wr-chip { width:100%; min-height:44px; background:transparent; border:0; padding:0; text-align:left; }
+  .personal-live-card .wr-pick { white-space:normal; font:600 15px/1.4 Inter,sans-serif; }
+  .personal-score { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 8px; }
+  .personal-team { display:flex; align-items:center; gap:8px; font:600 23px Oswald,sans-serif; }
+  .personal-team img { width:36px; height:36px; }
+  .personal-team small { display:block; font:12px Inter,sans-serif; color:#adb8b4; }
+  .personal-live-card .wr-detail { margin-top:12px; }
+  .wr-card.row-you { border-color:#327550; }
+  .more-list { display:grid; gap:10px; max-width:560px; }
+  .more-list button { display:flex; align-items:center; gap:14px; min-height:58px; padding:16px; text-align:left; }
+  #home-year { display:none; }
+  .personal-live-card .wr-chip { grid-template-columns:1fr auto; box-shadow:none; }
+  .personal-live-card .wr-bt { grid-column:1 / -1; }
+  .personal-live-card .wr-sub { grid-column:2; grid-row:2; }
+  .personal-live-card .wr-pick { grid-column:1; grid-row:2; }
+  .home-table .row-you { background:rgba(70,224,138,.07); }
+  .home-table .row-you .name-you,.home-table .row-you .rank-you { color:#58e69a; }
+  .home-table .you-pill { color:#58e69a; border-color:#327550; }
+  @media(max-width:767px) {
+    .home-overview { padding:12px; }
+    .home-overview .home-record { margin-top:0; font-size:23px; }
+    .home-table .member-row { height:46px; }
+    .home-year-pills { display:none; }
+    #home-year { display:block; color:#58e69a; border:1px solid #344139; border-radius:7px; background:#141819; min-height:44px; padding:6px 26px 6px 10px; font-size:13px; }
+  }
+  body[data-view="thisweek"] #ticker,body[data-view="warroom"] #ticker,body[data-view="standings"] #ticker { display:none; }
+  body[data-view="thisweek"] .below-ticker,body[data-view="warroom"] .below-ticker,body[data-view="standings"] .below-ticker { top:var(--safe-top)!important; }
+  @media(min-width:1024px) {
+    .picks-layout { grid-template-columns:minmax(0,2fr) minmax(0,1fr); align-items:start; }
+    .picks-layout .picks-aside { grid-column:2; grid-row:1; position:sticky; top:16px; }
+    .picks-board { grid-column:1; grid-row:1 / span 2; }
+    .picks-whos { grid-column:2; }
+    .personal-live-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+  @media(max-width:767px) {
+    #mobile-nav { padding-bottom:env(safe-area-inset-bottom,0px); }
+    .bottom-nav-link { min-height:52px; justify-content:center; gap:5px; }
+    body[data-view="standings"] header,body[data-view="thisweek"] header,body[data-view="warroom"] header { padding-top:var(--safe-top); }
+    .home-table th,.home-table td { padding:11px 8px; font-size:13px; }
+    .home-table th:nth-child(4),.home-table td:nth-child(4),.home-table th:nth-child(6),.home-table td:nth-child(6),.home-table th:nth-child(7),.home-table td:nth-child(7) { display:none; }
+    .home-table .member-row td:nth-child(2)>div:not(:first-child) { display:none; }
+    .home-table .member-row td:first-child .inline-flex { gap:0; }
+    .home-table .member-row td:first-child .inline-flex > :not(:first-child) { display:none; }
+    .home-table .member-row .font-display-lg { font:600 14px Inter,sans-serif; text-transform:none; }
+    .home-table .member-row td:nth-child(5) { font-size:12px; }
+    .picks-top .week-nav { margin:0; }
+    #board-status { letter-spacing:0; font-size:10px; }
+  }
+
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -1058,18 +1143,7 @@
       <span class="material-symbols-outlined">swords</span>
       <span class="font-label-caps text-[10px]">Live</span>
     </button>
-    <button class="bottom-nav-link nav-link" data-view="lifetime">
-      <span class="material-symbols-outlined">history</span>
-      <span class="font-label-caps text-[10px]">Lifetime</span>
-    </button>
-    <button class="bottom-nav-link nav-link" data-view="payments">
-      <span class="material-symbols-outlined">payments</span>
-      <span class="font-label-caps text-[10px]">Pay</span>
-    </button>
-    <button class="bottom-nav-link nav-link" data-view="rules">
-      <span class="material-symbols-outlined">gavel</span>
-      <span class="font-label-caps text-[10px]">Rules</span>
-    </button>
+    <button class="bottom-nav-link nav-link" data-view="more"><span class="material-symbols-outlined">more_horiz</span><span class="font-label-caps text-[10px]">More</span></button>
   </div>
 </nav>
 
@@ -1496,8 +1570,9 @@ function renderTickerWeekSelect() {
 }
 
 function syncNavActive() {
+  document.body.dataset.view = state.view;
   document.querySelectorAll(".nav-link").forEach(b => {
-    const on = b.dataset.view === state.view;
+    const on = b.dataset.view === state.view || (b.dataset.view === "more" && ["lifetime","payments","rules"].includes(state.view));
     b.classList.toggle("active", on);
     if (on) b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
@@ -1922,6 +1997,63 @@ async function markPayout(week, paid) {
   } catch { showToast("NETWORK ERROR", "err"); }
 }
 
+// Shared five-slot summary. A live projection is never presented as a settled win.
+function pickStatusChips(picks) {
+  return `<div class="card-chips">${BET_TYPES_ORDER.map(bt => {
+    const p = picks.find(p => p.bet_type === bt);
+    const result = p?.result || (p?.final ? ({win:"W",lose:"L",push:"P"}[p.status]) : null);
+    const filled = !!(p?.pick_text || p?.text);
+    const label = p?.kind === "hidden" ? "HIDDEN" : p?.kind === "missing" ? "MISSED" : result || (p?.state === "in" && !p.final ? "LIVE" : filled ? "✓" : "—");
+    return `<span class="card-chip ${result || (filled ? "selected" : "")}" aria-label="${escapeHtml(bt)}: ${label === "✓" ? "selected" : label}">${btShort(bt)}<strong>${label}</strong></span>`;
+  }).join("")}</div>`;
+}
+function renderHomeWeek(season) {
+  const week = currentNflWeekClient().week || 1;
+  const standings = buildStandings(season);
+  const status = !standings.some(r => r.seasonRec.w + r.seasonRec.l) ? "Awaiting first results" : !seasonLeader(standings) ? "Tied at the top" : "Follow this week’s games and results";
+  const md = state.user && DATA.members[state.user.name]?.[season];
+  const picks = BET_TYPES_ORDER.map(bt => ({...md?.byType?.[bt]?.picks?.[week], bet_type:bt}));
+  const w = picks.filter(p => p.result === "W").length, l = picks.filter(p => p.result === "L").length, pushes = picks.filter(p => p.result === "P").length;
+  const units = picks.reduce((sum,p) => sum + (pickUnits(p,season) || 0),0);
+  const unpriced = picks.filter(p => ["W","L"].includes(p.result) && pickUnits(p,season) === null).length;
+  return `<div class="compact-panel compact-heading"><div><h2>${season} season · Week ${String(week).padStart(2,"0")}</h2><p class="quiet-copy">${status}</p></div><button class="text-action" data-go="warroom">Open Live →</button></div>
+    ${state.user ? `<section class="compact-panel home-overview"><div class="compact-heading"><h3>My week</h3><button class="text-action" data-go="thisweek">View card →</button></div><div class="home-record">${w}–${l}${pushes ? "–"+pushes : ""}<span>${fmtUnits(units)}u</span></div><p class="quiet-copy">Settled results${unpriced ? ` · ${unpriced} missing odds` : ""}</p>${pickStatusChips(picks)}</section>` : `<div class="compact-panel compact-heading"><p class="quiet-copy">Sign in to see your weekly card.</p><button class="text-action" data-account>Sign in →</button></div>`}`;
+}
+function liveMemberSummary(m, season) {
+  let units = 0, unpriced = 0;
+  for (const p of m.picks) {
+    if (!p.final || p.kind !== "pick") continue;
+    const result = {win:"W",lose:"L",push:"P"}[p.status];
+    if (!result) continue;
+    const value = pickUnits({...p,result}, season);
+    if (value === null) unpriced++; else units += value;
+  }
+  return {units,unpriced,live:m.picks.filter(p => p.state === "in" && !p.final).length};
+}
+function renderPersonalLive(wr) {
+  const me = wr.members?.find(m => isMe(m.name));
+  if (!me) return "";
+  const u = liveMemberSummary(me,wr.season || 2026), L = me.live;
+  const active = me.picks.filter(p => p.kind === "pick" && !p.final);
+  const cards = active.map(p => {
+    const score = p.score;
+    const d = score ? {away:{name:score.away,score:score.away_score},home:{name:score.home,score:score.home_score},state:p.state} : null;
+    const cached = p.game_key && wrGameCache[p.game_key]?.data;
+    // Scoreboard progress is already in the existing poll. Player stats use the
+    // same deduplicated game-detail cache as the expandable league cards.
+    const track = p.prop?.market ? (cached?.found ? wrPropTrack(p,cached) : cached ? "Player stats not available yet" : "Player stats loading…") : wrPickTrack(p,d);
+    const scoreHtml = score ? `<div class="personal-score"><div class="personal-team">${teamLogoMark(score.away,"w-9 h-9","quiet-copy")}<div><small>${escapeHtml(teamShort(score.away))}</small>${score.away_score ?? "–"}</div></div><span class="quiet-copy">${escapeHtml(p.detail || (p.state === "in" ? "Live" : "Awaiting grade"))}</span><div class="personal-team"><div><small>${escapeHtml(teamShort(score.home))}</small>${score.home_score ?? "–"}</div>${teamLogoMark(score.home,"w-9 h-9","quiet-copy")}</div></div>` : "";
+    const expanded = state.wrExpanded === `${me.member_id}:${p.bet_type}`;
+    return `<article class="personal-live-card">${wrChip(p,{...me,personal:true})}<p class="quiet-copy">${escapeHtml(bookLabel(p.book))}${p.price != null ? " · " + americanOdds(p.price) : " · Odds unavailable"}</p>${scoreHtml}${track ? `<p class="quiet-copy">${escapeHtml(track)}</p>` : ""}${p.prop?.market && cached?.found ? `<p class="quiet-copy">Stats: ${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</p>` : ""}${expanded ? wrGamePanel(p) : ""}</article>`;
+  }).join("");
+  return `<section class="compact-panel"><div class="compact-heading"><h3>My Card</h3><span class="quiet-copy">${u.live} live</span></div><div class="home-record">${L.fW || 0}–${L.fL || 0}${L.fP ? "–"+L.fP : ""}<span>${fmtUnits(u.units)}u</span></div><p class="quiet-copy">Settled results${u.unpriced ? ` · ${u.unpriced} missing odds` : ""}</p>${pickStatusChips(me.picks)}</section><h3 class="font-headline-lg text-xl uppercase">Your live picks</h3>${cards ? `<div class="personal-live-grid">${cards}</div>` : `<p class="quiet-copy" style="margin:12px 0 24px">${me.picks.some(p => p.kind === "hidden") ? "Your remaining picks appear as their games start." : "No picks still in play. Your results are below."}</p>`}`;
+}
+function refreshPersonalLiveStats() {
+  const me = state.warRoom?.members?.find(m => isMe(m.name));
+  const keys = new Set((me?.picks || []).filter(p => p.kind === "pick" && !p.final && p.prop?.market && p.game_key).map(p => p.game_key));
+  for (const key of keys) loadWrGame(key);
+}
+
 function renderStandings() {
   const season = state.season;
   const rows = buildStandings(season);
@@ -1929,25 +2061,10 @@ function renderStandings() {
   const winners = seasonInfo?.weeklyWinners || {};
   const isLive = !!seasonInfo?.live;
   const champ = isLive ? seasonLeader(rows) : rows[0];
-  const hasResults = rows.some(r => r.seasonRec.w + r.seasonRec.l > 0);
-
-  const champPct = champ && (champ.seasonRec.w + champ.seasonRec.l) ? pct(champ.seasonRec) + "%" : "-";
-  const champSuper = champ ? parseRecord(champ.md?.byType?.["Super Lock"]?.record) : { w: 0, l: 0, t: 0 };
-  let bestBt = null, bestPct = -1, bestRec = { w: 0, l: 0, t: 0 };
-  if (champ) {
-    for (const bt of BET_TYPES_ORDER) {
-      const r = parseRecord(champ.md?.byType?.[bt]?.record);
-      const tot = r.w + r.l;
-      if (!tot) continue;
-      const p = r.w / tot;
-      if (p > bestPct) { bestPct = p; bestBt = bt; bestRec = r; }
-    }
-  }
-  const bestBtLabel = bestBt === "Super Lock" ? "SUPER" : (bestBt ? bestBt.toUpperCase() : "-");
 
   // Year filter pills
   const yearPills = `
-    <div class="flex gap-2 items-center">
+    <div class="home-year-pills flex gap-2 items-center">
       ${seasonsVisible().map(y => `
         <button class="year-tab year-pill ${state.season === y ? "active" : ""}" data-year="${y}">${y}</button>
       `).join("")}
@@ -1956,44 +2073,7 @@ function renderStandings() {
 
   return `
     ${renderSeasonPrep()}
-    <!-- Champion hero -->
-    <section class="relative w-full rounded-xl overflow-hidden mb-6 hero-bg champion-glow">
-      <div class="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent z-10"></div>
-      <div class="relative z-20 px-5 md:px-8 py-5 md:py-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="min-w-0 flex-1">
-          <div class="inline-flex items-center px-2.5 py-0.5 bg-tertiary-fixed-dim text-on-tertiary-fixed font-label-caps text-[10px] rounded-sm mb-2 uppercase">
-            <span class="material-symbols-outlined text-xs mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
-            ${season} ${isLive ? (champ ? "Leader" : "Season underway") : "Champion"}
-          </div>
-          <h2 class="font-display-lg text-3xl md:text-5xl leading-none uppercase mb-3 break-words" style="color:#46e08a">${escapeHtml(champ ? champ.name : hasResults ? "Tied at the top" : "Awaiting first results")}</h2>
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <div class="flex items-baseline gap-2">
-              <span class="text-on-surface-variant font-label-caps text-[10px]">RECORD</span>
-              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champ ? recordHtml(champ.seasonRec) : "-"}</span>
-            </div>
-            <span class="w-px h-4 bg-outline-variant"></span>
-            <div class="flex items-baseline gap-2">
-              <span class="text-on-surface-variant font-label-caps text-[10px]">WEEKS</span>
-              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champ ? champ.weeksWon : 0}</span>
-            </div>
-            <span class="w-px h-4 bg-outline-variant"></span>
-            <div class="flex items-baseline gap-2">
-              <span class="text-on-surface-variant font-label-caps text-[10px]">WIN %</span>
-              <span class="font-data-tabular text-base md:text-lg text-on-surface">${champPct}</span>
-            </div>
-          </div>
-        </div>
-        <div class="glass-card px-4 py-2.5 flex items-center gap-3 border-l-2 border-l-secondary-fixed-dim shrink-0">
-          <span class="material-symbols-outlined text-2xl ${isLive ? "text-primary-fixed" : "text-live-red"}">${isLive ? "sports_football" : "event_available"}</span>
-          <div>
-            <div class="text-on-surface-variant font-label-caps text-[9px] uppercase tracking-widest">Status</div>
-            <div class="font-display-lg text-base ${isLive ? "text-primary-fixed" : "text-live-red"} uppercase leading-none mt-0.5">${isLive ? "In Progress" : "Season Final"}</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    ${renderSeasonStatTiles(season)}
+    ${isLive ? renderHomeWeek(season) : `<section class="compact-panel home-champion"><div><div class="quiet-copy">${season} champion</div><strong>${escapeHtml(champ?.name || "Season complete")}</strong></div><span class="quiet-copy">${champ ? recordHtml(champ.seasonRec) : ""} · Season final</span></section>`}
 
     <!-- Year selector + section header -->
     <section class="mb-stack-lg">
@@ -2001,17 +2081,17 @@ function renderStandings() {
         <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface uppercase flex items-center gap-3">
           <span class="w-2 h-8 bg-primary-fixed inline-block"></span> ${season} Standings
         </h3>
-        ${yearPills}
+        ${yearPills}<select id="home-year" aria-label="Standings season">${seasonsVisible().map(y => `<option value="${y}" ${season === y ? "selected" : ""}>${y}</option>`).join("")}</select>
       </div>
 
-      <p class="font-data-tabular text-[11px] text-on-surface-variant mb-3">${Number(season) >= 2026 ? "Units use saved odds with 1u risk per pick. Pushes return 0u; missed picks and bets missing odds are excluded." : "Historical units estimated at −110: +1u per win, −1.1u per loss."}</p>
-      <div class="overflow-x-auto hide-scrollbar glass-card rounded-lg">
+
+      <div class="overflow-x-auto hide-scrollbar glass-card rounded-lg home-table">
         <table class="w-full text-left border-collapse min-w-[640px]">
           <thead>
             <tr class="border-b border-outline-variant font-label-caps text-on-surface-variant text-[11px] tracking-widest bg-surface-container-low/50 uppercase">
               <th class="px-4 md:px-6 py-4">Rank</th>
               <th class="px-4 md:px-6 py-4">Member</th>
-              <th class="px-4 md:px-6 py-4">Record (W-L)</th>
+              <th class="px-4 md:px-6 py-4">W–L</th>
               <th class="px-4 md:px-6 py-4">Win %</th><th class="px-4 md:px-6 py-4">Units</th>
               <th class="px-4 md:px-6 py-4 hidden lg:table-cell">Weekly Heat (1-18)</th>
               <th class="px-4 md:px-6 py-4 text-right">Weeks Won</th>
@@ -2024,6 +2104,10 @@ function renderStandings() {
       </div>
     </section>
 
+      <p class="quiet-copy">${Number(season) >= 2026 ? "Units use saved odds with 1u risk per pick. Pushes return 0u; missed picks and bets missing odds are excluded." : "Historical units estimated at −110: +1u per win, −1.1u per loss."}</p>
+    ${isLive && state.pot?.weekly?.prize != null ? `<section class="compact-panel compact-heading" style="margin-top:18px"><div><h3>Week ${currentNflWeekClient().week || 1} pot</h3><p class="quiet-copy">${winners[String(currentNflWeekClient().week || 1)] ? escapeHtml(winners[String(currentNflWeekClient().week || 1)]) + " · weekly winner" : "Winner pending final results"}</p></div><button class="text-action" data-go="payments">$${Number(state.pot.weekly.prize).toLocaleString("en-US")} →</button></section>` : ""}
+    <details class="home-secondary"><summary>Season highlights &amp; weekly winners</summary>
+    ${renderSeasonStatTiles(season)}
     <!-- Weekly Winners -->
     <section class="mb-stack-lg">
       <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface uppercase flex items-center gap-3 mb-6">
@@ -2056,7 +2140,7 @@ function renderStandings() {
           `;
         }).join("")}
       </div>
-    </section>
+    </section></details>
   `;
 }
 
@@ -2880,7 +2964,7 @@ function seasonPrepInner() {
   const countdown = `
     <div>
       <div class="sp-count">
-        <span class="sp-count-num font-display-lg">${days}</span>
+        <span class="font-display-lg" style="font-size:24px">${days}</span>
         <span class="sp-count-unit font-label-caps">${days === 1 ? "DAY" : "DAYS"} TO KICKOFF</span>
       </div>
       <div class="sp-count-sub">Week 1 picks are open · Wed kickoff 7:20 PM CT<br>Picks due Sunday noon CT · earlier games lock at kickoff</div>
@@ -2924,7 +3008,7 @@ function seasonPrepInner() {
   }
 
   return `<div class="sp-head">${countdown}<div class="sp-tag font-label-caps">GET READY</div></div>
-    <div class="sp-steps">${steps}</div>`;
+    <details><summary class="quiet-copy" style="cursor:pointer;margin-top:10px">Alerts &amp; installation</summary><div class="sp-steps">${steps}</div></details>`;
 }
 
 function renderSeasonPrep() {
@@ -3474,7 +3558,7 @@ function slLockBtnHtml(m, pl) {
 
 function myCardProgress() {
   const n = BET_TYPES_ORDER.filter(bt => { const p = currentMyPicks[bt]; return p && (p.pick_text || p.text); }).length;
-  return `${n} / 5 locked`;
+  return `${n} of 5 selected`;
 }
 
 function renderMyCardPanel() {
@@ -3488,18 +3572,13 @@ function renderMyCardPanel() {
       <button class="btn-primary w-full" id="mycard-signin">Sign In To Pick</button>
     </div>`;
   }
-  return `<div class="glass-card p-5 md:p-6" id="my-card">
-    <div class="flex items-center justify-between mb-4">
-      <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary-fixed" style="font-variation-settings:'FILL' 1">receipt_long</span>
-        <h3 class="font-headline-lg text-lg uppercase leading-none">My Card</h3>
-      </div>
-      <span class="font-data-tabular text-[11px] text-on-surface-variant" id="mycard-progress">${myCardProgress()}</span>
-    </div>
+  return `<details class="glass-card" id="my-card" ${state.myCardOpen ? "open" : ""}>
+    <summary><div class="compact-heading"><h3 class="font-headline-lg text-lg uppercase">My Card</h3><span class="card-chevron" aria-hidden="true">⌄</span></div>
+    <div class="quiet-copy" id="mycard-progress">${myCardProgress()}</div><div id="mycard-chips">${pickStatusChips(BET_TYPES_ORDER.map(bt => ({...currentMyPicks[bt], bet_type:bt})))}</div></summary>
     <div id="my-card-body" class="space-y-2.5">${renderMyCardBody()}</div>
     <div id="my-card-sl" class="mt-4 pt-4 border-t border-outline-variant">${superLockEditorHtml()}</div>
-    <div class="mt-4 pt-4 border-t border-outline-variant font-data-tabular text-[10px] tracking-wide text-on-surface-variant uppercase">Locks Sun 12:00 PM CT · Started games lock at kickoff</div>
-  </div>`;
+    <p class="quiet-copy" style="margin-top:14px">Picks due Sunday noon CT. Earlier games lock at kickoff.</p>
+  </details>`;
 }
 
 function myCardWeek() {
@@ -3740,7 +3819,7 @@ function renderPicksHistory(sel, curWeek) {
     ? `<span class="pk-hist-win"><span class="pk-crown">🏆</span><b>${escapeHtml(winner.name)}</b> · ${winner.W}-${winner.L}${winner.P ? "-" + winner.P : ""}</span>`
     : (graded ? `<span class="pk-hist-win">Tie at the top</span>` : `<span class="pk-hist-win">Not graded yet</span>`);
   const cards = members.map((m, i) => `
-    <div class="wr-card">
+    <div class="wr-card ${isMe(m.name) ? "row-you" : ""}">
       <div class="wr-head">
         <span class="wr-rank">${String(i + 1).padStart(2, "0")}</span>
         <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
@@ -3771,28 +3850,12 @@ function renderThisWeek() {
     </div>`;
 
   return `
-    <section class="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-      <div>
-        <div class="flex items-center gap-3">
-          <span class="w-2 h-8 bg-primary-fixed inline-block rounded-sm"></span>
-          <h1 class="font-display-lg text-3xl md:text-4xl uppercase text-on-surface leading-none">Picks</h1>
-        </div>
-        <div class="mt-3">${weekNavHtml(sel, curWeek)}</div>
-        <p class="text-on-surface-variant text-sm mt-2.5">${games.length ? `${games.length} games this week. Lines from FanDuel and DraftKings.` : (isErr ? "Lines are unavailable right now." : "No games posted yet.")}</p>
-      </div>
-      ${cd ? `
-        <div class="flex flex-col items-start md:items-end">
-          <span class="font-label-caps text-[10px] text-on-surface-variant mb-1.5 uppercase tracking-widest">Kickoff in</span>
-          <div class="flex gap-2">${box(cd.days, "Days", "cd-days")}${box(cd.hrs, "Hrs", "cd-hrs")}${box(cd.mins, "Min", "cd-min")}</div>
-        </div>` : ""}
+    <section><div class="picks-top"><h1 class="font-display-lg text-3xl uppercase">Picks</h1>${weekNavHtml(sel, curWeek)}</div>
+      <p class="quiet-copy picks-deadline">Picks due Sunday noon CT · Earlier games lock at kickoff${cd ? `<br>Next kickoff in <span id="cd-days">${cd.days}</span>d <span id="cd-hrs">${cd.hrs}</span>h <span id="cd-min">${cd.mins}</span>m` : ""}</p>
     </section>
-
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <aside class="picks-aside lg:col-span-4 lg:order-2 lg:sticky lg:top-16 self-start space-y-4">
-        ${renderMyCardPanel()}
-        ${renderWhosInWidget()}
-      </aside>
-      <div class="lg:col-span-8 lg:order-1">
+    <div class="picks-layout">
+      <aside class="picks-aside">${renderMyCardPanel()}</aside>
+      <div class="picks-board">
         <div class="flex items-center justify-between border-b border-outline-variant pb-2.5 mb-4">
           <h3 class="font-headline-lg text-lg uppercase leading-none">The Board</h3>
           <div id="board-status" class="flex items-center gap-2 font-data-tabular text-[10px] text-on-surface-variant uppercase tracking-widest">
@@ -3807,6 +3870,7 @@ function renderThisWeek() {
           </div>`
           : `<div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${games.map(g => renderGameCard(g)).join("")}</div>`}
       </div>
+      <div class="picks-whos">${renderWhosInWidget()}</div>
     </div>
   `;
 }
@@ -3903,6 +3967,10 @@ function switchBook(gameKey, book) {
 }
 
 function refreshMyCard() {
+  const disclosure = document.getElementById("my-card");
+  if (disclosure?.tagName === "DETAILS") disclosure.ontoggle = () => { state.myCardOpen = disclosure.open; };
+  const chips = document.getElementById("mycard-chips");
+  if (chips) chips.innerHTML = pickStatusChips(BET_TYPES_ORDER.map(bt => ({...currentMyPicks[bt], bet_type:bt})));
   const body = document.getElementById("my-card-body");
   if (body) body.innerHTML = renderMyCardBody();
   const prog = document.getElementById("mycard-progress");
@@ -4470,7 +4538,7 @@ function rerenderWarRoom() {
   if (state.view !== "warroom") return;
   const root = document.getElementById("root");
   const active = document.activeElement;
-  const focusSelector = active?.dataset.exp ? `[data-exp="${CSS.escape(active.dataset.exp)}"]` : active?.id ? `#${CSS.escape(active.id)}` : null;
+  const focusSelector = active?.dataset.exp ? `[data-exp="${CSS.escape(active.dataset.exp)}"][data-personal="${active.dataset.personal || "false"}"]` : active?.id ? `#${CSS.escape(active.id)}` : null;
   const top = root.scrollTop, windowTop = window.scrollY;
   const html = renderWarRoom();
   if (root._warRoomHtml === html) return;
@@ -4487,7 +4555,7 @@ function startWarRoomPoll() {
     if (state.view !== "warroom") { clearInterval(warRoomTimer); warRoomTimer = null; return; }
     if (document.hidden) return;
     await loadWarRoom();
-    if (state.view === "warroom") rerenderWarRoom();
+    if (state.view === "warroom") { rerenderWarRoom(); refreshPersonalLiveStats(); }
     // Keep an open game drill-down fresh (refetch past its 20s cache).
     if (state.view === "warroom" && state.wrExpandedKey) loadWrGame(state.wrExpandedKey, { force: true });
   }, 45000);
@@ -4496,7 +4564,7 @@ function attachWarRoomHandlers() {
   const btn = document.getElementById("wr-refresh");
   if (btn) btn.onclick = async () => {
     btn.disabled = true;
-    try { await loadWarRoom(); rerenderWarRoom(); }
+    try { await loadWarRoom(); rerenderWarRoom(); refreshPersonalLiveStats(); }
     finally { btn.disabled = false; }
   };
   const signin = document.getElementById("wr-signin");
@@ -4582,10 +4650,10 @@ function wrChip(p, ctx) {
   const oddsTag = (p.bet_type === "Super Lock" && p.price != null)
     ? `<span class="wr-odds">${americanOdds(p.price)}</span>` : "";
   const inner = `${btEl}
-      <span class="wr-pick">${escapeHtml(shortPickText(p.pick_text))}</span>
-      <span class="wr-sub">${oddsTag}${escapeHtml(scoreTxt)}${mark}${chev}</span>`;
+      <span class="wr-pick">${escapeHtml(ctx?.personal ? p.pick_text : shortPickText(p.pick_text))}</span>
+      <span class="wr-sub">${ctx?.personal ? "" : oddsTag + escapeHtml(scoreTxt)}${mark}${chev}</span>`;
   if (canExpand) {
-    return `<button type="button" class="wr-chip ${stateCls} expandable" data-exp="${expId}" data-key="${escapeHtml(p.game_key)}" aria-expanded="${isExp ? "true" : "false"}">${inner}</button>`;
+    return `<button type="button" class="wr-chip ${stateCls} expandable" data-exp="${expId}" data-personal="${!!ctx?.personal}" data-key="${escapeHtml(p.game_key)}" aria-expanded="${isExp ? "true" : "false"}">${inner}</button>`;
   }
   return `<div class="wr-chip ${stateCls}">${inner}</div>`;
 }
@@ -4740,14 +4808,14 @@ async function shareRecap() {
   catch { showToast("COULD NOT COPY", "err"); }
 }
 function renderWarRoomSkeleton() {
-  return `<div class="wr-wrap"><div class="wr-topbar"><div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Live board</div></div></div>
+  return `<div class="wr-wrap"><div class="wr-topbar"><div><h2 class="wr-title">Live</h2><div class="wr-sub2">Live board</div></div></div>
     <div class="wr-empty">Loading the live board...</div></div>`;
 }
 function renderWarRoom() {
   const wr = state.warRoom;
   const cur = currentNflWeekClient();
   const head = (extra) => `<div class="wr-wrap"><div class="wr-topbar">
-      <div><h2 class="wr-title">War Room</h2><div class="wr-sub2">Week ${wr?.week || cur.week || "-"} · live board</div>${wr?.revealed ? `<div class="wr-freshness">${escapeHtml(sourceAgeLabel(wr.source_updated_at, wr.stale))}</div>` : ""}</div>
+      <div><h2 class="wr-title">Live</h2><div class="wr-sub2">Week ${wr?.week || cur.week || "-"} · live board</div>${wr?.revealed ? `<div class="wr-freshness">${escapeHtml(sourceAgeLabel(wr.source_updated_at, wr.stale))}</div>` : ""}</div>
       ${extra || ""}
     </div>`;
   if (!wr) return renderWarRoomSkeleton();
@@ -4795,10 +4863,10 @@ function renderWarRoom() {
     let detail = "";
     if (state.wrExpanded && state.wrExpanded.startsWith(`${m.member_id}:`)) {
       const ep = orderedPicks.find((p) => `${m.member_id}:${p.bet_type}` === state.wrExpanded);
-      if (ep && ep.game_key) detail = wrGamePanel(ep);
+      if (ep && ep.game_key && !(isMe(m.name) && ep.kind === "pick" && !ep.final)) detail = wrGamePanel(ep);
     }
     return `
-      <div class="wr-card">
+      <div class="wr-card ${isMe(m.name) ? "row-you" : ""}">
         <div class="wr-head">
           <span class="wr-rank">${String(i + 1).padStart(2, "0")}</span>
           <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
@@ -4808,7 +4876,7 @@ function renderWarRoom() {
         ${detail}
       </div>`;
   }).join("");
-  return head(actions) + renderRecapCard(wr) + `<div class="wr-grid">${rows}</div></div>`;
+  return head(actions) + renderPersonalLive(wr) + renderRecapCard(wr) + `<h3 class="font-headline-lg text-xl uppercase mb-3">League this week</h3><p class="quiet-copy" style="margin-bottom:12px">Records marked “proj” include in-game projections.</p><div class="wr-grid">${rows}</div></div>`;
 }
 
 function updatePreseasonBanner() {
@@ -4849,7 +4917,7 @@ async function render() {
   }
   // Live season data comes from the DB; load it before views that show it.
   if ((state.view === "standings" && state.season === "2026") || state.view === "lifetime") {
-    await ensureLive2026();
+    await Promise.all([ensureLive2026(), state.view === "standings" && state.user && !state.pot ? loadPot() : Promise.resolve()]);
   }
   renderTickerWeekSelect();
   renderTicker();
@@ -4857,6 +4925,8 @@ async function render() {
   if (state.view === "standings") {
     root.innerHTML = renderStandings();
     attachStandingsHandlers();
+    const yearSelect = document.getElementById("home-year");
+    if (yearSelect) yearSelect.onchange = () => { state.season = yearSelect.value; state.expanded = null; render(); };
     bindSeasonPrep();
     refreshSeasonPrep();
     document.querySelectorAll(".year-pill").forEach(b => {
@@ -4876,6 +4946,8 @@ async function render() {
         render();
       });
     });
+  } else if (state.view === "more") {
+    root.innerHTML = `<h1 class="font-display-lg text-3xl mb-6">MORE</h1><div class="more-list">${[["payments","payments","Payments"],["lifetime","history","Lifetime"],["rules","gavel","Rules"]].map(([view,icon,label]) => `<button class="compact-panel" data-go="${view}"><span class="material-symbols-outlined">${icon}</span>${label}</button>`).join("")}<button class="compact-panel" data-account>Account &amp; notifications</button></div>`;
   } else if (state.view === "rules") {
     root.innerHTML = renderRules();
   } else if (state.view === "warroom") {
@@ -4885,6 +4957,7 @@ async function render() {
     root.innerHTML = renderWarRoom();
     attachWarRoomHandlers();
     startWarRoomPoll();
+    refreshPersonalLiveStats();
   } else if (state.view === "thisweek") {
     const cur = currentNflWeekClient();
     const curWeek = cur.week || 1;
@@ -5026,6 +5099,11 @@ function attachStandingsHandlers() {
   }).observe(document.body, { childList: true, subtree: true });
 })();
 
+document.addEventListener("click", e => {
+  const go = e.target.closest("[data-go]");
+  if (go) { state.view = go.dataset.go; state.expanded = null; render(); }
+  if (e.target.closest("[data-account]")) { if (state.user) openAccount(); else openLogin(); }
+});
 // Nav click handlers
 document.querySelectorAll(".nav-link[data-view]").forEach(btn => {
   btn.addEventListener("click", () => {
