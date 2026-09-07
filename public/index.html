@@ -4529,12 +4529,12 @@ function wrPropTrack(p, d) {
   const stat = matches.length === 1 ? matches[0].markets?.[p.prop.market] : null;
   if (!stat || !Number.isFinite(stat.actual)) return "Selected player stats not available yet";
   const actual = stat.actual, line = Number(p.prop.line);
-  const prefix = d.state === "post" ? "Final stats" : "Live progress";
+  const prefix = d.stats_final ? "Final stats" : "Live progress";
   if (p.prop.market === "anytime_td") return `${prefix} · ${actual > 0 ? "touchdown recorded" : "no touchdown recorded"}`;
   if (!Number.isFinite(line)) return `${prefix} · ${actual} ${stat.unit}`;
   const over = p.prop.side !== "under";
   const progress = actual === line ? "on the number" : (over ? actual > line : actual < line) ? "ahead of target" : over ? `needs ${Math.max(1, Math.floor(line - actual) + 1)} more` : "over the limit";
-  return `${prefix} · ${actual} ${stat.unit} · ${d.state === "post" ? "locked target " + (over ? "over " : "under ") + line : progress}`;
+  return `${prefix} · ${actual} ${stat.unit} · ${d.stats_final ? "locked target " + (over ? "over " : "under ") + line : progress}`;
 }
 function wrPickTrack(p, d) {
   if (!d || !d.away || d.away.score == null || d.home.score == null) return "";

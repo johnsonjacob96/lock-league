@@ -70,12 +70,14 @@ export async function onRequest({ request, env }) {
     if (!ev) return json({ found: false, key });
 
     const gameLive = ev.state === "in" || ev.state === "post";
-    let leaders = [], situation = null, lastPlay = null, players = [], statsUpdatedAt = null;
+    let leaders = [], situation = null, lastPlay = null, players = [], statsUpdatedAt = null, statsFinal = false;
     if (gameLive && ev.id) {
       const gp = await espnSummary(ev.id, env).catch(() => null);
       if (gp) {
         leaders = parseLeaders(gp);
         statsUpdatedAt = gp.source_updated_at || null;
+        const summaryStatus = gp.header?.competitions?.[0]?.status?.type;
+        statsFinal = gp._seedFinal === true || summaryStatus?.completed === true || summaryStatus?.state === "post";
         players = parsePlayerProgress(gp);
         const sit = gp.situation || gp.header?.competitions?.[0]?.situation;
         situation = sit?.downDistanceText || null;
@@ -88,7 +90,7 @@ export async function onRequest({ request, env }) {
       kickoff: ev.kickoff || null,
       away: { name: ev.away, score: ev.away_score },
       home: { name: ev.home, score: ev.home_score },
-      leaders, situation, lastPlay, players, stats_updated_at: statsUpdatedAt,
+      leaders, situation, lastPlay, players, stats_updated_at: statsUpdatedAt, stats_final: statsFinal,
       source_updated_at: ev.source_updated_at || null,
       fetched_at: new Date().toISOString(),
     };
