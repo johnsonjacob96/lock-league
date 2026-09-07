@@ -1026,6 +1026,19 @@
   .wr-topbar { margin-bottom:12px; }
   @media (max-width:767px) { .bottom-nav-link { padding:6px 0 2px; min-height:48px; } }
 
+
+  .personal-live-card { padding:12px; }
+  .personal-live-card .personal-score { margin:8px 0; }
+  .personal-live-card .personal-team { font-size:21px; }
+  .personal-live-card .personal-team img { width:30px; height:30px; }
+  .personal-live-card .pick-progress { margin-top:8px; }
+  .personal-live-card .pick-progress-label { margin-top:5px; }
+  .personal-live-grid { gap:10px; }
+  .slip-selection { display:flex; align-items:center; gap:10px; }
+  .slip-selection .wr-chip { flex:1; min-width:0; }
+  .slip-player-photo { width:48px; height:48px; object-fit:contain; flex-shrink:0; border-radius:8px; background:#222827; }
+  .slip-player-photo[hidden] { display:none; }
+
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -2117,8 +2130,12 @@ function renderPersonalLive(wr) {
     // same deduplicated game-detail cache as the expandable league cards.
     const track = p.prop?.market ? (cached?.found ? wrPropTrack(p,cached) : cached ? "Player stats not available yet" : "Player stats loading…") : wrPickTrack(p,d);
     const scoreHtml = score ? `<div class="personal-score"><div class="personal-team">${teamLogoMark(score.away,"w-9 h-9","quiet-copy")}<div><small>${escapeHtml(teamShort(score.away))}</small>${score.away_score ?? "–"}</div></div><span class="quiet-copy">${escapeHtml(p.detail || (p.state === "in" ? "Live" : "Awaiting grade"))}</span><div class="personal-team"><div><small>${escapeHtml(teamShort(score.home))}</small>${score.home_score ?? "–"}</div>${teamLogoMark(score.home,"w-9 h-9","quiet-copy")}</div></div>` : "";
+    const normalizedPlayer = value => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const playerMatches = p.prop?.player ? (cached?.players || []).filter(x => normalizedPlayer(x.name) === normalizedPlayer(p.prop.player)) : [];
+    const photoUrl = playerMatches.length === 1 ? playerMatches[0].headshot : null;
+    const photo = typeof photoUrl === "string" && /^https:\/\/([a-z0-9-]+\.)*espncdn\.com\//i.test(photoUrl) ? `<img class="slip-player-photo" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(p.prop.player)}" loading="lazy" onerror="this.hidden=true">` : "";
     const expanded = state.wrExpanded === `${me.member_id}:${p.bet_type}`;
-    return `<article class="personal-live-card">${wrChip(p,{...me,personal:true})}<p class="quiet-copy">${escapeHtml(bookLabel(p.book))}${p.price != null ? " · " + americanOdds(p.price) : " · Odds unavailable"}</p>${scoreHtml}${track ? `<p class="quiet-copy">${escapeHtml(track)}</p>` : ""}${liveProgressBar(p,cached?.found ? cached : d)}${p.prop?.market && cached?.found ? `<p class="quiet-copy">Stats: ${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</p>` : ""}${expanded ? wrGamePanel(p) : ""}</article>`;
+    return `<article class="personal-live-card"><div class="slip-selection">${photo}${wrChip(p,{...me,personal:true})}</div><p class="quiet-copy">${escapeHtml(bookLabel(p.book))}${p.price != null ? " · " + americanOdds(p.price) : " · Odds unavailable"}</p>${scoreHtml}${track ? `<p class="quiet-copy">${escapeHtml(track)}</p>` : ""}${liveProgressBar(p,cached?.found ? cached : d)}${p.prop?.market && cached?.found ? `<p class="quiet-copy">Stats: ${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</p>` : ""}${expanded ? wrGamePanel(p) : ""}</article>`;
   }).join("");
   const selector = `<div class="live-view-control"><label for="live-member">${comparing ? escapeHtml(me.name) + "’s card" : "My Card"}</label><select id="live-member" aria-label="Track a participant">${(wr.members || []).map(m => `<option value="${m.member_id}" ${m === me ? "selected" : ""}>${escapeHtml(m.name)}${isMe(m.name) ? " (You)" : ""}</option>`).join("")}</select></div>`;
   const ownUnits = own ? liveMemberSummary(own,wr.season || 2026) : null;

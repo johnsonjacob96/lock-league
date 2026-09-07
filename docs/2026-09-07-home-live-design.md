@@ -34,3 +34,5 @@ Live now includes target-marked measured progress bars for totals, spreads, and 
 250 logic/browser checks passed; expanded four-width preview fixtures verify champion restoration, comparison selection, and zero extra bottom navigation padding. Native iPhone positioning still requires observation on a physical device; browser checks verify the removed padding.
 
 Updated illustrative snapshots: [Live](previews/2026-09-07/polish/live.png), [Compare](previews/2026-09-07/polish/compare.png), [Champion](previews/2026-09-07/polish/champion.png).
+
+Final refinement: thinner Live slips include ESPN-provided player headshots alongside existing score/clock and progress. Photos come from the same boxscore athletes used for stats, are limited to HTTPS ESPN CDN URLs, and disappear cleanly when unavailable. Verified headshot shape against an actual ESPN boxscore. No new provider or per-player API polling. Final validation: 72 backend tests, 250 logic/browser checks, and four-width preview generation passed.
