@@ -41,11 +41,12 @@ const { pickCutoff, currentNflWeek, weeksToGrade, SEASON_2026_KICKOFF } = await 
 const bcrypt = (await import('bcryptjs')).default;
 const env = { SESSION_SECRET: 'test-only-session-secret' };
 let cookie, oddsDown = false, propsDown = false;
-let fetchCalls = 0;
+let fetchCalls = 0, oddsCalls = 0, oddsFailAfter = Infinity;
 const liveGames = events.map(e => ({ ...e, books: { fanduel: { spread: { fav: e.home, line: -3.5, favPrice: -110, dogPrice: -110 }, total: { point: 44.5, overPrice: -110, underPrice: -110 } } } }));
 mock.method(globalThis, 'fetch', async url => {
  fetchCalls++;
  const props = String(url).includes('/api/props');
+ if (!props && oddsCalls++ >= oddsFailAfter) throw new Error('provider unavailable');
  if (props ? propsDown : oddsDown) throw new Error('provider unavailable');
  return Response.json(props ? {markets:[{ market:'receptions', kind:'ou', players:[{player:'Test Receiver',line:3.5,fanduel:{line:3.5,over:110,under:-110},alts:[]}]}]} : { source: 'sharpapi', games: liveGames });
 });
@@ -66,7 +67,8 @@ before(async()=>{
 beforeEach(async()=>{
  mock.timers.reset(); mock.timers.enable({apis:['Date'],now:Date.parse('2026-09-11T12:00:00Z')});
  cookie=`ll_session=${await sign(env,'1')}`;
- await db.exec('DELETE FROM picks'); oddsDown=false; propsDown=false; board=events; fetchCalls=0; beforeWrite=null; statements=[];
+ await db.exec('DELETE FROM picks'); oddsDown=false; propsDown=false; board=events; fetchCalls=0; oddsCalls=0; oddsFailAfter=Infinity; beforeWrite=null; statements=[];
+ await db.exec('DROP TABLE IF EXISTS odds_snapshot');
 });
 after(async()=>{mock.timers.reset();await db.close();});
 
@@ -100,6 +102,36 @@ test('provider outage cannot accept fabricated ordinary or Super Lock lines',asy
  assert.equal((await request({season:2026,week:1,picks:[{bet_type:'Super Lock',line_pick:{...pick(),bet:'Favorite'}}]})).status,503);
  propsDown=true;assert.equal((await request({season:2026,week:1,picks:[{bet_type:'Super Lock',prop:{market:'receptions',player:'Test Receiver',side:'over',line:null,game_key:key(1)}}]})).status,503);
  assert.equal((await db.query('SELECT * FROM picks')).rows.length,0);
+});
+test('kickoff guard reuses the board the line check already fetched',async()=>{
+ // ESPN is unreachable from the colo (the normal production case) and the odds
+ // board answers once — the line check — then goes cold. Re-fetching it for the
+ // kickoff guard is what used to 503 with "Can't verify game times right now"
+ // while the picker was looking at a perfectly good board.
+ // Past the isolate's 60s scoreboard cache, so the guard really re-derives.
+ mock.timers.setTime(Date.parse('2026-09-11T12:02:00Z'));
+ board=[]; oddsFailAfter=1;
+ assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,200);
+ assert.equal(Number((await db.query('SELECT line FROM picks')).rows[0].line),-3.5);
+});
+test('kickoff guard falls back to the stored board, and fails closed without one',async()=>{
+ // Nothing upstream is reachable: no ESPN, no live odds. A free-text Super Lock
+ // needs no line check, so the guard is on its own — Neon's last-good board
+ // still carries the kickoffs it needs.
+ mock.timers.setTime(Date.parse('2026-09-11T12:04:00Z'));
+ board=[]; oddsDown=true;
+ const superLock={season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text:'Someone over 40.5 rushing yards',price:-110,game_key:key(1)}]};
+ const closed=await request(superLock);
+ assert.equal(closed.status,503); assert.equal(closed.body.error,'scoreboard-unavailable');
+ assert.equal((await db.query('SELECT * FROM picks')).rows.length,0);
+ await db.exec('CREATE TABLE odds_snapshot(id INT PRIMARY KEY, payload JSONB NOT NULL, fetched_at TIMESTAMPTZ DEFAULT NOW())');
+ await db.query('INSERT INTO odds_snapshot(id,payload) VALUES(1,$1::jsonb)',[JSON.stringify({source:'sharpapi',games:liveGames})]);
+ assert.equal((await request(superLock)).status,200);
+ // A Monday game is still refused off the stored board, and a game it doesn't
+ // carry still fails closed rather than slipping past the guard unverified.
+ assert.equal((await request({season:2026,week:1,picks:[{...superLock.picks[0],game_key:key(2)}]})).body.error,'monday-not-allowed');
+ const missing=await request({season:2026,week:1,picks:[{...superLock.picks[0],game_key:'Green Bay Packers@Chicago Bears'}]});
+ assert.equal(missing.status,503); assert.equal(missing.body.reason,'unknown-kickoff');
 });
 test('Monday game rejected in Central time',async()=>{assert.equal((await request({season:2026,week:1,picks:[pick('Favorite',2)]})).body.error,'monday-not-allowed');});
 test('unknown game rejected',async()=>{assert.equal((await request({season:2026,week:1,picks:[{...pick(),game_key:'Unknown@Unknown'}]})).status,422);});
