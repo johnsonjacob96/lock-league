@@ -1154,6 +1154,28 @@
       <button class="btn ghost" id="login-cancel">Cancel</button>
     </div>
     <div class="modal-err" id="login-err"></div>
+    <button class="w-full mt-5 font-data-tabular text-[11px] tracking-widest uppercase text-on-surface-variant hover:text-primary-fixed transition-colors text-center" id="login-forgot">Forgot password?</button>
+  </div>
+</div>
+
+<!-- Password reset modal (code by push, or from the commissioner) -->
+<div class="modal-backdrop" id="reset-modal">
+  <div class="modal">
+    <h3 class="font-display-lg text-2xl text-primary-fixed mb-1 uppercase">Reset Password</h3>
+    <div class="font-data-tabular text-[10px] tracking-widest text-on-surface-variant mb-6 uppercase">One-time code</div>
+    <label>Member</label>
+    <select id="reset-name"></select>
+    <button class="btn w-full mt-3" id="reset-send">Send a code to my devices</button>
+    <div class="font-data-tabular text-[10px] tracking-wide text-on-surface-variant mt-2 mb-4" id="reset-status">Notifications must be on for this device. No devices? Ask the commissioner for a code.</div>
+    <label>Code</label>
+    <input id="reset-code" type="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX">
+    <label>New password (min 8 characters)</label>
+    <input id="reset-next" type="password" autocomplete="new-password" placeholder="New password">
+    <div class="flex gap-3 mt-2">
+      <button class="btn" id="reset-submit">Set Password</button>
+      <button class="btn ghost" id="reset-cancel">Cancel</button>
+    </div>
+    <div class="modal-err" id="reset-err"></div>
   </div>
 </div>
 
@@ -1197,6 +1219,14 @@
     <div class="flex gap-3 mt-2">
       <button class="btn" id="acct-save">Update</button>
       <button class="btn ghost" id="acct-cancel">Close</button>
+    </div>
+    <div id="acct-admin" class="mt-5 pt-5 border-t border-outline-variant" style="display:none">
+      <label>Issue a reset code (commissioner)</label>
+      <div class="flex gap-2">
+        <select id="admin-reset-name" class="flex-1"></select>
+        <button class="btn" id="admin-reset-go">Issue</button>
+      </div>
+      <div class="font-data-tabular text-[11px] tracking-wide text-on-surface-variant mt-2" id="admin-reset-out">Text the code to them — it works once and expires in 20 minutes.</div>
     </div>
     <button class="w-full mt-5 font-data-tabular text-[11px] tracking-widest uppercase text-on-surface-variant hover:text-live-red transition-colors text-center" id="acct-logout">Sign Out</button>
     <div class="modal-err" id="acct-err"></div>
@@ -2872,6 +2902,94 @@ function openLogin() {
   setTimeout(() => document.getElementById("login-pass").focus(), 50);
 }
 
+// ---- Password reset (code by push, or relayed by the commissioner) ----
+function openReset(name) {
+  const sel = document.getElementById("reset-name");
+  sel.innerHTML = MEMBERS_ALL.map(n => `<option>${n}</option>`).join("");
+  if (name) sel.value = name;
+  document.getElementById("reset-code").value = "";
+  document.getElementById("reset-next").value = "";
+  document.getElementById("reset-err").textContent = "";
+  document.getElementById("reset-status").textContent = "Notifications must be on for this device. No devices? Ask the commissioner for a code.";
+  document.getElementById("login-pass").blur();
+  document.getElementById("login-modal").classList.remove("show");
+  document.getElementById("reset-modal").classList.add("show");
+}
+function closeReset() {
+  document.getElementById("reset-code").blur();
+  document.getElementById("reset-next").blur();
+  document.getElementById("reset-modal").classList.remove("show");
+}
+async function sendResetCode() {
+  const btn = document.getElementById("reset-send");
+  const status = document.getElementById("reset-status");
+  const name = document.getElementById("reset-name").value;
+  btn.disabled = true;
+  status.textContent = "Sending…";
+  try {
+    const r = await fetch("/api/auth?action=reset-request", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const j = await r.json();
+    if (r.status === 429) status.textContent = "A code just went out. Wait a minute before asking for another.";
+    else if (!r.ok) status.textContent = "Couldn't send a code. Ask the commissioner for one.";
+    else if (j.channel === "none") status.textContent = "No devices signed up for notifications — ask the commissioner to text you a code.";
+    else status.textContent = `Code sent to ${j.devices} device${j.devices === 1 ? "" : "s"}. It expires in ${j.expires_in_minutes} minutes.`;
+  } catch { status.textContent = "Network error."; }
+  btn.disabled = false;
+}
+async function submitReset() {
+  const name = document.getElementById("reset-name").value;
+  const code = document.getElementById("reset-code").value.trim();
+  const next = document.getElementById("reset-next").value;
+  const err = document.getElementById("reset-err");
+  err.textContent = "";
+  if (!code || !next) { err.textContent = "Code and new password are both required."; return; }
+  if (next.length < 8) { err.textContent = "New password must be at least 8 characters."; return; }
+  try {
+    const r = await fetch("/api/auth?action=reset-confirm", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, code, next }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      err.textContent = j.error === "bad-code" ? `That code isn't right.${Number.isFinite(j.attempts_left) ? ` ${j.attempts_left} tries left.` : ""}`
+        : j.error === "no-code" ? "No live code for that member. Send yourself one, or ask the commissioner."
+        : j.error === "too-many" ? "Too many wrong tries. Get a new code."
+        : j.error === "too-short" ? "New password must be at least 8 characters."
+        : "Reset failed.";
+      return;
+    }
+    state.user = j.member;
+    live2026Promise = null; // pick visibility depends on who's signed in
+    closeReset();
+    render();
+    showToast("PASSWORD RESET");
+    scrollAppToTop(); requestAnimationFrame(scrollAppToTop); setTimeout(scrollAppToTop, 250);
+  } catch (e) { err.textContent = "Network error: " + e.message; }
+}
+async function adminIssueReset() {
+  const btn = document.getElementById("admin-reset-go");
+  const out = document.getElementById("admin-reset-out");
+  const name = document.getElementById("admin-reset-name").value;
+  btn.disabled = true;
+  out.textContent = "Issuing…";
+  try {
+    const r = await fetch("/api/auth?action=reset-issue", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const j = await r.json();
+    out.textContent = r.ok
+      ? `${name}: ${j.code} — good for ${j.expires_in_minutes} minutes, one use.`
+      : j.error === "not-admin" ? "Only a commissioner can issue reset codes." : "Couldn't issue a code.";
+  } catch { out.textContent = "Network error."; }
+  btn.disabled = false;
+}
+
 function openAccount() {
   if (!state.user) { openLogin(); return; }
   document.getElementById("account-name").textContent = `${state.user.name} · Lock League Member`;
@@ -2882,6 +3000,13 @@ function openAccount() {
   const vstatus = document.getElementById("acct-venmo-status");
   venmo.value = state.settlement?.me?.venmo_handle || "";
   vstatus.textContent = "";
+  const adminBox = document.getElementById("acct-admin");
+  adminBox.style.display = state.user.is_admin ? "" : "none";
+  if (state.user.is_admin) {
+    document.getElementById("admin-reset-name").innerHTML =
+      MEMBERS_ALL.filter(n => n !== state.user.name).map(n => `<option>${n}</option>`).join("");
+    document.getElementById("admin-reset-out").textContent = "Text the code to them — it works once and expires in 20 minutes.";
+  }
   document.getElementById("account-modal").classList.add("show");
   refreshNotifUI();
   // Backfill the handle if the ledger hasn't loaded yet this session.
@@ -5376,6 +5501,12 @@ document.getElementById("sidebar-submit-picks").addEventListener("click", () => 
 document.getElementById("login-submit").onclick = loginSubmit;
 document.getElementById("login-cancel").onclick = () => { document.getElementById("login-pass").blur(); document.getElementById("login-modal").classList.remove("show"); };
 document.getElementById("login-pass").addEventListener("keydown", e => { if (e.key === "Enter") loginSubmit(); });
+document.getElementById("login-forgot").onclick = () => openReset(document.getElementById("login-name").value);
+document.getElementById("reset-send").onclick = sendResetCode;
+document.getElementById("reset-submit").onclick = submitReset;
+document.getElementById("reset-cancel").onclick = closeReset;
+document.getElementById("reset-next").addEventListener("keydown", e => { if (e.key === "Enter") submitReset(); });
+document.getElementById("admin-reset-go").onclick = adminIssueReset;
 
 // iOS leaves position:fixed bars (our bottom nav) pinned to the shrunk
 // on-screen-keyboard viewport after any text field closes, so the nav can float
