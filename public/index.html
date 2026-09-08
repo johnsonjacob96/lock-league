@@ -607,6 +607,13 @@
   .slot .lp-book, .sl-locked .lp-book { font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; color:#9aa4a2; border:1px solid #2c332f; border-radius:4px; padding:1px 5px; }
   .slot .lp-ts, .sl-locked .lp-ts { font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:0.03em; color:#868f8c; }
   .slot .lp-odds, .sl-locked .lp-odds { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; letter-spacing:0.02em; color:#f4cf5a; }
+  /* Clear a slot straight from the card. Only rendered while the pick is still
+     editable, so its presence is itself the "you can still change this" signal. */
+  .slot .slot-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .slot .slot-drop { display:flex; align-items:center; justify-content:center; width:28px; height:28px; padding:0; border-radius:7px; background:transparent; border:1px solid #2c332f; color:#868f8c; cursor:pointer; transition: color 0.14s, border-color 0.14s, background 0.14s; }
+  .slot .slot-drop .material-symbols-outlined { font-size:16px; }
+  .slot .slot-drop:hover, .slot .slot-drop:focus-visible { color:#ff6b6b; border-color:#5c2b2b; background:#1d1516; }
+  .slot .slot-drop[disabled] { opacity:0.5; cursor:progress; }
   /* Picks-tab sidebar: it's a sticky column (top-16). When My Card + Super Lock
      picker grows taller than the viewport, a plain sticky pins the top and leaves
      the lower half unreachable until the games column ends (feels like it "stops
@@ -3478,9 +3485,25 @@ function renderMyCardBody() {
           ? `<div class="slot-val">${txt}</div>${metaHtml}${moveHtml}`
           : `<div class="slot-empty">${isSuper ? "Enter it below ↓" : "Tap a line below"}</div>`}
       </div>
-      ${filled ? `<span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};font-variation-settings:'FILL' 1">check_circle</span>` : ""}
+      ${filled ? `<div class="slot-actions">
+        ${removablePick(bt, p) ? `<button class="slot-drop" data-drop="${bt}" title="Remove this pick" aria-label="Remove ${bt} pick"><span class="material-symbols-outlined">close</span></button>` : ""}
+        <span class="material-symbols-outlined" style="font-size:18px;color:${meta.color};font-variation-settings:'FILL' 1">check_circle</span>
+      </div>` : ""}
     </div>`;
   }).join("");
+}
+
+// A pick can be dropped from the card until it locks: the week's cutoff, or its
+// own game's kickoff for the games that start before it. A pick whose game the
+// board doesn't carry (a leftover from a dry run) stays removable — that row is
+// exactly what needs clearing, and the server has the final say either way.
+function removablePick(bet_type, p) {
+  if (!p || !(p.pick_text || p.text)) return false;
+  const cutoff = state.serverConfig?.cutoff;
+  if (cutoff && Date.now() >= Date.parse(cutoff)) return false;
+  const g = (state.thisWeekData?.games || []).find(x => `${x.away}@${x.home}` === p.game_key);
+  const kickoff = g ? Date.parse(g.kickoff) : NaN;
+  return !(Number.isFinite(kickoff) && Date.now() >= kickoff);
 }
 
 // Super Lock entry + grade live in My Card (no separate picks tab). Kept out of
@@ -4151,7 +4174,7 @@ function refreshMyCard() {
   const chips = document.getElementById("mycard-chips");
   if (chips) chips.innerHTML = pickStatusChips(BET_TYPES_ORDER.map(bt => ({...currentMyPicks[bt], bet_type:bt})));
   const body = document.getElementById("my-card-body");
-  if (body) body.innerHTML = renderMyCardBody();
+  if (body) { body.innerHTML = renderMyCardBody(); bindMyCardDrops(); }
   const prog = document.getElementById("mycard-progress");
   if (prog) prog.textContent = myCardProgress();
 }
@@ -4417,8 +4440,10 @@ async function clickPickButton(btn) {
   }
 }
 
-async function unpick(btn, bet_type, season, week) {
-  btn.classList.add("saving");
+// Drop one slot. Shared by the board (tapping the line you already have) and
+// the card's own remove button, so both paths clear the same state and the
+// board's "picked" highlight can never survive a removal made from the card.
+async function dropPick(bet_type, season, week) {
   try {
     const r = await fetch("/api/picks?action=remove", {
       method: "POST",
@@ -4428,18 +4453,44 @@ async function unpick(btn, bet_type, season, week) {
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-      showToast(j.error === "locked" ? "PICKS LOCKED FOR THIS WEEK" : j.detail || ("ERROR: " + (j.error || "unknown")), "err");
-    } else {
-      btn.classList.remove("picked");
-      delete currentMyPicks[bet_type];
-      refreshMyCard();
-      showToast(`REMOVED ${BET_META[bet_type].short}`, "warn");
+      showToast(j.error === "locked" ? "PICKS LOCKED FOR THIS WEEK"
+        : j.error === "game-started" ? "GAME STARTED, PICK LOCKED"
+        : j.detail || ("ERROR: " + (j.error || "unknown")), "err");
+      return false;
     }
+    document.querySelectorAll(`.pick-btn[data-bet="${bet_type}"]`).forEach(b => b.classList.remove("picked"));
+    delete currentMyPicks[bet_type];
+    refreshMyCard();
+    showToast(`REMOVED ${BET_META[bet_type].short}`, "warn");
+    return true;
   } catch (e) {
     showToast("NETWORK ERROR", "err");
+    return false;
+  }
+}
+
+async function unpick(btn, bet_type, season, week) {
+  btn.classList.add("saving");
+  try {
+    await dropPick(bet_type, season, week);
   } finally {
     btn.classList.remove("saving");
   }
+}
+
+// Remove buttons on My Card's own rows, so a slot can be cleared without
+// hunting for its game on the board — the only way to clear a pick whose game
+// isn't on the board at all.
+function bindMyCardDrops() {
+  document.querySelectorAll("#my-card-body .slot-drop").forEach(btn => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      await dropPick(btn.dataset.drop, 2026, myCardWeek());
+      // refreshMyCard() re-renders the row on success; re-enable for the
+      // failure path, where this button is still on screen.
+      if (document.body.contains(btn)) btn.disabled = false;
+    };
+  });
 }
 
 // =================== My Card data + Who's In ===================

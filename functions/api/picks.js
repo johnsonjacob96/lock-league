@@ -164,21 +164,28 @@ export function deriveProp(markets, prop) { // exported for tests; CF ignores no
 // Neon. Only when ALL THREE are unavailable do we have no kickoff to verify
 // against — the caller then fails closed (503). Fetched once and shared by both
 // guards within the request.
+//
+// `complete` says whether the board is the WHOLE week's slate. The ESPN
+// scoreboard (live or seeded) lists every game including the ones already
+// kicked off, so a game missing from it is not part of this week at all. The
+// betting board is pregame-only — a game can drop off it precisely because it
+// started — so absence there proves nothing. Callers need that difference to
+// tell stale data from a game they simply can't see (see the submit guard).
 async function boardEvents(season, week, seasontype, env, request, liveOdds = null) {
   try {
     const events = await scoreboardFor(season, week, seasontype, env);
     if (!events.length) throw new Error("empty-board");
-    return events;
+    return { events, complete: true };
   } catch {
     // Reuse the board this request already fetched for the line check when there
     // is one — a second same-origin call can miss the warm caches the first one
     // hit and go all the way upstream, which is exactly when it runs out of time.
     const games = (liveOdds ? await liveOdds() : null) || await fetchLiveOdds(request);
     if (games && games.length) {
-      return games.map(g => ({ away: g.away, home: g.home, kickoff: g.kickoff }));
+      return { events: games.map(g => ({ away: g.away, home: g.home, kickoff: g.kickoff })), complete: false };
     }
     const snapshot = await snapshotEvents(env);
-    if (snapshot && snapshot.length) return snapshot;
+    if (snapshot && snapshot.length) return { events: snapshot, complete: false };
     throw new Error("no-board"); // no ESPN, no live odds, no stored board
   }
 }
@@ -239,6 +246,23 @@ export function unverifiedGame(picks, events) {
     const [a, h] = String(p.game_key).split("@");
     return sameTeam(e.away, a) && sameTeam(e.home, h) && Number.isFinite(Date.parse(e.kickoff));
   }));
+}
+
+// The same question for a pick that is ALREADY on the card and is being replaced
+// or removed. It only has to hold its slot while we genuinely can't tell whether
+// its game is under way. A game missing from the COMPLETE week slate is stale
+// data — a leftover from a dry run, a re-seeded week — not a game in progress,
+// so it must not lock a member out of their own slot forever. Everything else
+// unverifiable still does: absence from a pregame-only board proves nothing (a
+// game drops off it exactly when it starts), and a game that IS on the slate
+// without a usable kickoff is unverified in the ordinary sense.
+export function unverifiedExisting(picks, events, complete) { // exported for smoke tests
+  return picks.find(p => {
+    if (!p.game_key) return false;
+    const [a, h] = String(p.game_key).split("@");
+    const ev = events.find(e => sameTeam(e.away, a) && sameTeam(e.home, h));
+    return ev ? !Number.isFinite(Date.parse(ev.kickoff)) : !complete;
+  });
 }
 
 export function validPickPeriod(season, week, env) {
@@ -326,12 +350,18 @@ export async function onRequest({ request, env }) {
     if (existing?.game_key) {
       let started;
       try {
-        const events = await boardEvents(season, week, seasonTypeFor(env), env, request);
-        if (unverifiedGame([existing], events)) throw new Error("unknown-kickoff");
-        removeKickoff = events.find(e => sameTeam(e.away, existing.game_key.split("@")[0]) && sameTeam(e.home, existing.game_key.split("@")[1])).kickoff;
-        started = findStartedGame([existing], events);
-      } catch {
-        return json({ error: "scoreboard-unavailable", detail: "Can't verify game time right now — try again shortly." }, { status: 503 });
+        const { events, complete } = await boardEvents(season, week, seasonTypeFor(env), env, request);
+        if (unverifiedExisting([existing], events, complete)) throw new Error("unknown-kickoff");
+        // Absent from a complete slate: a stale row, so no kickoff deadline
+        // applies to clearing it (the DELETE below treats NULL as "no deadline").
+        const ev = events.find(e => sameTeam(e.away, existing.game_key.split("@")[0]) && sameTeam(e.home, existing.game_key.split("@")[1]));
+        if (ev) {
+          removeKickoff = ev.kickoff;
+          started = findStartedGame([existing], events);
+        }
+      } catch (e) {
+        return json({ error: "scoreboard-unavailable", reason: String(e?.message || "no-board"),
+          detail: "Can't verify game time right now — try again shortly." }, { status: 503 });
       }
       if (started) return json({ error: "game-started", ...started }, { status: 423 });
     }
@@ -514,8 +544,11 @@ export async function onRequest({ request, env }) {
     if (replacing.some(p => p.result != null)) return json({ error: "pick-graded" }, { status: 423 });
     let started, monday, verifiedEvents;
     try {
-      const events = await boardEvents(season, week, seasonTypeFor(env), env, request, liveOdds);
-      const unverified = unverifiedGame([...picks, ...replacing], events);
+      const { events, complete } = await boardEvents(season, week, seasonTypeFor(env), env, request, liveOdds);
+      // The picks being MADE must always be verifiable — that guard is the point.
+      // The picks being REPLACED get the looser rule (see unverifiedExisting),
+      // so a stale row can't hold its slot hostage.
+      const unverified = unverifiedGame(picks, events) || unverifiedExisting(replacing, events, complete);
       if (unverified) throw Object.assign(new Error("unknown-kickoff"), { game_key: unverified.game_key });
       verifiedEvents = events;
       started = findStartedGame([...picks, ...replacing], events);
@@ -538,10 +571,14 @@ export async function onRequest({ request, env }) {
     const s = sql(env);
     const incoming = picks.map(p => {
       const old = replacing.find(x => x.bet_type === p.bet_type);
+      // Null for a game the week's slate doesn't carry: the row being replaced
+      // is stale, so it imposes no kickoff deadline (the SQL guard below treats
+      // a NULL kickoff as "no deadline"). Incoming picks are always on the board
+      // by here, so this only ever goes null for `old`.
       const kickoff = key => {
         if (!key) return null;
         const [a, h] = key.split("@");
-        return verifiedEvents.find(e => sameTeam(e.away, a) && sameTeam(e.home, h)).kickoff;
+        return verifiedEvents.find(e => sameTeam(e.away, a) && sameTeam(e.home, h))?.kickoff ?? null;
       };
       return { ...p, prop_meta: p.prop || null, expected_locked_at: old?.locked_at || null,
         existed: !!old, kickoff: kickoff(p.game_key), old_kickoff: kickoff(old?.game_key) };
