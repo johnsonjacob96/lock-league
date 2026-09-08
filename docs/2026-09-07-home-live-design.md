@@ -36,3 +36,9 @@ Live now includes target-marked measured progress bars for totals, spreads, and 
 Updated illustrative snapshots: [Live](previews/2026-09-07/polish/live.png), [Compare](previews/2026-09-07/polish/compare.png), [Champion](previews/2026-09-07/polish/champion.png).
 
 Final refinement: thinner Live slips include ESPN-provided player headshots alongside existing score/clock and progress. Photos come from the same boxscore athletes used for stats, are limited to HTTPS ESPN CDN URLs, and disappear cleanly when unavailable. Verified headshot shape against an actual ESPN boxscore. No new provider or per-player API polling. Final validation: 72 backend tests, 250 logic/browser checks, and four-width preview generation passed.
+
+## Live leaderboard priority
+
+Owner clarified that units are a secondary fun stat. Removed units from Live's own/participant summaries and comparison anchor; season/lifetime units remain available. A weekly leaderboard now leads Live, with current W/L/P, open slots, shared ranks for ties, top three plus the viewer, and an expand-all control. Tapping a row opens that member's slips and retains the viewer's comparison summary. Current in-game records are explicitly projections. Uses the existing War Room poll; no extra endpoint or subscription.
+
+259 logic/browser checks passed. Four-width browser previews verify full roster expansion and keyboard activation of a member row, along with existing layout checks. [Rendered leaderboard snapshot](previews/2026-09-07/leaderboard.png) uses illustrative Sunday data.

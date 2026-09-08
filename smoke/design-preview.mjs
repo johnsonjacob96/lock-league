@@ -26,8 +26,9 @@ for(const width of [375,390,844,1440]){
  const game={away:'Chicago Bears',home:'Carolina Panthers',kickoff:'2026-09-13T17:00Z',books:{fanduel:{updated:new Date().toISOString(),spread:{fav:'Carolina Panthers',line:-2.5,favPrice:-110,dogPrice:-110},total:{point:47.5,overPrice:-102,underPrice:-120}},draftkings:{updated:new Date().toISOString(),spread:{fav:'Carolina Panthers',line:-3,favPrice:-110,dogPrice:-110},total:{point:46.5,overPrice:-118,underPrice:-102}}}};
  state.thisWeekData={games:[game,{...game,away:'Dallas Cowboys',home:'Philadelphia Eagles',kickoff:'2026-09-13T20:25Z'}],source:'sharpapi',fetched_at:new Date().toISOString()};
  currentMyPicks=Object.fromEntries(rows.filter(p=>p.member_name==='Jacob').slice(0,3).map(p=>[p.bet_type,p]));
- const members=names.map((name,i)=>({member_id:i+1,name,live:{W:3,L:1,P:0,fW:2,fL:1,fP:0,pending:1},picks:BET_TYPES_ORDER.map((bt,j)=>({bet_type:bt,kind:'pick',pick_text:rows[i*5+j].pick_text,price:rows[i*5+j].price,book:'fanduel',status:j===1?'lose':j<3?'win':'pending',final:j<3,state:j<3?'post':'in',game_key:j===4?'Dallas Cowboys@Philadelphia Eagles':'Chicago Bears@Carolina Panthers',score:{away:j===4?'Dallas Cowboys':'Chicago Bears',home:j===4?'Philadelphia Eagles':'Carolina Panthers',away_score:j===4?17:17,home_score:j===4?21:14},detail:j===4?'Q4 · 11:06':'Q3 · 08:42',...(j===4?{prop:{market:'passing_yards',player:'Jalen Hurts',line:224.5,side:'over'}}:{})}))}));
+ const members=names.map((name,i)=>({member_id:i+1,name,live:{W:3,L:1,P:0,fW:2,fL:1,fP:0,pending:1},picks:BET_TYPES_ORDER.map((bt,j)=>({bet_type:bt,kind:'pick',pick_text:rows[i*5+j].pick_text,price:rows[i*5+j].price,book:'fanduel',status:({W:'win',L:'lose'}[results[i][j]] || (j===3?'win':'pending')),final:!!results[i][j],state:results[i][j]?'post':'in',game_key:j===4?'Dallas Cowboys@Philadelphia Eagles':'Chicago Bears@Carolina Panthers',score:{away:j===4?'Dallas Cowboys':'Chicago Bears',home:j===4?'Philadelphia Eagles':'Carolina Panthers',away_score:j===4?17:17,home_score:j===4?21:14},detail:j===4?'Q4 · 11:06':'Q3 · 08:42',...(j===4?{prop:{market:'passing_yards',player:'Jalen Hurts',line:224.5,side:'over'}}:{})}))}));
  state.pot={season:2026,weekly:{prize:40}};
+ for(const m of members){m.live={W:m.picks.filter(p=>p.status==='win').length,L:m.picks.filter(p=>p.status==='lose').length,P:0,fW:m.picks.filter(p=>p.final&&p.status==='win').length,fL:m.picks.filter(p=>p.final&&p.status==='lose').length,fP:0,pending:m.picks.filter(p=>p.status==='pending').length};}
  state.warRoom={season:2026,week:1,revealed:true,anyLive:true,members,source_updated_at:new Date().toISOString()};
  wrGameCache['Dallas Cowboys@Philadelphia Eagles']={ts:Date.now(),data:{found:true,away:{name:'Dallas Cowboys',score:17},home:{name:'Philadelphia Eagles',score:21},state:'in',detail:'Q4 · 11:06',source_updated_at:new Date().toISOString(),stats_updated_at:new Date().toISOString(),players:[{name:'Jalen Hurts',headshot:'https://a.espncdn.com/i/headshots/nfl/players/full/4040715.png',markets:{passing_yards:{actual:186,unit:'pass yds'}}}]}};
  },JSON.parse(readFileSync(dir+'/public/data/seasons.json','utf8')));
@@ -38,7 +39,11 @@ for(const width of [375,390,844,1440]){
  if(overflows) throw new Error(`Overflow ${view} at ${width}px`);
  console.log(JSON.stringify({width,view,...await p.evaluate(()=>({overflow:document.getElementById('root').scrollWidth>document.getElementById('root').clientWidth,firstGame:document.querySelector('.game-card')?.getBoundingClientRect().top,text:document.getElementById('root').innerText.slice(0,160)}))}));
  }
- await p.selectOption('#live-member','4');
+ await p.locator('#live-leader-toggle').click();
+ if(await p.locator('[data-track-member]').count()!==8)throw new Error('Full leaderboard missing members');
+ await p.locator('[data-track-member="4"]').focus();
+ await p.keyboard.press('Enter');
+ if(await p.locator('#live-member').inputValue()!=='4')throw new Error('Leaderboard did not select participant');
  await p.waitForTimeout(100);
  if(!await p.locator('.comparison-anchor').count()) throw new Error('Own card missing during comparison');
  await p.screenshot({path:`${output}/compare-${width}.png`});

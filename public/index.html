@@ -1039,6 +1039,25 @@
   .slip-player-photo { width:48px; height:48px; object-fit:contain; flex-shrink:0; border-radius:8px; background:#222827; }
   .slip-player-photo[hidden] { display:none; }
 
+
+  .live-leaderboard { background:#141819; border:1px solid #303735; border-radius:12px; padding:14px; margin-bottom:16px; }
+  .live-leaderboard h3 { font-size:20px; }
+  .live-leaderboard > .quiet-copy { font-size:12px; margin:5px 0 12px; }
+  .live-leader-labels,.live-leader-row { display:grid; grid-template-columns:30px minmax(0,1fr) 68px 36px; align-items:center; gap:8px; }
+  .live-leader-labels { padding:6px 8px; color:#aeb8b3; font-size:11px; text-transform:uppercase; }
+  .live-leader-labels > :nth-child(n+3) { text-align:right; }
+  .live-leader-row { width:100%; min-height:44px; padding:8px; border-top:1px solid #2b3330; text-align:left; font:13px Inter,sans-serif; border-radius:4px; }
+  .live-leader-row:hover { background:#222b26; }
+  .live-leader-row.is-you { background:rgba(70,224,138,.07); }
+  .leader-rank,.leader-open { color:#aeb8b3; font-variant-numeric:tabular-nums; }
+  .leader-record,.leader-open { text-align:right; }
+  .leader-record { font-variant-numeric:tabular-nums; }
+  .leader-name { display:flex; align-items:center; gap:8px; font-weight:600; }
+  .leader-name small { color:#58df95; font-size:10px; }
+  .leader-hint { color:#aeb8b3; font-size:11px; line-height:1.5; margin-top:6px; }
+  #live-leader-toggle { width:100%; }
+  #live-card-summary .home-record { font:600 18px Inter,sans-serif; }
+
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -2115,11 +2134,41 @@ function liveProgressBar(p, d) {
   return `<div class="pick-progress" role="img" aria-label="${escapeHtml(`${label}: ${actual}. ${targetLabel}: ${target}. Progress, not a final result.`)}"><div class="pick-progress-track" aria-hidden="true"><span class="pick-progress-fill" style="width:${position(actual)}%"></span><span class="pick-progress-target" style="left:${position(target)}%"></span></div><div class="pick-progress-label"><span>${escapeHtml(label)}: ${actual}</span><span>${escapeHtml(targetLabel)} ${target}</span></div></div>`;
 }
 
+// Rank by the same W/L ordering as the weekly API; alphabetical order only
+// stabilizes tied rows and never breaks a tie for the displayed rank.
+function liveLeaderboardRows(wr) {
+  const sorted = (wr.members || []).slice().sort((a,b) => b.live.W-a.live.W || a.live.L-b.live.L || a.name.localeCompare(b.name));
+  let rank = 1;
+  return sorted.map((member,index) => {
+    const previous = sorted[index-1];
+    if (!previous || previous.live.W !== member.live.W || previous.live.L !== member.live.L) rank = index+1;
+    const tied = sorted.some(other => other !== member && other.live.W === member.live.W && other.live.L === member.live.L);
+    return {member,rank,tied,open:member.picks.filter(p => p.kind === "hidden" || (p.kind === "pick" && !p.final)).length};
+  });
+}
+function renderLiveLeaderboard(wr) {
+  const ranked = liveLeaderboardRows(wr);
+  const visible = state.wrLeaderboardAll ? ranked : ranked.filter((r,i) => i < 3 || isMe(r.member.name));
+  return `<section class="live-leaderboard" aria-label="Weekly live leaderboard"><div class="compact-heading"><h3>Week ${wr.week} leaderboard</h3><span class="quiet-copy">${wr.anyLive ? "In progress" : wr.recap?.complete ? "Final" : "This week"}</span></div>
+    <p class="quiet-copy">${wr.anyLive ? "Live W–L includes in-game projections." : "Current weekly W–L."} Ties share rank.</p>
+    <div class="live-leader-labels" aria-hidden="true"><span>#</span><span>Member</span><span>W–L–P</span><span>Open</span></div>
+    ${visible.map(({member:m,rank,tied,open}) => `<button class="live-leader-row ${isMe(m.name) ? "is-you" : ""}" data-track-member="${m.member_id}" aria-label="Track ${escapeHtml(m.name)}, ${tied ? "tied " : ""}rank ${rank}, ${m.live.W} wins, ${m.live.L} losses, ${m.live.P || 0} pushes, ${open} picks open"><span class="leader-rank">${tied ? "T" : ""}${rank}</span><span class="leader-name">${escapeHtml(m.name)}${isMe(m.name) ? '<small>You</small>' : ""}</span><span class="leader-record">${m.live.W}–${m.live.L}${m.live.P ? "–"+m.live.P : ""}</span><span class="leader-open">${open}</span></button>`).join("")}
+    ${ranked.length > 3 ? `<button id="live-leader-toggle" class="text-action" aria-expanded="${!!state.wrLeaderboardAll}">${state.wrLeaderboardAll ? "Show leaders + you" : `View all ${ranked.length} members`} <span aria-hidden="true">${state.wrLeaderboardAll ? "↑" : "↓"}</span></button>` : ""}
+    <p class="leader-hint">Tap a member to track their picks · Open includes unrevealed slots.</p>
+  </section>`;
+}
+function selectLiveMember(id) {
+  state.wrMemberId = id;
+  state.wrExpanded = null; state.wrExpandedKey = null;
+  rerenderWarRoom(); refreshPersonalLiveStats();
+}
+
 function renderPersonalLive(wr) {
   const own = wr.members?.find(m => isMe(m.name));
   const me = wr.members?.find(m => String(m.member_id) === String(state.wrMemberId)) || own;
   if (!me) return "";
-  const u = liveMemberSummary(me,wr.season || 2026), L = me.live;
+  const L = me.live;
+  const liveCount = me.picks.filter(p => p.state === "in" && !p.final).length;
   const comparing = me !== own;
   const active = me.picks.filter(p => p.kind === "pick" && (comparing || !p.final)).sort((a,b) => Number(!!a.final)-Number(!!b.final));
   const cards = active.map(p => {
@@ -2138,9 +2187,8 @@ function renderPersonalLive(wr) {
     return `<article class="personal-live-card"><div class="slip-selection">${photo}${wrChip(p,{...me,personal:true})}</div><p class="quiet-copy">${escapeHtml(bookLabel(p.book))}${p.price != null ? " · " + americanOdds(p.price) : " · Odds unavailable"}</p>${scoreHtml}${track ? `<p class="quiet-copy">${escapeHtml(track)}</p>` : ""}${liveProgressBar(p,cached?.found ? cached : d)}${p.prop?.market && cached?.found ? `<p class="quiet-copy">Stats: ${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</p>` : ""}${expanded ? wrGamePanel(p) : ""}</article>`;
   }).join("");
   const selector = `<div class="live-view-control"><label for="live-member">${comparing ? escapeHtml(me.name) + "’s card" : "My Card"}</label><select id="live-member" aria-label="Track a participant">${(wr.members || []).map(m => `<option value="${m.member_id}" ${m === me ? "selected" : ""}>${escapeHtml(m.name)}${isMe(m.name) ? " (You)" : ""}</option>`).join("")}</select></div>`;
-  const ownUnits = own ? liveMemberSummary(own,wr.season || 2026) : null;
-  const comparison = comparing && own ? `<section class="comparison-anchor"><div class="compact-heading"><strong>Your card</strong><span>${own.live.fW || 0}–${own.live.fL || 0} · ${fmtUnits(ownUnits.units)}u settled${ownUnits.unpriced ? ` · ${ownUnits.unpriced} missing odds` : ""}</span></div>${pickStatusChips(own.picks)}</section>` : "";
-  return `${comparison}<section class="compact-panel">${selector}<div class="compact-heading"><div class="home-record">${L.fW || 0}–${L.fL || 0}${L.fP ? "–"+L.fP : ""}<span>${fmtUnits(u.units)}u</span></div><span class="quiet-copy">${u.live} live</span></div><p class="quiet-copy">Settled results${u.unpriced ? ` · ${u.unpriced} missing odds` : ""}</p>${pickStatusChips(me.picks)}</section><h3 class="font-headline-lg text-xl uppercase">${comparing ? escapeHtml(me.name) + "’s revealed picks" : "Your live picks"}</h3>${cards ? `<div class="personal-live-grid">${cards}</div>` : `<p class="quiet-copy" style="margin:12px 0 24px">${me.picks.some(p => p.kind === "hidden") ? "Your remaining picks appear as their games start." : "No picks still in play. Your results are below."}</p>`}`;
+  const comparison = comparing && own ? `<section class="comparison-anchor"><div class="compact-heading"><strong>Your card</strong><span>${own.live.fW || 0}–${own.live.fL || 0}${own.live.fP ? "–"+own.live.fP : ""} settled</span></div>${pickStatusChips(own.picks)}</section>` : "";
+  return `${comparison}<section class="compact-panel" id="live-card-summary">${selector}<div class="compact-heading"><div class="home-record">${L.fW || 0}–${L.fL || 0}${L.fP ? "–"+L.fP : ""}</div><span class="quiet-copy">${liveCount} live</span></div><p class="quiet-copy">Settled results</p>${pickStatusChips(me.picks)}</section><h3 class="font-headline-lg text-xl uppercase">${comparing ? escapeHtml(me.name) + "’s revealed picks" : "Your live picks"}</h3>${cards ? `<div class="personal-live-grid">${cards}</div>` : `<p class="quiet-copy" style="margin:12px 0 24px">${me.picks.some(p => p.kind === "hidden") ? "Your remaining picks appear as their games start." : "No picks still in play. Your results are below."}</p>`}`;
 }
 function refreshPersonalLiveStats() {
   const me = state.warRoom?.members?.find(m => String(m.member_id) === String(state.wrMemberId)) || state.warRoom?.members?.find(m => isMe(m.name));
@@ -4692,11 +4740,22 @@ function startWarRoomPoll() {
   }, 45000);
 }
 function attachWarRoomHandlers() {
+  document.querySelectorAll("[data-track-member]").forEach(button => {
+    button.onclick = () => {
+      selectLiveMember(button.dataset.trackMember);
+      (document.querySelector(".comparison-anchor") || document.getElementById("live-card-summary"))?.scrollIntoView({block:"start"});
+      document.getElementById("live-member")?.focus({preventScroll:true});
+    };
+  });
+  const leaderboardToggle = document.getElementById("live-leader-toggle");
+  if (leaderboardToggle) leaderboardToggle.onclick = () => {
+    state.wrLeaderboardAll = !state.wrLeaderboardAll;
+    rerenderWarRoom();
+    document.getElementById("live-leader-toggle")?.focus({preventScroll:true});
+  };
   const memberSelect = document.getElementById("live-member");
   if (memberSelect) memberSelect.onchange = () => {
-    state.wrMemberId = memberSelect.value;
-    state.wrExpanded = null; state.wrExpandedKey = null;
-    rerenderWarRoom(); refreshPersonalLiveStats();
+    selectLiveMember(memberSelect.value);
     document.getElementById("live-member")?.focus({preventScroll:true});
   };
   const btn = document.getElementById("wr-refresh");
@@ -4980,7 +5039,7 @@ function renderWarRoom() {
     : `<span class="wr-livetag idle" role="status" aria-live="polite"><span class="idle-dot"></span>${anyPending ? "PREGAME" : "FINAL"}</span>`;
   const actions = `<div class="wr-actions">${liveTag}<button id="wr-refresh" class="wr-refresh" aria-label="Refresh war room" title="Refresh"><span class="material-symbols-outlined text-sm">refresh</span></button></div>`;
   if (!wr.members || !wr.members.length) return head(actions) + `<div class="wr-empty">No cards are locked yet. Each member's picks reveal here the moment their game kicks off.</div></div>`;
-  const rows = wr.members.map((m, i) => {
+  const rows = liveLeaderboardRows(wr).map(({member:m,rank,tied}) => {
     const L = m.live;
     const rec = `${L.W}-${L.L}${L.P ? "-" + L.P : ""}`;
     // A result is "projected" while its game is still live: the record can still
@@ -5006,7 +5065,7 @@ function renderWarRoom() {
     return `
       <div class="wr-card ${isMe(m.name) ? "row-you" : ""}">
         <div class="wr-head">
-          <span class="wr-rank">${String(i + 1).padStart(2, "0")}</span>
+          <span class="wr-rank">${tied ? "T" : ""}${rank}</span>
           <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
           <span class="wr-recwrap">${recHtml}${pend}</span>
         </div>
@@ -5014,7 +5073,7 @@ function renderWarRoom() {
         ${detail}
       </div>`;
   }).join("");
-  return head(actions) + renderPersonalLive(wr) + renderRecapCard(wr) + `<h3 class="font-headline-lg text-xl uppercase mb-3">League this week</h3><p class="quiet-copy" style="margin-bottom:12px">Records marked “proj” include in-game projections.</p><div class="wr-grid">${rows}</div></div>`;
+  return head(actions) + renderLiveLeaderboard(wr) + renderPersonalLive(wr) + renderRecapCard(wr) + `<h3 class="font-headline-lg text-xl uppercase mb-3">League this week</h3><p class="quiet-copy" style="margin-bottom:12px">Records marked “proj” include in-game projections.</p><div class="wr-grid">${rows}</div></div>`;
 }
 
 function updatePreseasonBanner() {

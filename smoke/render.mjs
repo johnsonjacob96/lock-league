@@ -210,7 +210,7 @@ export async function run() {
         checks.refreshPreservesDraft=root.querySelector('#design-draft').value==='Unsaved custom prop' && card.open && root.querySelector('#mycard-progress').textContent==='2 of 5 selected';
         state.warRoom={season:2026,week:1,revealed:true,anyLive:true,members:[me],source_updated_at:new Date().toISOString()};
         root.innerHTML=renderWarRoom();
-        checks.personalCard=root.textContent.includes('Your live picks') && root.textContent.includes('+2.00u') && root.textContent.includes('1 missing odds');
+        checks.personalCard=root.textContent.includes('Your live picks') && !root.textContent.includes('+2.00u') && root.textContent.includes('leaderboard');
         const longPick={bet_type:'Super Lock',kind:'pick',pick_text:'Jalen Hurts over 224.5 passing yards',game_key:'Dallas Cowboys@Philadelphia Eagles',status:'pending',state:'in',price:-110};
         checks.fullTitle=wrChip(longPick,{...me,personal:true}).includes(longPick.pick_text);
         state.warRoom.revealed=false;
@@ -219,6 +219,19 @@ export async function run() {
         const table=root.querySelector('.home-table');
         checks.standingsFit=table.scrollWidth<=table.clientWidth+1;
         checks.homeSeasonSelect=!!root.querySelector('#home-year');
+        const leaderboardFixture={week:1,anyLive:true,members:[
+          {member_id:5,name:'Jacob',live:{W:1,L:1,P:1},picks:[{kind:'hidden'}]},
+          {member_id:2,name:'Jack',live:{W:2,L:0,P:0},picks:[]},
+          {member_id:7,name:'Mason',live:{W:2,L:0,P:0},picks:[]},
+          {member_id:1,name:'Brayden',live:{W:1,L:0,P:0},picks:[]},
+          {member_id:6,name:'Jared',live:{W:0,L:1,P:0},picks:[]}]};
+        const ranked=liveLeaderboardRows(leaderboardFixture);
+        checks.leaderRanks=ranked.map(r=>r.rank).join(',')==='1,1,3,4,5' && ranked[0].tied && ranked[1].tied;
+        state.wrLeaderboardAll=false;root.innerHTML=renderLiveLeaderboard(leaderboardFixture);
+        checks.leadersAndYou=root.querySelectorAll('[data-track-member]').length===4 && !!root.querySelector('[data-track-member="5"]') && !root.querySelector('[data-track-member="6"]');
+        state.wrLeaderboardAll=true;root.innerHTML=renderLiveLeaderboard(leaderboardFixture);
+        checks.fullLeaderboard=root.querySelectorAll('[data-track-member]').length===5 && root.textContent.includes('projections');
+        state.wrLeaderboardAll=false;
         const game={away:{name:'Chicago Bears',score:17},home:{name:'Carolina Panthers',score:14},state:'in'};
         const bar=liveProgressBar({bet_type:'Under',pick_text:'Bears / Panthers U47.5'},game);
         checks.totalProgress=bar.includes('Total points: 31') && bar.includes('Under 47.5') && bar.includes('pick-progress-target');
@@ -228,7 +241,7 @@ export async function run() {
         state.warRoom={season:2026,week:1,revealed:true,anyLive:true,members:[me,other]};state.wrMemberId='2';
         root.innerHTML=renderWarRoom();attachWarRoomHandlers();
         checks.comparison=root.textContent.includes('Your card') && root.textContent.includes('Jack’s revealed picks') && root.querySelectorAll('.personal-live-card').length===1;
-        checks.comparisonMissingOdds=root.querySelector('.comparison-anchor').textContent.includes('1 missing odds');
+        checks.comparisonNoUnits=!root.querySelector('.comparison-anchor').textContent.includes('missing odds') && !root.querySelector('.comparison-anchor').textContent.includes('u settled');
         checks.selector=!!root.querySelector('#live-member option[value="5"]') && root.querySelector('#live-member').value==='2';
         root.querySelector('#live-member').value='5';root.querySelector('#live-member').onchange();
         checks.switchBack=state.wrMemberId==='5';
