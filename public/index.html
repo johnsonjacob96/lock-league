@@ -976,10 +976,13 @@
   body[data-view="thisweek"] #ticker,body[data-view="warroom"] #ticker,body[data-view="standings"] #ticker { display:none; }
   body[data-view="thisweek"] .below-ticker,body[data-view="warroom"] .below-ticker,body[data-view="standings"] .below-ticker { top:var(--safe-top)!important; }
   @media(min-width:1024px) {
-    .picks-layout { grid-template-columns:minmax(0,2fr) minmax(0,1fr); align-items:start; }
-    .picks-layout .picks-aside { grid-column:2; grid-row:1; position:sticky; top:16px; }
-    .picks-board { grid-column:1; grid-row:1 / span 2; }
-    .picks-whos { grid-column:2; }
+    /* Row 3 is an empty 1fr that soaks up the tall board's height, so rows 1-2
+       stay content-sized and Who's In sits directly under My Card instead of
+       floating in the middle of the column. */
+    .picks-layout { grid-template-columns:minmax(0,2fr) minmax(0,1fr); grid-template-rows:auto auto 1fr; align-items:start; }
+    .picks-layout .picks-aside { grid-column:2; grid-row:1; }
+    .picks-board { grid-column:1; grid-row:1 / -1; }
+    .picks-whos { grid-column:2; grid-row:2; }
     .personal-live-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   }
   @media(max-width:767px) {
