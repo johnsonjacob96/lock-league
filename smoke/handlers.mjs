@@ -133,6 +133,51 @@ test('kickoff guard falls back to the stored board, and fails closed without one
  const missing=await request({season:2026,week:1,picks:[{...superLock.picks[0],game_key:'Green Bay Packers@Chicago Bears'}]});
  assert.equal(missing.status,503); assert.equal(missing.body.reason,'unknown-kickoff');
 });
+test('a stale pick on a game this week does not carry cannot lock its own slot',async()=>{
+ // Mock-board leftovers: rows whose game_key is not on this week's slate at all
+ // (a dry run against /api/odds?mock=1). They used to fail the kickoff guard —
+ // it could not verify their kickoff — so every edit of that slot 503'd and the
+ // card could never be cleared.
+ await db.query("INSERT INTO picks(member_id,season,week,bet_type,pick_text,game_key,locked_at) VALUES(1,2026,1,'Favorite','Buffalo Bills -2.5','Kansas City Chiefs@Buffalo Bills','2026-09-05T01:00:00Z')");
+ assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,200);
+ assert.equal((await db.query('SELECT pick_text FROM picks')).rows[0].pick_text,'New York Giants -3.5');
+});
+test('a stale pick can be removed from the card',async()=>{
+ await db.query("INSERT INTO picks(member_id,season,week,bet_type,pick_text,game_key,locked_at) VALUES(1,2026,1,'Over','Dallas Cowboys / Philadelphia Eagles O47.5','Dallas Cowboys@Philadelphia Eagles','2026-09-05T01:00:00Z')");
+ assert.equal((await request({season:2026,week:1,bet_type:'Over'},'action=remove')).body.removed,1);
+ assert.equal((await db.query('SELECT * FROM picks')).rows.length,0);
+});
+test('a partial board still fails closed on an unverifiable existing pick',async()=>{
+ // Only the pregame betting board is reachable, and a game drops off it the
+ // moment it starts — so absence there is not proof the pick is stale.
+ mock.timers.setTime(Date.parse('2026-09-11T12:06:00Z'));
+ board=[];
+ await db.query("INSERT INTO picks(member_id,season,week,bet_type,pick_text,game_key,locked_at) VALUES(1,2026,1,'Favorite','stale','Kansas City Chiefs@Buffalo Bills','2026-09-05T01:00:00Z')");
+ const r=await request({season:2026,week:1,picks:[pick()]});
+ assert.equal(r.status,503); assert.equal(r.body.reason,'unknown-kickoff');
+ assert.equal((await db.query('SELECT pick_text FROM picks')).rows[0].pick_text,'stale');
+ assert.equal((await request({season:2026,week:1,bet_type:'Favorite'},'action=remove')).status,503);
+});
+test('a game on the slate without a usable kickoff still holds its slot',async()=>{
+ // Present but unverified is not the same as absent: only absence from a
+ // complete slate means "stale". A bad kickoff still fails closed.
+ mock.timers.setTime(Date.parse('2026-09-11T12:08:00Z'));
+ board=[{...events[0]},{...events[1],kickoff:null},{...events[2]}];
+ await db.query("INSERT INTO picks(member_id,season,week,bet_type,pick_text,game_key,locked_at) VALUES(1,2026,1,'Favorite','old','Dallas Cowboys@New York Giants','2026-09-05T01:00:00Z')");
+ const r=await request({season:2026,week:1,picks:[pick('Favorite',0)]});
+ assert.equal(r.status,503); assert.equal(r.body.reason,'unknown-kickoff');
+ // Re-warm the isolate's 60s scoreboard cache with the good slate, so this
+ // doctored board can't leak into a later test through it.
+ mock.timers.setTime(Date.parse('2026-09-11T12:10:00Z'));
+ board=events; await request({season:2026,week:1,picks:[pick('Dog')]});
+});
+test('a started game on the full slate still locks its slot',async()=>{
+ // The complete-board rule must not become a way around the kickoff guard: the
+ // game IS on the slate, it has simply already kicked off.
+ await insertOld({i:0});
+ assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,423);
+ assert.equal((await request({season:2026,week:1,bet_type:'Favorite'},'action=remove')).status,423);
+});
 test('Monday game rejected in Central time',async()=>{assert.equal((await request({season:2026,week:1,picks:[pick('Favorite',2)]})).body.error,'monday-not-allowed');});
 test('unknown game rejected',async()=>{assert.equal((await request({season:2026,week:1,picks:[{...pick(),game_key:'Unknown@Unknown'}]})).status,422);});
 test('invalid periods, duplicates and null picks rejected cleanly',async()=>{
@@ -158,7 +203,7 @@ test('Wednesday opener, Sunday cutoff, DST and rollover match NFL week',()=>{
  assert.deepEqual(weeksToGrade(new Date('2026-09-15T09:00Z')),[1,2]);
 });
 
-if (process.env.RUN_BROWSER === '1') test('browser: real login, board save/reload/remove, outage feedback and mobile navigation', async()=>{
+if (process.env.RUN_BROWSER === '1') test('browser: real login, board save/reload, card removal, outage feedback and mobile navigation', async()=>{
  const { createServer } = await import('node:http');
  const { readFile } = await import('node:fs/promises');
  const { tmpdir } = await import('node:os');
@@ -200,6 +245,21 @@ if (process.env.RUN_BROWSER === '1') test('browser: real login, board save/reloa
   await page.reload();await page.waitForFunction(()=>state.user?.name==='Jacob');
   await page.locator('.side-nav-link[data-view="thisweek"]').click();await page.waitForFunction(()=>!!currentMyPicks.Favorite);
   assert.equal(await page.evaluate(()=>currentMyPicks.Favorite.pick_text),'New York Giants -3.5');
+  // My Card's own remove buttons, including on a leftover row whose game this
+  // week's board doesn't carry — the only way to clear one of those, since
+  // there is no board button to tap for a game that isn't on the board.
+  await db.query("INSERT INTO picks(member_id,season,week,bet_type,pick_text,game_key,side,line,book,price,locked_at) VALUES(1,2026,1,'Over','Kansas City Chiefs / Buffalo Bills O48.5','Kansas City Chiefs@Buffalo Bills','over',48.5,'fanduel',-110,'2026-09-05T01:00:00Z')");
+  await page.reload();await page.waitForFunction(()=>state.user?.name==='Jacob');
+  await page.locator('.side-nav-link[data-view="thisweek"]').click();await page.waitForFunction(()=>!!currentMyPicks.Over);
+  await page.evaluate(()=>{document.getElementById('my-card').open=true;});
+  await page.locator('#my-card-body .slot-drop[data-drop="Over"]').click();
+  await page.waitForFunction(()=>!currentMyPicks.Over);
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM picks WHERE bet_type='Over'")).rows[0].n,0);
+  // Removing from the card also drops the board's highlight for that slot.
+  await page.locator('#my-card-body .slot-drop[data-drop="Favorite"]').click();
+  await page.waitForFunction(()=>!currentMyPicks.Favorite&&!document.querySelector('.pick-btn.picked[data-bet="Favorite"]'));
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM picks')).rows[0].n,0);
+  await button.click();await page.waitForFunction(()=>!!currentMyPicks.Favorite);
   await page.locator('.pick-btn.picked[data-bet="Favorite"]').first().click();await page.waitForFunction(()=>!currentMyPicks.Favorite);
   oddsDown=true;await page.locator('.pick-btn[data-bet="Favorite"][data-game="Dallas Cowboys@New York Giants"]').first().click();
   await page.waitForFunction(()=>document.getElementById('toast').textContent.includes('Cannot verify'));
