@@ -1,3 +1,4 @@
+import { ensureSuperLockClaims, isSuperLockClaimConflict, superLockTaken } from "../_shared/super-lock-claims.js";
 import { verifiedGames, verifiedMarkets, quoteChanged } from "../_shared/quote-freshness.js";
 // /api/picks  GET (read) / POST (submit) / POST ?action=mark-super-lock
 import { sql } from "../_shared/db.js";
@@ -573,6 +574,7 @@ export async function onRequest({ request, env }) {
       return json({ error: "monday-not-allowed", ...monday }, { status: 422 });
     }
     await ensureExtras(env);
+    if (picks.some(p => p.bet_type === "Super Lock")) await ensureSuperLockClaims(env);
     const s = sql(env);
     const incoming = picks.map(p => {
       const old = replacing.find(x => x.bet_type === p.bet_type);
@@ -591,7 +593,9 @@ export async function onRequest({ request, env }) {
     // Serialize edits of a member/week. Re-check the row version and deadlines
     // inside the transaction, then insert all slots in ONE statement. A stale
     // browser or a request crossing kickoff must never partially save a card.
-    const [, saved] = await s.transaction([
+    let saved;
+    try {
+    [, saved] = await s.transaction([
       s`SELECT pg_advisory_xact_lock(${memberId}::int, ${(season * 100 + week)}::int)`,
       s`WITH incoming AS (
         SELECT * FROM jsonb_to_recordset(${JSON.stringify(incoming)}::jsonb) AS x(
@@ -616,6 +620,10 @@ export async function onRequest({ request, env }) {
         result = NULL, graded_at = NULL
       RETURNING id`
     ]);
+    } catch (error) {
+      if (isSuperLockClaimConflict(error)) return superLockTaken();
+      throw error;
+    }
     if (saved.length !== picks.length) return json({ error: "pick-changed", detail: "Your card changed or a game locked. Refresh and try again." }, { status: 409 });
     return json({ ok: true, count: picks.length, picks: picks.map(p => ({
       bet_type: p.bet_type, pick_text: p.pick_text, game_key: p.game_key || null,

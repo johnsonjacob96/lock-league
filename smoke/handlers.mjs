@@ -496,3 +496,56 @@ test('missing requested sportsbook never silently changes to another book',async
  const result=await request({season:2026,week:1,picks:[{...pick(),book:'draftkings'}]});
  assert.equal(result.status,422);assert.equal((await db.query('SELECT * FROM picks')).rows.length,0);
 });
+
+test('two members racing for the same Super Lock produce exactly one owner',async()=>{
+ const other=await cookieFor(2);
+ const submit=c=>picks({env,request:new Request('https://test.invalid/api/picks',{method:'POST',headers:{cookie:c},body:JSON.stringify({season:2026,week:1,picks:[{bet_type:'Super Lock',prop:{market:'receptions',player:'Test Receiver',side:'over',line:3.5,book:'fanduel',game_key:key(1)}}]})})});
+ const results=await Promise.all([submit(cookie),submit(other)]);
+ assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+ const loser=results.find(r=>r.status===409);assert.equal((await loser.json()).error,'super-lock-taken');
+ assert.equal((await db.query("SELECT * FROM picks WHERE bet_type='Super Lock'")).rows.length,1);
+});
+test('claims ignore books, thresholds, common wording, and token order; opposite sides differ',async()=>{
+ const variants=['Drake Maye o25.5 rush yds','Drake Maye OVER 30.5 Rushing Yards DraftKings -110','Over 40.5 rushing yards Drake Maye','Drake Maye 35+ rushing yards'];
+ const keys=[];for(const text of variants)keys.push((await db.query('SELECT ll_super_lock_key($1) AS key',[text])).rows[0].key);
+ assert.equal(new Set(keys).size,1);
+ const under=(await db.query("SELECT ll_super_lock_key('Drake Maye u25.5 rush yds') AS key")).rows[0].key;
+ assert.notEqual(under,keys[0]);
+ const passing=(await db.query("SELECT ll_super_lock_key('Drake Maye o225.5 pass yds') AS key")).rows[0].key;
+ assert.notEqual(passing,keys[0]);
+});
+test('taken lock rolls back every slot and preserves the loser original card',async()=>{
+ await request({season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text:'Drake Maye over 25.5 rushing yards',price:110}]});
+ cookie=await cookieFor(2);
+ await request({season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text:'Sam Darnold under 10.5 rushing yards',price:110},pick()]});
+ const before=(await db.query('SELECT * FROM picks ORDER BY id')).rows;
+ const denied=await request({season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text:'Drake Maye o35.5 rush yds DraftKings',price:120},pick('Over')]});
+ assert.equal(denied.status,409);assert.equal(denied.body.error,'super-lock-taken');
+ assert.deepEqual((await db.query('SELECT * FROM picks ORDER BY id')).rows,before);
+});
+test('owner can change their line and another member can claim a released lock',async()=>{
+ const lock=pick_text=>({season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text,price:110}]});
+ assert.equal((await request(lock('Drake Maye o25.5 rush yds'))).status,200);
+ assert.equal((await request(lock('Drake Maye o35.5 rush yds'))).status,200);
+ assert.equal((await request({season:2026,week:1,bet_type:'Super Lock'},'action=remove')).status,200);
+ cookie=await cookieFor(2);
+ assert.equal((await request(lock('Drake Maye over 30.5 rushing yards'))).status,200);
+});
+
+test('every supported prop stat claims the same canonical and long-form custom wording',async()=>{
+ const {PROP_DEFS}=await import('../functions/_shared/props.js');
+ for(const [market,def] of Object.entries(PROP_DEFS)) {
+  const standard=market==='anytime_td'?'Test Player anytime TD':`Test Player o10.5 ${def.unit}`;
+  const custom=market==='anytime_td'?'Test Player anytime touchdown':`Test Player Over 20.5 ${def.label}`;
+  const rows=await db.query('SELECT ll_super_lock_key($1) AS a,ll_super_lock_key($2) AS b',[standard,custom]);
+  assert.equal(rows.rows[0].a,rows.rows[0].b,market);
+ }
+});
+
+test('Super Lock exclusivity is weekly and does not restrict ordinary picks or old history',async()=>{
+ const custom={season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text:'Drake Maye o25.5 rush yds',price:110}]};
+ assert.equal((await request(custom)).status,200);
+ await db.query("INSERT INTO picks(member_id,season,week,bet_type,pick_text) VALUES(2,2026,2,'Super Lock',$1),(1,2023,1,'Super Lock',$1),(2,2023,1,'Super Lock',$1)",[custom.picks[0].pick_text]);
+ assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,200);
+ cookie=await cookieFor(2);assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,200);
+});

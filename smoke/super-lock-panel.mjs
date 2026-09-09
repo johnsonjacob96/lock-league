@@ -25,7 +25,7 @@ for(const width of [375,390,844,1440]) {
  await page.route('**/api/**',async route=>{
   if(route.request().url().includes('/api/props'))return route.fulfill({json:{markets}});
   if(route.request().method()==='POST'&&route.request().url().includes('/api/picks')){
-   writes.push(route.request().postDataJSON());return route.fulfill({status:rejectSave?409:200,json:rejectSave?{error:'prop-not-offered'}:{}});
+   writes.push(route.request().postDataJSON());return route.fulfill({status:rejectSave?409:200,json:rejectSave?(rejectSave==='taken'?{error:'super-lock-taken',detail:'That Super Lock is already claimed. Choose a different bet. Your saved picks are unchanged.'}:{error:'prop-not-offered'}):{}});
   }
   return route.fulfill({json:{}});
  });
@@ -109,6 +109,8 @@ for(const width of [375,390,844,1440]) {
  await page.evaluate(()=>{superLockState.markets.find(x=>x.market==='rush_yds').players=window.originalRushPlayers;superLockState.draft={market:'rush_yds',player:'Jalen Hurts',side:'under',book:'fanduel',line:null};superLockState.search='hurts';refreshSuperLockEditor();});
  await page.locator('.sl-alt-wrap summary').click();await page.locator('[data-slchoose$=":fanduel:50.5"]').click();
  rejectSave=true;await page.locator('#sl-lock').click();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('NO LONGER'));
+ assert.equal(await page.locator('#sl-lock').isEnabled(),true);checks++;
+ rejectSave='taken';await page.locator('#sl-lock').click();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('already claimed'));
  assert.equal(await page.locator('#sl-lock').isEnabled(),true);checks++;
  rejectSave=false;await page.locator('#sl-lock').click();await page.waitForSelector('#sl-dialog',{state:'detached'});
  assert.equal(writes.at(-1).picks[0].prop.line,50.5);checks++;
