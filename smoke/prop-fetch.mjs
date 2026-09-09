@@ -185,3 +185,18 @@ test('concurrent menus also deduplicate the paid anytime-TD request', async t =>
   assert.equal(vendorCalls.filter(path => path.endsWith('/odds')).length, 1);
   await h.drain();
 });
+
+test('combined passing+rushing cannot overwrite rushing, including broad stat categories', async () => {
+  const {normalizeSharpProps,marketKeyFromName}=await import('../functions/_shared/props.js');
+  const row={is_player_prop:true,sportsbook:'draftkings',player_name:'Drake Maye',home_team:HOME,away_team:AWAY,is_main_line:true,odds_american:-110};
+  const pair=(market_type,line,stat_category)=>['over','under'].map(selection_type=>({...row,market_type,line,stat_category,selection_type}));
+  for(const stat of ['passing_+_rushing_yards','rushing_yards',undefined]) {
+    const rows=[...pair('player_passing_+_rushing_yards',259.5,stat),...pair('player_rushing_yards',25.5,'rushing_yards')];
+    const props=normalizeSharpProps(rows);
+    assert.equal(props.length,1);assert.equal(props[0].market,'rush_yds');assert.equal(props[0].draftkings.line,25.5);
+  }
+  assert.equal(marketKeyFromName('player_passing_+_rushing_yards'),null);
+  assert.equal(marketKeyFromName('player_rushing_+_receiving_yards'),'rush_rec_yds');
+  assert.deepEqual(normalizeSharpProps(pair('player_longest_reception',15.5,'receptions')),[]);
+  assert.deepEqual(normalizeSharpProps(pair('player_1st_half_rushing_yards',20.5,'rushing_yards')),[]);
+});
