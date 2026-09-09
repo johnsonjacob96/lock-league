@@ -34,8 +34,12 @@ for(const width of [375,390,844,1440]) {
   const g=(id,total,kickoff='2026-09-13T17:00Z')=>({id,kickoff,books:{fanduel:{total:{point:total}}}});
   const higher=g('highest',49.5);higher.books.draftkings={total:{point:51.5}};
   return slSortGames([g('missing',null),g('low',42.5),g('started',60,'2026-09-08T17:00Z'),higher,g('tied-later',51.5,'2026-09-13T20:25Z')]).map(x=>x.id);
- });assert.deepEqual(ordering,['highest','tied-later','low','missing','started']);checks++;
+ });assert.deepEqual(ordering,['started','missing','low','highest','tied-later']);checks++;
  assert.equal(await page.locator('[data-slgame]:disabled').count(),1);checks++;
+ const yardage=await page.evaluate(()=>{
+  const m={market:'rush_yds',players:[{player:'Low',line:20,fanduel:{line:20,over:-110}},{player:'High',line:70,fanduel:{line:70,over:-115},draftkings:{line:80,over:-105}},{player:'Missing'},{player:'Tie',line:80,fanduel:{line:80,over:-110}}]};
+  return {yards:slSortedPlayers(m).map(x=>[x.pl.player,x.pi]),other:slSortedPlayers({...m,market:'anytime_td'}).map(x=>x.pl.player)};
+ });assert.deepEqual(yardage.yards,[['High',1],['Tie',3],['Low',0],['Missing',2]]);assert.deepEqual(yardage.other,['Low','High','Missing','Tie']);checks+=2;
  await page.locator('#sl-close').focus();
  await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.getElementById('sl-dialog').contains(document.activeElement)),true);checks++;
  await page.screenshot({path:`${output}/games-${width}.png`});
@@ -69,6 +73,18 @@ for(const width of [375,390,844,1440]) {
  assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1),true);checks++;
  await page.waitForFunction(()=>{const img=document.querySelector('[data-slportrait="Jalen Hurts"] img');return img?.complete&&img.naturalWidth>0;});
  await page.screenshot({path:`${output}/props-${width}.png`});
+ await page.evaluate(()=>{
+  const m=slMarkets.find(x=>x.market==='rush_yds');window.originalRushPlayers=m.players;
+  const player=(name,line)=>({...m.players[0],player:name,line,alts:[],fanduel:{line,over:-115,under:-110},draftkings:{line,over:-105,under:-125}});
+  m.players=[m.players[0],player('Saquon Barkley',79.5),player('Dak Prescott',12.5)];slSearch='';refreshSuperLockEditor();
+ });
+ assert.deepEqual(await page.locator('.sl-player-heading strong').allTextContents(),['Saquon Barkley','Jalen Hurts','Dak Prescott']);checks++;
+ await page.locator('[data-slchoose]').first().click();
+ assert.equal(await page.evaluate(()=>slDraft.player),'Saquon Barkley');checks++;
+ assert.equal(await page.locator('[data-slchoose]').first().getAttribute('data-slchoose'),'5:1:over');checks++;
+ await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-slportrait] img')).every(img=>img.complete&&img.naturalWidth>0));
+ await page.screenshot({path:`${output}/yardage-${width}.png`});
+ await page.evaluate(()=>{slMarkets.find(x=>x.market==='rush_yds').players=window.originalRushPlayers;slDraft={market:'rush_yds',player:'Jalen Hurts',side:'under',line:null};slSearch='hurts';refreshSuperLockEditor();});
  await page.locator('.sl-alt-wrap summary').click();await page.locator('[data-slchoose$=":50.5"]').click();
  rejectSave=true;await page.locator('#sl-lock').click();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('NO LONGER'));
  assert.equal(await page.locator('#sl-lock').isEnabled(),true);checks++;
