@@ -361,6 +361,81 @@ function resolveTotal(rows) {
   };
 }
 
+// Recover only uniquely corroborated, two-sided quotes when a book's main
+// market was entirely mislabeled as alternate. Never relax invalid/stale flags
+// or replace a main quote; each book retains its own number and prices.
+function recoverFlaggedMarkets(g, books) {
+  const balanced = (p) =>
+    Number.isInteger(p) && ((p >= -150 && p <= -100) || (p >= 100 && p <= 130));
+  const candidates = (book, type) => {
+    const groups = new Map();
+    for (const row of book[`_alternate_${type}`] || []) {
+      if (!row.marketId || !balanced(row.price)) continue;
+      const key = `${row.marketId}:${Math.abs(row.point)}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+    return [...groups.values()].flatMap((rows) => {
+      if (rows.length !== 2) return [];
+      if (type === "spread") {
+        const [a, b] = rows;
+        if (
+          a.point !== -b.point ||
+          a.point === 0 ||
+          a.team === b.team ||
+          ![g.home, g.away].includes(a.team) ||
+          ![g.home, g.away].includes(b.team)
+        )
+          return [];
+        return [resolveSpread(rows, g)];
+      }
+      if (
+        !rows.some((r) => r.ou === "over") ||
+        !rows.some((r) => r.ou === "under")
+      )
+        return [];
+      return [resolveTotal(rows)];
+    });
+  };
+  const agrees = (a, b, type) =>
+    a &&
+    b &&
+    (type === "spread"
+      ? a.fav === b.fav && Math.abs(a.line - b.line) <= 1
+      : Math.abs(a.point - b.point) <= 3);
+  for (const type of ["spread", "total"]) {
+    const pending = Object.fromEntries(
+      ["fanduel", "draftkings"].map((k) => [
+        k,
+        g.books[k] ? candidates(g.books[k], type) : [],
+      ]),
+    );
+    const restore = {};
+    for (const key of ["fanduel", "draftkings"]) {
+      if (books[key]?.[type]) continue;
+      const other = key === "fanduel" ? "draftkings" : "fanduel";
+      const anchors = books[other]?.[type]
+        ? [books[other][type]]
+        : pending[other];
+      const matches = pending[key].filter((a) =>
+        anchors.some((b) => agrees(a, b, type)),
+      );
+      if (matches.length === 1) restore[key] = matches[0];
+    }
+    // If both main markets are absent, both books must have a unique match.
+    for (const [key, quote] of Object.entries(restore)) {
+      const other = key === "fanduel" ? "draftkings" : "fanduel";
+      if (!books[other]?.[type] && !restore[other]) continue;
+      books[key] ||= {
+        spread: null,
+        total: null,
+        updated: g.books[key].updated || null,
+      };
+      books[key][type] = quote;
+    }
+  }
+}
+
 export function normalizeSharp(rows) {
   // exported for tests; CF ignores non-handler exports
   // First pass: bucket every spread/total selection (main + alternate) per game+book.
@@ -369,7 +444,6 @@ export function normalizeSharp(rows) {
     if (
       row.is_player_prop === true ||
       row.is_active === false ||
-      row.is_alternate_line === true ||
       row.is_stale_pregame_price === true ||
       row.is_impossible_scoreline === true
     )
@@ -438,7 +512,15 @@ export function normalizeSharp(rows) {
     if (isTotal) {
       const ou =
         stype === "over" || (!stype && sel.includes("over")) ? "over" : "under";
-      b._total.push({ point: pt, ou, price, isMain });
+      if (row.is_alternate_line === true) {
+        (b._alternate_total ||= []).push({
+          point: pt,
+          ou,
+          price,
+          isMain,
+          marketId: row.market_id,
+        });
+      } else b._total.push({ point: pt, ou, price, isMain });
     } else {
       const side = String(row.team_side ?? stype).toLowerCase();
       const team =
@@ -451,7 +533,15 @@ export function normalizeSharp(rows) {
                   .replace(/\s*[-+]?\d+(?:\.\d+)?\s*$/, "")
                   .trim(),
               );
-      b._spread.push({ point: pt, team, price, isMain });
+      if (row.is_alternate_line === true) {
+        (b._alternate_spread ||= []).push({
+          point: pt,
+          team,
+          price,
+          isMain,
+          marketId: row.market_id,
+        });
+      } else b._spread.push({ point: pt, team, price, isMain });
     }
   }
   // Second pass: resolve each book's main spread + total, drop empties.
@@ -464,6 +554,7 @@ export function normalizeSharp(rows) {
       if (spread || total)
         books[bk] = { spread, total, updated: b.updated || null };
     }
+    recoverFlaggedMarkets(g, books);
     if (Object.keys(books).length) {
       g.books = books;
       out.push(g);
@@ -517,6 +608,32 @@ export async function fetchSharpRaw(env, maxPages = 8, overrides = null) {
   }
   return all;
 }
+// Bookmaker event times can differ by a few minutes. Match the current week's
+// persisted ESPN schedule so the board countdown agrees with the pick guard.
+export function alignSharpKickoffs(games, events) {
+  const schedule = new Map(
+    (events || []).flatMap((ev) => {
+      const cs = ev.competitions?.[0]?.competitors || [];
+      const home = canonicalNflTeam(
+        cs.find((c) => c.homeAway === "home")?.team?.displayName,
+      );
+      const away = canonicalNflTeam(
+        cs.find((c) => c.homeAway === "away")?.team?.displayName,
+      );
+      return home && away && Number.isFinite(Date.parse(ev.date))
+        ? [[`${away}@${home}`, ev.date]]
+        : [];
+    }),
+  );
+  return games.map((g) => {
+    const kickoff = schedule.get(`${g.away}@${g.home}`);
+    return kickoff &&
+      Math.abs(Date.parse(kickoff) - Date.parse(g.kickoff)) <= 3600000
+      ? { ...g, kickoff }
+      : g;
+  });
+}
+
 async function fetchSharpApi(env) {
   const all = normalizeSharp(await fetchSharpRaw(env));
   // SharpAPI returns the whole season; scope to the current pick week's
@@ -530,7 +647,19 @@ async function fetchSharpApi(env) {
   });
   // Normally never blank the board on a window miss; under preseason test mode
   // do NOT fall back to the full season, or regular-season games would leak in.
-  const games = scoped;
+  let games = scoped;
+  try {
+    const cur = currentSeasonWeek(env);
+    const events = await loadScoreboardSeed(
+      env,
+      cur.season,
+      cur.week,
+      seasonTypeFor(env),
+    );
+    games = alignSharpKickoffs(games, events);
+  } catch {
+    /* Retain provider times when the schedule snapshot is unavailable. */
+  }
   if (!games.length) throw new Error("sharpapi: no games parsed");
   return {
     source: "sharpapi",
