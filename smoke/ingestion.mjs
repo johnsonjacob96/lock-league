@@ -366,3 +366,58 @@ test('Sharp main board ignores alternate, inactive and flagged-invalid selection
  for(const flag of [{is_alternate_line:true},{is_active:false},{is_impossible_scoreline:true},{is_stale_pregame_price:true}]) rows.push({...base,...flag,line:73.5,selection_type:'over'},{...base,...flag,line:73.5,selection_type:'under'});
  assert.equal(normalizeSharp(rows)[0].books.draftkings.total.point,46.5);
 });
+
+const recoveryBase = { home_team:'Seattle Seahawks', away_team:'New England Patriots',
+  event_id:'opener', event_start_time:'2026-09-10T00:20Z', is_active:true, timestamp:'2026-09-09T19:36Z' };
+function recoveryPair(book, type, line, alternate=true, id='main') {
+  return [0,1].map(i => ({...recoveryBase,sportsbook:book,market_id:id,
+    market_type:type==='spread'?'point_spread':'total_points',
+    selection_type:type==='spread'?(i?'away':'home'):(i?'under':'over'),
+    line:type==='spread'?(i?line:-line):line,odds_american:i?-120:-102,
+    is_alternate_line:alternate,is_main_line:!alternate}));
+}
+test('mislabeled FD spread recovers from nearby main DK spread with its own prices',()=>{
+  const g=normalizeSharp([...recoveryPair('fanduel','spread',3.5),...recoveryPair('draftkings','spread',3,false)])[0];
+  assert.deepEqual(g.books.fanduel.spread,{fav:'Seattle Seahawks',line:-3.5,favPrice:-102,dogPrice:-120});
+  assert.equal(g.books.draftkings.spread.line,-3);
+});
+test('both books mislabeled can corroborate a unique balanced market',()=>{
+  const g=normalizeSharp([...recoveryPair('fanduel','spread',5.5),...recoveryPair('draftkings','spread',5.5)])[0];
+  assert.equal(g.books.fanduel.spread.line,-5.5);
+  assert.equal(g.books.draftkings.spread.line,-5.5);
+});
+test('total recovery accepts corroborated main-sized quote but rejects polluted 73.5',()=>{
+  const g=normalizeSharp([...recoveryPair('fanduel','total',47.5,false),
+    ...recoveryPair('draftkings','total',47.5),...recoveryPair('draftkings','total',73.5,true,'wrong')])[0];
+  assert.equal(g.books.draftkings.total.point,47.5);
+  const bad=normalizeSharp([...recoveryPair('fanduel','total',47.5,false),...recoveryPair('draftkings','total',73.5)])[0];
+  assert.equal(bad.books.draftkings,undefined);
+});
+test('recovery fails closed for ambiguous, unpaired, invalid, extreme, and uncorroborated quotes',()=>{
+  const base=recoveryPair('fanduel','spread',3.5);
+  const variants=[base.slice(0,1),base.map(r=>({...r,is_active:false})),
+    base.map(r=>({...r,is_stale_pregame_price:true})),base.map(r=>({...r,is_impossible_scoreline:true})),
+    base.map(r=>({...r,odds_american:500})),base.map(r=>({...r,market_id:undefined})),
+    [base[0],{...base[1],market_id:'different'}],
+    [...base,...recoveryPair('fanduel','spread',2.5,true,'second')],
+    recoveryPair('fanduel','spread',9.5)];
+  for(const rows of variants){
+    const g=normalizeSharp([...rows,...recoveryPair('draftkings','spread',3,false)])[0];
+    assert.equal(g.books.fanduel,undefined);
+  }
+  assert.equal(normalizeSharp(base).length,0);
+});
+test('recovery never replaces an existing primary line',()=>{
+  const g=normalizeSharp([...recoveryPair('fanduel','spread',3,false),
+    ...recoveryPair('fanduel','spread',3.5),...recoveryPair('draftkings','spread',3.5,false)])[0];
+  assert.equal(g.books.fanduel.spread.line,-3);
+});
+
+
+test('Sharp countdown uses verified schedule while rejecting unrelated or invalid dates', async()=>{
+  const {alignSharpKickoffs}=await import('../functions/_shared/odds-providers.js');
+  const g=game('2026-09-10T00:15Z');
+  assert.equal(alignSharpKickoffs([g],[event()])[0].kickoff,'2026-09-10T00:20:00Z');
+  for(const events of [[],[event('1','invalid')],[event('1','2026-09-17T00:20Z')]])
+    assert.equal(alignSharpKickoffs([g],events)[0].kickoff,g.kickoff);
+});
