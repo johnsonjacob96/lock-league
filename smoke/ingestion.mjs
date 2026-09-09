@@ -468,3 +468,14 @@ test('ESPN fallback requires matching complete current sides and never takes ope
   }
   assert.deepEqual(espnDraftKingsRows([quotedEvent()],[game('2026-09-17T00:20Z')],new Date(now).toISOString(),now),[]);
 });
+
+test('ESPN can fill a game entirely omitted by Sharp, with no fake Sharp event ID',async()=>{
+ const {retainSchedule}=await import('../functions/_shared/odds-schedule.js');
+ const {espnDraftKingsRows}=await import('../functions/_shared/odds-providers.js');
+ const events=[quotedEvent()],now=Date.parse('2026-09-09T20:00Z');
+ const scheduled=retainSchedule({games:[]},events).games;
+ const rows=espnDraftKingsRows(events,scheduled,'2026-09-09T19:59:30Z',now);
+ const games=normalizeSharp(rows);
+ assert.equal(games.length,1);assert.equal(games[0].books.draftkings.total.point,44.5);
+ assert.deepEqual(games[0].sharp_event_ids,[]);
+});

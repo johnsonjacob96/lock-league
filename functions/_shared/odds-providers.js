@@ -1,3 +1,4 @@
+import { retainSchedule } from "./odds-schedule.js";
 import { providerFetch, sharedFeed } from "./feed-cache.js";
 // Provider adapters: request/normalization semantics are independent of cache policy.
 import {
@@ -488,7 +489,7 @@ export function normalizeSharp(rows) {
       games.set(key, g);
     }
     if (
-      row.event_id != null &&
+      !row.espn_supplement && row.event_id != null &&
       !g.sharp_event_ids.includes(String(row.event_id))
     )
       g.sharp_event_ids.push(String(row.event_id));
@@ -761,6 +762,7 @@ async function fetchSharpApi(env) {
       cur.week,
       seasonTypeFor(env),
     );
+    games = retainSchedule({games}, events).games;
     const missing = games.some((g) =>
       ["spread", "total"].some((m) => !g.books?.draftkings?.[m]),
     );
@@ -780,6 +782,7 @@ async function fetchSharpApi(env) {
         /* Old schedule remains usable for times, never for prices. */
       }
     }
+    games = retainSchedule({games}, events).games;
     const extra = missing ? espnDraftKingsRows(events, games, updatedAt) : [];
     if (extra.length)
       games = normalizeSharp([...raw, ...extra]).filter((g) => {
