@@ -3741,7 +3741,10 @@ function slSortGames(games) {
 }
 function slSortedPlayers(m) {
   const rows=m.players.map((pl,pi)=>({pl,pi}));
-  if(!/(?:yds|yards)/i.test(m.market))return rows;
+  // Sort every over/under market highest-line-first (yards, receptions,
+  // attempts, completions, TDs, …). Anytime TD has no line, so it keeps its
+  // board order (best odds first).
+  if(m.kind==='yes')return rows;
   const line=pl=>{
     const value=slBestSide(pl,'over').line ?? slBestSide(pl,'under').line ?? pl.line;
     return typeof value==='number'&&Number.isFinite(value)?value:-Infinity;
