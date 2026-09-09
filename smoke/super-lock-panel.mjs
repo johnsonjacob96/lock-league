@@ -31,6 +31,8 @@ for(const width of [375,390,844,1440]) {
  await page.locator('#sl-open').click();
  assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.open),true);checks++;
  assert.equal(await page.locator('[data-slgame]:disabled').count(),1);checks++;
+ await page.locator('#sl-close').focus();
+ await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.getElementById('sl-dialog').contains(document.activeElement)),true);checks++;
  await page.screenshot({path:`${output}/games-${width}.png`});
  await page.locator('[data-slgame="Dallas Cowboys@Philadelphia Eagles"]').click();
  await page.waitForSelector('[data-slmarket="pass_int"]');
@@ -48,6 +50,7 @@ for(const width of [375,390,844,1440]) {
  await page.locator('[data-slmarket="rush_yds"]').click();
  await page.locator('[data-slchoose$=":under"]').click();
  assert.equal(await page.evaluate(()=>slPropSel(slMarkets.find(m=>m.market==='rush_yds'),slMarkets.find(m=>m.market==='rush_yds').players[0]).book),'fanduel');checks++;
+ assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1),true);checks++;
  await page.screenshot({path:`${output}/props-${width}.png`});
  await page.locator('.sl-alt-wrap summary').click();await page.locator('[data-slchoose$=":50.5"]').click();
  rejectSave=true;await page.locator('#sl-lock').click();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('NO LONGER'));
@@ -57,7 +60,7 @@ for(const width of [375,390,844,1440]) {
  await page.locator('#sl-repick').click();await page.locator('[data-sltab="lines"]').click();await page.locator('[data-slmarket="__total__"]').click();await page.locator('[data-slside="over"]').click();await page.locator('#sl-lock-line').click();await page.waitForSelector('#sl-dialog',{state:'detached'});
  assert.equal(writes.at(-1).picks[0].line_pick.bet,'Over');checks++;
  await page.locator('#sl-repick').click();await page.locator('[data-slmode="custom"]').click();await page.locator('#mycard-superlock').fill('Custom pick');await page.locator('#mycard-sl-price').fill('-130');await page.locator('#mycard-sl-save').click();assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.open),true);checks++;
- await page.locator('#mycard-sl-price').fill('150');await page.locator('#mycard-sl-save').click();await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(writes.at(-1).picks[0].price,150);checks++;
+ await page.locator('#mycard-sl-price').fill('150');await page.evaluate(()=>refreshSuperLockEditor());assert.equal(await page.locator('#mycard-superlock').inputValue(),'Custom pick');assert.equal(await page.locator('#mycard-sl-price').inputValue(),'150');checks+=2;await page.locator('#mycard-sl-save').click();await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(writes.at(-1).picks[0].price,150);checks++;
  await page.locator('#sl-repick').click();await page.keyboard.press('Escape');await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(await page.locator('#sl-repick').evaluate(e=>e===document.activeElement),true);checks++;
  assert.deepEqual(errors,[]);checks++;console.log(`${width}px passed`);await page.close();
 }

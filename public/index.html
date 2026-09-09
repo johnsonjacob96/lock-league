@@ -4031,6 +4031,8 @@ function refreshSuperLockEditor() {
     let dialog=document.getElementById('sl-dialog');
     const fresh=!dialog;
     if(fresh){dialog=document.createElement('dialog');dialog.id='sl-dialog';dialog.setAttribute('aria-label','Choose Super Lock');document.body.append(dialog);dialog.addEventListener('cancel',e=>{e.preventDefault();closeSlPanel();});}
+    const customText=dialog.querySelector('#mycard-superlock')?.value;
+    const customPrice=dialog.querySelector('#mycard-sl-price')?.value;
     const scroll=dialog.querySelector('.sl-panel-body')?.scrollTop||0;
     const active=document.activeElement;
     const focusAttr=['data-slchoose','data-slmarket','data-sltab','id'].find(attr=>active?.hasAttribute(attr));
@@ -4038,6 +4040,8 @@ function refreshSuperLockEditor() {
     const filterScroll=dialog.querySelector('.sl-filters')?.scrollLeft||0;
     el.querySelector('#mycard-sl-msg')?.remove();
     dialog.innerHTML=slPanelHtml();
+    if(customText!=null&&dialog.querySelector('#mycard-superlock'))dialog.querySelector('#mycard-superlock').value=customText;
+    if(customPrice!=null&&dialog.querySelector('#mycard-sl-price'))dialog.querySelector('#mycard-sl-price').value=customPrice;
     if(fresh)dialog.showModal();
     bindSuperLockEditor();
     dialog.querySelector('.sl-panel-body').scrollTop=scroll;
