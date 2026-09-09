@@ -501,6 +501,7 @@ export function normalizeSharp(rows) {
       (!b.updated || Date.parse(row.timestamp) > Date.parse(b.updated))
     )
       b.updated = row.timestamp;
+    if (row.espn_supplement) b.supplementedAt = row.timestamp;
     const pt = sharpPoint(row);
     if (pt == null) continue;
     const price = Number.isFinite(Number(row.odds_american))
@@ -552,7 +553,14 @@ export function normalizeSharp(rows) {
       const spread = resolveSpread(b._spread, g);
       const total = resolveTotal(b._total);
       if (spread || total)
-        books[bk] = { spread, total, updated: b.updated || null };
+        books[bk] = {
+          spread,
+          total,
+          updated: b.supplementedAt || b.updated || null,
+          ...(b.supplementedAt
+            ? { supplemental: true, provider: "DraftKings via ESPN" }
+            : {}),
+        };
     }
     recoverFlaggedMarkets(g, books);
     if (Object.keys(books).length) {
@@ -634,8 +642,86 @@ export function alignSharpKickoffs(games, events) {
   });
 }
 
+// ESPN's current scoreboard names its sportsbook and carries exact current
+// prices under pointSpread/total.*.close. Never relabel consensus or opening odds.
+export function espnDraftKingsRows(events, games, updatedAt, now = Date.now()) {
+  const age = now - Date.parse(updatedAt);
+  if (!Number.isFinite(age) || age < 0 || age > 15 * 60 * 1000) return [];
+  const out = [];
+  const price = (v) =>
+    /^[+-]?\d+$/.test(String(v)) && Math.abs(Number(v)) >= 100
+      ? Number(v)
+      : null;
+  const line = (v, prefix = "") => {
+    const text = String(v ?? "").replace(new RegExp(`^[${prefix || " "}]`), "");
+    return /^[+-]?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null;
+  };
+  for (const ev of events || []) {
+    const comp = ev.competitions?.[0],
+      cs = comp?.competitors || [];
+    const home = cs.find((c) => c.homeAway === "home")?.team?.displayName;
+    const away = cs.find((c) => c.homeAway === "away")?.team?.displayName;
+    const g = games.find(
+      (g) =>
+        g.home === home &&
+        g.away === away &&
+        Math.abs(Date.parse(g.kickoff) - Date.parse(ev.date)) <= 3600000,
+    );
+    if (!g) continue;
+    const odds = comp.odds?.find(
+      (o) =>
+        String(o.provider?.id) === "100" && o.provider?.name === "DraftKings",
+    );
+    if (!odds) continue;
+    for (const type of ["spread", "total"]) {
+      const existing = g.books?.draftkings?.[type];
+      if (
+        existing &&
+        (type === "spread"
+          ? [existing.favPrice, existing.dogPrice]
+          : [existing.overPrice, existing.underPrice]
+        ).every((p) => Number.isFinite(p) && Math.abs(p) >= 100)
+      )
+        continue;
+      const sides = type === "spread" ? ["home", "away"] : ["over", "under"];
+      const market = type === "spread" ? odds.pointSpread : odds.total;
+      const quotes = sides.map((side) => ({
+        side,
+        point: line(market?.[side]?.close?.line, type === "total" ? "ou" : ""),
+        price: price(market?.[side]?.close?.odds),
+      }));
+      if (quotes.some((q) => q.point === null || q.price === null)) continue;
+      if (
+        type === "spread"
+          ? quotes[0].point !== -quotes[1].point || quotes[0].point === 0
+          : quotes[0].point !== quotes[1].point || quotes[0].point <= 0
+      )
+        continue;
+      for (const q of quotes)
+        out.push({
+          home_team: home,
+          away_team: away,
+          event_id: g.id,
+          event_start_time: ev.date,
+          sportsbook: "draftkings",
+          market_type: type === "spread" ? "point_spread" : "total_points",
+          market_id: `espn:${ev.id}:${type}`,
+          selection_type: q.side,
+          line: q.point,
+          odds_american: q.price,
+          is_main_line: true,
+          is_active: true,
+          timestamp: updatedAt,
+          espn_supplement: true,
+        });
+    }
+  }
+  return out;
+}
+
 async function fetchSharpApi(env) {
-  const all = normalizeSharp(await fetchSharpRaw(env));
+  const raw = await fetchSharpRaw(env);
+  const all = normalizeSharp(raw);
   // SharpAPI returns the whole season; scope to the current pick week's
   // kickoff window, exactly like the The-Odds-API path.
   const win = weekWindow(currentSeasonWeek(env).week, env);
@@ -650,12 +736,37 @@ async function fetchSharpApi(env) {
   let games = scoped;
   try {
     const cur = currentSeasonWeek(env);
-    const events = await loadScoreboardSeed(
+    let events = await loadScoreboardSeed(
       env,
       cur.season,
       cur.week,
       seasonTypeFor(env),
     );
+    const missing = games.some((g) =>
+      ["spread", "total"].some((m) => !g.books?.draftkings?.[m]),
+    );
+    let updatedAt = events?.source_updated_at;
+    if (
+      missing &&
+      (!updatedAt || Date.now() - Date.parse(updatedAt) > 15 * 60 * 1000)
+    ) {
+      try {
+        events = await espnScoreboardEvents(
+          cur.season,
+          seasonTypeFor(env),
+          cur.week,
+        );
+        updatedAt = new Date().toISOString();
+      } catch {
+        /* Old schedule remains usable for times, never for prices. */
+      }
+    }
+    const extra = missing ? espnDraftKingsRows(events, games, updatedAt) : [];
+    if (extra.length)
+      games = normalizeSharp([...raw, ...extra]).filter((g) => {
+        const t = Date.parse(g.kickoff);
+        return t >= from && t < to;
+      });
     games = alignSharpKickoffs(games, events);
   } catch {
     /* Retain provider times when the schedule snapshot is unavailable. */

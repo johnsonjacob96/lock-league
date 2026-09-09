@@ -42,3 +42,22 @@ retains the provider time.
 Worker build passes. Regression tests cover missing-book recovery, both-book
 mislabeling, corrupted totals, ambiguous ladders, invalid rows, unchanged main
 lines, and kickoff reconciliation. Production verification follows deployment.
+
+## Additional free fallback
+
+Production verification found SharpAPI subsequently omitted the Detroit DK
+spread entirely, leaving no quote to corroborate FD. ESPN's scoreboard contains
+explicitly identified DraftKings prices under `pointSpread` / `total`, including
+DET -7 (-108), NO +7 (-112). The adapter now fills missing DK markets from those
+exact current quotes, which can also corroborate the remaining flagged FD quote.
+It accepts only provider ID 100 AND name DraftKings, matching game/time, complete
+matching sides, valid prices, and data fetched within 15 minutes. It never uses
+opening prices or relabels consensus. Healthy Sharp quotes are preserved.
+
+The existing scoreboard snapshot is reused when fresh; otherwise the bounded
+ESPN host fallback runs inside the existing odds cache. Missing/stale/invalid
+ESPN data leaves the existing paid-backup/safe-unavailable behavior intact.
+No new credentials, subscriptions, frontend polling, or sportsbook quota calls.
+ESPN-supplemented books retain their actual snapshot time and source label.
+95 backend tests and Worker compile pass, including source identity, freshness,
+line-pair integrity, preserved primary prices and FD corroboration regressions.

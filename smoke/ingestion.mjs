@@ -421,3 +421,45 @@ test('Sharp countdown uses verified schedule while rejecting unrelated or invali
   for(const events of [[],[event('1','invalid')],[event('1','2026-09-17T00:20Z')]])
     assert.equal(alignSharpKickoffs([g],events)[0].kickoff,g.kickoff);
 });
+
+const espnQuotes = () => ({provider:{id:'100',name:'DraftKings'},
+  pointSpread:{home:{close:{line:'-3',odds:'-108'}},away:{close:{line:'+3',odds:'-112'}}},
+  total:{over:{close:{line:'o44.5',odds:'-105'}},under:{close:{line:'u44.5',odds:'-115'}}}});
+function quotedEvent(odds=espnQuotes()) {
+  const ev=event();ev.competitions[0].odds=[odds];return ev;
+}
+test('ESPN named DraftKings current quotes restore missing book and corroborate FD',async()=>{
+  const {espnDraftKingsRows}=await import('../functions/_shared/odds-providers.js');
+  const now=Date.parse('2026-09-09T20:00Z'),updated='2026-09-09T19:55Z';
+  const rows=espnDraftKingsRows([quotedEvent()],[game('2026-09-10T00:15Z')],updated,now);
+  assert.equal(rows.length,4);
+  const g=normalizeSharp([...recoveryPair('fanduel','spread',3.5),...rows])[0];
+  assert.equal(g.books.fanduel.spread.line,-3.5);
+  assert.deepEqual(g.books.draftkings.spread,{fav:'Seattle Seahawks',line:-3,favPrice:-108,dogPrice:-112});
+  assert.equal(g.books.draftkings.total.point,44.5);
+  assert.equal(g.books.draftkings.updated,updated);
+  assert.equal(g.books.draftkings.provider,'DraftKings via ESPN');
+});
+test('ESPN fallback refuses stale/future/unidentified quotes and preserves primary markets',async()=>{
+  const {espnDraftKingsRows}=await import('../functions/_shared/odds-providers.js');
+  const now=Date.parse('2026-09-09T20:00Z'),g=game('2026-09-10T00:20Z');
+  for(const stamp of ['2026-09-09T19:44Z','2026-09-09T20:01Z',null,'bad'])
+    assert.deepEqual(espnDraftKingsRows([quotedEvent()],[g],stamp,now),[]);
+  for(const provider of [{id:'58',name:'ESPN BET'},{id:'100',name:'Consensus'},{name:'DraftKings'}])
+    assert.deepEqual(espnDraftKingsRows([quotedEvent({...espnQuotes(),provider})],[g],new Date(now).toISOString(),now),[]);
+  g.books.draftkings={spread:{line:-2.5,favPrice:-110,dogPrice:-110},total:{point:45.5,overPrice:-110,underPrice:-110}};
+  assert.deepEqual(espnDraftKingsRows([quotedEvent()],[g],new Date(now).toISOString(),now),[]);
+});
+test('ESPN fallback requires matching complete current sides and never takes opening prices',async()=>{
+  const {espnDraftKingsRows}=await import('../functions/_shared/odds-providers.js');
+  const now=Date.parse('2026-09-09T20:00Z');
+  const variants=[q=>delete q.pointSpread.home.close,
+    q=>q.pointSpread.home.close.odds=null,q=>q.pointSpread.away.close.line='+4',
+    q=>q.pointSpread.home.close.odds='-99'];
+  for(const mutate of variants){
+    const q=espnQuotes();mutate(q);q.pointSpread.home.open={line:'-3',odds:'-110'};
+    const rows=espnDraftKingsRows([quotedEvent(q)],[game('2026-09-10T00:20Z')],new Date(now).toISOString(),now);
+    assert.equal(rows.length,2);assert.ok(rows.every(r=>r.market_type==='total_points'));
+  }
+  assert.deepEqual(espnDraftKingsRows([quotedEvent()],[game('2026-09-17T00:20Z')],new Date(now).toISOString(),now),[]);
+});
