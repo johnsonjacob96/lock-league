@@ -1058,6 +1058,15 @@
   #live-leader-toggle { width:100%; }
   #live-card-summary .home-record { font:600 18px Inter,sans-serif; }
 
+
+  .sl-entry{display:flex;justify-content:space-between;gap:12px;margin-bottom:12px;align-items:center}.sl-launch{width:100%;display:flex;justify-content:space-between;padding:16px;border:1px solid #3f6b53;border-radius:10px;text-align:left;color:#48df94;background:#18261f}
+  #sl-dialog{padding:0;border:1px solid #303936;border-radius:16px;background:#101514;color:#e9eeeb;width:min(600px,calc(100vw - 32px));max-height:90dvh;overflow:hidden}#sl-dialog::backdrop{background:#000b}
+  .sl-panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #29322e}.sl-panel-head h2{font-family:Oswald,sans-serif;font-size:24px}.sl-panel-head button{min-width:44px;min-height:44px;font-size:26px}.sl-panel-body{padding:20px;max-height:calc(90dvh - 70px);overflow-y:auto;scroll-padding:20px 0 160px}.sl-panel-body h3{font-family:Oswald,sans-serif;font-size:28px;margin-bottom:10px}
+  .sl-game-list{display:grid;gap:12px;margin-top:20px}.sl-game-choice{padding:16px;border:1px solid #303936;border-radius:12px;background:#191f1d;text-align:center}.sl-game-choice:disabled{opacity:.45}.sl-matchup{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}.sl-matchup>span{display:flex;align-items:center;gap:10px}.sl-game-choice small,.sl-player-heading small{display:block;color:#a1ada7}.sl-selected-game{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin-bottom:12px}.sl-tabs{display:flex;margin:20px 0}.sl-tabs button{flex:1;padding:14px;border-bottom:2px solid #303936}.sl-tabs [aria-pressed=true]{border-color:#37db89;color:#37db89}
+  .sl-search-label{display:block;font-size:13px;color:#abb8b0;margin-bottom:6px}#sl-search{width:100%}.sl-filters{display:flex;overflow-x:auto;gap:8px;margin:16px 0}.sl-filters button{flex-shrink:0;white-space:nowrap;padding:10px 12px;min-height:44px;border:1px solid #344039;border-radius:20px;font-size:12px}.sl-filters [aria-pressed=true]{background:#203d2e;color:#65ec9f;border-color:#37db89}
+  .sl-prop-row{padding:16px 0;border-bottom:1px solid #2c3530}.sl-prop-row[hidden]{display:none}.sl-player-heading{display:flex;align-items:center;gap:12px;margin-bottom:12px}.sl-avatar{display:grid;place-items:center;width:40px;height:40px;background:#28372f;border-radius:50%;font-size:13px;color:#b5c8bd}.sl-player-heading strong{font-size:16px}.sl-player-heading small{font-size:12px;margin-top:3px}.sl-prop-row .sl-side-btn{min-height:56px}.sl-prop-row .sl-side-btn.active{color:#64e89e;border-color:#37db89;background:#1b3025}.sl-alt-wrap summary{padding:12px 0;cursor:pointer}.sl-alt-btn span{display:block}.sl-confirm{position:sticky;bottom:-20px;background:#101514;border-top:1px solid #3b4c41;padding:16px 0 20px;margin-top:20px}.sl-confirm strong,.sl-confirm small{display:block}.sl-selection-line{display:block;font-size:14px;color:#c5d0c9;margin:8px 0}.sl-confirm .btn-primary{font-family:inherit;letter-spacing:0;font-size:16px;min-height:48px;text-transform:none}.sl-confirm small{font-size:11px;color:#aab8af;margin:6px 0}.sl-custom-link{display:block;margin:24px auto 4px;padding:12px}#sl-dialog button:focus-visible,#sl-dialog input:focus-visible,#sl-dialog summary:focus-visible{outline:2px solid #70e8a6;outline-offset:3px}
+  @media(max-width:640px){#sl-dialog{width:100%;height:100dvh;max-height:100dvh;max-width:100vw;border:0;border-radius:0;margin:0}.sl-panel-head{padding-top:max(12px,env(safe-area-inset-top))}.sl-panel-body{max-height:calc(100dvh - 80px - env(safe-area-inset-top));padding-bottom:max(20px,env(safe-area-inset-bottom))}}
+
 </style>
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -3536,22 +3545,31 @@ function slPropSel(m, pl) {
   return null;
 }
 
+let slPanelOpen = false, slSearch = "", slTab = "props", slSaving = false;
 function superLockEditorHtml() {
   const p = currentMyPicks["Super Lock"];
-  const header = `
-    <div class="flex items-center gap-1.5 mb-2 flex-wrap">
-      <span class="material-symbols-outlined text-[15px] text-tertiary-fixed" style="font-variation-settings:'FILL' 1">lock</span>
-      <span class="font-label-caps text-[10px] tracking-widest uppercase text-tertiary-fixed">Super Lock</span>
-      <span class="font-data-tabular text-[9.5px] text-on-surface-variant">line or prop · -120 or longer</span>
-    </div>`;
-  const msg = `<span class="font-data-tabular text-[11px] tracking-widest text-primary-fixed block mt-2" id="mycard-sl-msg"></span>`;
-  if (p && (p.pick_text || p.text) && !slEditing) return header + slLockedHtml(p) + msg;
-  const toggle = `
-    <div class="sl-toggle mb-3">
-      <button class="sl-seg ${slMode === "board" ? "active" : ""}" data-slmode="board">From board</button>
-      <button class="sl-seg ${slMode === "custom" ? "active" : ""}" data-slmode="custom">Custom</button>
-    </div>`;
-  return header + toggle + (slMode === "board" ? slBoardPickerHtml() : slCustomHtml(p)) + msg;
+  return `<div class="sl-entry"><strong>SUPER LOCK</strong><span class="sl-hint">Odds must be -120 or longer</span></div>` +
+    (p && (p.pick_text || p.text) ? slLockedHtml(p) : `<button class="sl-launch" id="sl-open">Choose your Super Lock <span>→</span></button>`) +
+    `<span id="mycard-sl-msg" role="status"></span>`;
+}
+function closeSlPanel() {
+  if (slSaving) return;
+  slPanelOpen = false; slEditing = false;
+  const dialog = document.getElementById('sl-dialog');
+  if (dialog) { dialog.close(); dialog.remove(); }
+  const entry=document.getElementById('my-card-sl');
+  if(entry){entry.innerHTML=superLockEditorHtml();bindSuperLockEditor();}
+  document.getElementById('sl-open')?.focus();
+  document.getElementById('sl-repick')?.focus();
+}
+function openSlPanel() {
+  slPanelOpen = true; slEditing = true;
+  refreshSuperLockEditor();
+}
+function slPanelHtml() {
+  return `<div class="sl-panel-head"><button id="sl-back" aria-label="Back to games">←</button><h2>SUPER LOCK</h2><button id="sl-close" aria-label="Close Super Lock">×</button></div>
+    <div class="sl-panel-body">${slMode === 'custom' ? `<h3>Custom pick</h3>${slCustomHtml(currentMyPicks['Super Lock'])}` : slBoardPickerHtml()}
+    <div id="mycard-sl-msg" role="status" class="sl-hint"></div></div>`;
 }
 
 function slLockedHtml(p) {
@@ -3591,7 +3609,7 @@ function slLockedHtml(p) {
 function slCustomHtml(p) {
   const txt = p && (p.pick_text || p.text) && !slMeta(p) ? escapeHtml(p.pick_text || p.text) : "";
   return `
-    <div class="flex gap-2">
+    <label for="mycard-superlock" class="sl-search-label">Your pick</label><div class="flex gap-2">
       <input class="pick-input flex-1" id="mycard-superlock" autocapitalize="none" value="${txt}" placeholder="Player prop / specialty bet">
       <button class="btn-primary" id="mycard-sl-save">Save</button>
     </div>
@@ -3623,14 +3641,41 @@ function slGameLineSide(g, bet) {
 const BET_FOR_SIDE = { fav: "Favorite", dog: "Dog", over: "Over", under: "Under" };
 
 function slBoardPickerHtml() {
-  const games = slGamesList();
-  const gameOpts = `<option value="">Select a game…</option>` +
-    games.map(g => `<option value="${escapeHtml(g.key)}" ${g.key === slGameKey ? "selected" : ""}>${escapeHtml(g.label)}</option>`).join("");
-  let body;
-  if (!slGameKey) body = `<div class="sl-hint mt-2">Pick a game to load its lines and props.</div>`;
-  else if (slLoading) body = `<div class="sl-hint mt-2">Loading lines…</div>`;
-  else body = slMarketPickerHtml();
-  return `<select class="sl-select" id="sl-game">${gameOpts}</select>${body}`;
+  if (!slGameKey) {
+    const games = (state.thisWeekData?.games || []).slice().sort((a,b)=>new Date(a.kickoff)-new Date(b.kickoff));
+    return `<h3>Choose your game</h3><p class="sl-hint">Odds must be -120 or longer</p><div class="sl-game-list">${games.map(g=>{
+      const started = new Date(g.kickoff).getTime() <= Date.now();
+      return `<button class="sl-game-choice" data-slgame="${escapeHtml(g.away+'@'+g.home)}" ${started?'disabled':''}>
+        <span class="sl-matchup"><span>${teamLogoMark(g.away,'w-8 h-8','text-xs')}<b>${escapeHtml(slShort(g.away))}</b></span><small>@</small><span>${teamLogoMark(g.home,'w-8 h-8','text-xs')}<b>${escapeHtml(slShort(g.home))}</b></span></span>
+        <small>${started?'Game started':escapeHtml(new Date(g.kickoff).toLocaleString('en-US',{weekday:'short',hour:'numeric',minute:'2-digit',timeZone:'America/Chicago',timeZoneName:'short'}))}</small></button>`;
+    }).join('') || '<p>No games available for this week.</p>'}</div><button class="sl-link sl-custom-link" data-slmode="custom">Enter a custom pick instead</button>`;
+  }
+  const g = slCurrentGame();
+  return `<div class="sl-selected-game">${g?teamLogoMark(g.away,'w-8 h-8','text-xs'):''}<strong>${escapeHtml(slGameKey.replace('@',' @ '))}</strong>${g?teamLogoMark(g.home,'w-8 h-8','text-xs'):''}</div>
+    <button class="sl-link" id="sl-change-game">Change game</button>
+    <div class="sl-tabs"><button data-sltab="props" aria-pressed="${slTab==='props'}">Player props</button><button data-sltab="lines" aria-pressed="${slTab==='lines'}">Game lines</button></div>
+    ${slTab==='lines' ? `<div class="sl-filters"><button data-slmarket="__spread__">Spread</button><button data-slmarket="__total__">Total</button></div>${slDraft.market.startsWith('__')&&g?slGameLineSubHtml(g,slDraft.market==='__spread__'?'spread':'total'): '<p class="sl-hint">Choose spread or total.</p>'}` : slLoading ? '<p role="status">Loading player props…</p>' : slBrowsePropsHtml()}
+    <button class="sl-link sl-custom-link" data-slmode="custom">Enter a custom pick instead</button>`;
+}
+function slBrowsePropsHtml() {
+  const markets = slMarkets || [];
+  if (!markets.length) return `<p class="sl-hint">No player props available right now. Try game lines or refresh.</p><button id="sl-retry" class="sl-link">Refresh props</button>`;
+  const selectedMarket = slDraft.market.startsWith('__') ? '' : slDraft.market;
+  const rows = markets.flatMap((m,mi)=> (selectedMarket && selectedMarket!==m.market ? [] : m.players.map((pl,pi)=>{
+    const selected = slDraft.market===m.market && slDraft.player===pl.player;
+    const sides = m.kind==='yes'?['yes']:['over','under'];
+    return `<article class="sl-prop-row" data-player-search="${escapeHtml(pl.player.toLowerCase())}"><div class="sl-player-heading"><span class="sl-avatar" aria-hidden="true">${escapeHtml(pl.player.split(' ').map(x=>x[0]).slice(0,2).join(''))}</span><div><strong>${escapeHtml(pl.player)}</strong><small>${escapeHtml(m.label)}</small></div></div>
+      <div class="sl-sides">${sides.map(side=>{
+        const best=slBestSide(pl,side), active=selected&&slDraft.side===side&&slDraft.line==null;
+        return `<button class="sl-side-btn ${active?'active':''}" data-slchoose="${mi}:${pi}:${side}" aria-pressed="${active}" ${best.price==null?'disabled':''}><span class="sl-side-lab">${side==='yes'?'Anytime TD':(side==='over'?'Over ':'Under ')+(best.line??pl.line)}</span><span class="sl-side-price">${fmtPrice(best.price)}${best.book?' · '+bookShort(best.book):''}</span></button>`;
+      }).join('')}</div>
+      ${pl.alts?.length?`<details class="sl-alt-wrap"><summary>Alternate lines</summary><div class="sl-alts">${pl.alts.map(alt=>{const best=slBestAlt(pl,alt.line);return best.price==null?'':`<button class="sl-alt-btn ${selected&&Number(slDraft.line)===Number(alt.line)?'active':''}" data-slchoose="${mi}:${pi}:over:${alt.line}">Over ${alt.line}<span>${fmtPrice(best.price)} · ${bookShort(best.book)}</span></button>`;}).join('')}</div></details>`:''}</article>`;
+  })));
+  const m=markets.find(x=>x.market===slDraft.market),pl=m?.players.find(x=>x.player===slDraft.player);
+  return `<label class="sl-search-label" for="sl-search">Find a player</label><input id="sl-search" class="pick-input" type="search" value="${escapeHtml(slSearch)}" placeholder="Search player name">
+    <div class="sl-filters"><button data-slmarket="" aria-pressed="${!selectedMarket}">All props</button>${markets.map(m=>`<button data-slmarket="${escapeHtml(m.market)}" aria-pressed="${selectedMarket===m.market}">${escapeHtml(m.label)}</button>`).join('')}</div>
+    <div class="sl-prop-list">${rows.join('')}</div><p id="sl-no-results" hidden>No players match your search.</p>
+    ${m&&pl&&slPropSel(m,pl)?`<div class="sl-confirm"><small>YOUR SUPER LOCK</small><strong>${escapeHtml(pl.player)} · ${escapeHtml(m.label)}</strong>${slLockBtnHtml(m,pl)}<small>Auto-graded after the game</small></div>`:''}`;
 }
 
 // Sub-picker for a game-line Super Lock (spread or total): two side buttons +
@@ -3726,13 +3771,14 @@ function slMarketPickerHtml() {
 function slLockBtnHtml(m, pl) {
   const sel = slPropSel(m, pl);
   if (!sel) return "";
-  const meets = sel.price != null && Number(sel.price) >= -120;
+  const meets = Number.isInteger(Number(sel.price)) && Math.abs(Number(sel.price)) >= 100 && Number(sel.price) >= -120;
   const warn = (sel.price != null && !meets)
     ? `<div class="sl-hint warn mt-1">${fmtPrice(sel.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
     : (sel.price == null ? `<div class="sl-hint warn mt-1">No price available for this line.</div>` : "");
   const dis = meets ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
   const book = sel.book ? ` · ${bookShort(sel.book)}` : "";
-  return `<button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>Lock ${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${book}</button>${warn}`;
+  if (slPanelOpen) return `<span class="sl-selection-line">${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${sel.book?' · '+bookLabel(sel.book):''}</span><button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>Lock Super Lock</button>${warn}`;
+  return `<button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>Lock Super Lock · ${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${book}</button>${warn}`;
 }
 
 function myCardProgress() {
@@ -3765,17 +3811,18 @@ function myCardWeek() {
   return state.myPicksWeek || cur.week || 1;
 }
 function bindSuperLockEditor() {
-  const root = document.getElementById("my-card-sl");
+  const root = document.getElementById("sl-dialog") || document.getElementById("my-card-sl");
   if (!root) return;
+  bindSlPanelControls(root);
   // Mode toggle (board vs custom).
   root.querySelectorAll(".sl-seg").forEach(b => b.onclick = () => { slMode = b.dataset.slmode; refreshSuperLockEditor(); });
   // Custom free-text save + manual grade.
   const save = document.getElementById("mycard-sl-save");
-  if (save) save.onclick = () => { const inp = document.getElementById("mycard-superlock"); saveSuperLockText(inp ? inp.value : ""); };
+  if (save) save.onclick = () => { const inp = document.getElementById("mycard-superlock"); submitSl(()=>saveSuperLockText(inp ? inp.value : "")); };
   root.querySelectorAll(".sl-mark-btn").forEach(b => b.onclick = () => markSuperLockMyCard(b.dataset.result));
   // Change an already-locked pick.
   const repick = document.getElementById("sl-repick");
-  if (repick) repick.onclick = () => { slEditing = true; refreshSuperLockEditor(); };
+  if (repick) repick.onclick = openSlPanel;
   // Board picker: game -> market -> player -> side -> lock.
   const gameSel = document.getElementById("sl-game");
   if (gameSel) gameSel.onchange = () => {
@@ -3786,19 +3833,68 @@ function bindSuperLockEditor() {
   if (marketSel) marketSel.onchange = () => { slDraft.market = marketSel.value; slDraft.player = ""; slDraft.side = ""; slDraft.line = null; refreshSuperLockEditor(); };
   const playerSel = document.getElementById("sl-player");
   if (playerSel) playerSel.onchange = () => { slDraft.player = playerSel.value; slDraft.side = ""; slDraft.line = null; refreshSuperLockEditor(); };
-  root.querySelectorAll(".sl-side-btn").forEach(b => b.onclick = () => { slDraft.side = b.dataset.slside; slDraft.line = null; refreshSuperLockEditor(); });
-  root.querySelectorAll(".sl-alt-btn").forEach(b => b.onclick = () => { slDraft.line = Number(b.dataset.slalt); slDraft.side = "over"; refreshSuperLockEditor(); });
+  root.querySelectorAll(".sl-side-btn[data-slside]").forEach(b => b.onclick = () => { slDraft.side = b.dataset.slside; slDraft.line = null; refreshSuperLockEditor(); });
+  root.querySelectorAll(".sl-alt-btn[data-slalt]").forEach(b => b.onclick = () => { slDraft.line = Number(b.dataset.slalt); slDraft.side = "over"; refreshSuperLockEditor(); });
   const lock = document.getElementById("sl-lock");
-  if (lock && !lock.disabled) lock.onclick = () => lockStructuredProp();
+  if (lock && !lock.disabled) lock.onclick = () => submitSl(lockStructuredProp);
   const lockLine = document.getElementById("sl-lock-line");
-  if (lockLine && !lockLine.disabled) lockLine.onclick = () => lockGameLine();
+  if (lockLine && !lockLine.disabled) lockLine.onclick = () => submitSl(lockGameLine);
+}
+async function submitSl(action) {
+  if(slSaving)return;
+  slSaving=true;
+  const dialog=document.getElementById('sl-dialog');
+  dialog?.setAttribute('aria-busy','true');
+  dialog?.querySelectorAll('button,input').forEach(el=>{el.dataset.wasDisabled=String(el.disabled);el.disabled=true;});
+  try { await action(); } finally {
+    slSaving=false;
+    if(slPanelOpen&&!slEditing){closeSlPanel();refreshSuperLockEditor();}
+    else {dialog?.removeAttribute('aria-busy');dialog?.querySelectorAll('[data-was-disabled]').forEach(el=>{el.disabled=el.dataset.wasDisabled==='true';delete el.dataset.wasDisabled;});}
+  }
+}
+function bindSlPanelControls(root) {
+  root.querySelector('#sl-open')?.addEventListener('click',openSlPanel);
+  root.querySelector('#sl-close')?.addEventListener('click',closeSlPanel);
+  const back=()=>{ slGameKey='';slSearch='';slMode='board';slDraft={market:'',player:'',side:'',line:null}; refreshSuperLockEditor(); };
+  root.querySelector('#sl-back')?.addEventListener('click',back);
+  root.querySelector('#sl-change-game')?.addEventListener('click',back);
+  root.querySelector('#sl-retry')?.addEventListener('click',()=>loadPropMenu(slGameKey));
+  root.querySelectorAll('[data-slmode]').forEach(b=>b.onclick=()=>{slMode=b.dataset.slmode;refreshSuperLockEditor();});
+  root.querySelectorAll('[data-slgame]').forEach(b=>b.onclick=()=>{slGameKey=b.dataset.slgame;slTab='props';slSearch='';slDraft={market:'',player:'',side:'',line:null};slMarkets=null;loadPropMenu(slGameKey);});
+  root.querySelectorAll('[data-sltab]').forEach(b=>b.onclick=()=>{slTab=b.dataset.sltab;slDraft={market:'',player:'',side:'',line:null};refreshSuperLockEditor();});
+  root.querySelectorAll('[data-slmarket]').forEach(b=>b.onclick=()=>{slDraft={market:b.dataset.slmarket,player:'',side:'',line:null};refreshSuperLockEditor();});
+  root.querySelectorAll('[data-slchoose]').forEach(b=>b.onclick=()=>{
+    const [mi,pi,side,line]=b.dataset.slchoose.split(':');const m=slMarkets[mi],pl=m.players[pi];
+    slDraft={market:m.market,player:pl.player,side,line:line==null?null:Number(line)};refreshSuperLockEditor();
+  });
+  const search=root.querySelector('#sl-search');
+  const filter=()=>{let visible=0;root.querySelectorAll('[data-player-search]').forEach(row=>{row.hidden=!row.dataset.playerSearch.includes(slSearch.trim().toLowerCase());if(!row.hidden)visible++;});const empty=root.querySelector('#sl-no-results');if(empty)empty.hidden=visible>0;};
+  if(search){search.oninput=()=>{slSearch=search.value;filter();};filter();}
 }
 function refreshSuperLockEditor() {
   const el = document.getElementById("my-card-sl");
   if (!el) return;
-  el.innerHTML = superLockEditorHtml();
-  bindSuperLockEditor();
+  if(slSaving)return;
+  if (slPanelOpen && !slEditing) closeSlPanel();
+  if (slPanelOpen) {
+    let dialog=document.getElementById('sl-dialog');
+    const fresh=!dialog;
+    if(fresh){dialog=document.createElement('dialog');dialog.id='sl-dialog';dialog.setAttribute('aria-label','Choose Super Lock');document.body.append(dialog);dialog.addEventListener('cancel',e=>{e.preventDefault();closeSlPanel();});}
+    const scroll=dialog.querySelector('.sl-panel-body')?.scrollTop||0;
+    const active=document.activeElement;
+    const focusAttr=['data-slchoose','data-slmarket','data-sltab','id'].find(attr=>active?.hasAttribute(attr));
+    const focusValue=focusAttr?active.getAttribute(focusAttr):null;
+    const filterScroll=dialog.querySelector('.sl-filters')?.scrollLeft||0;
+    el.querySelector('#mycard-sl-msg')?.remove();
+    dialog.innerHTML=slPanelHtml();
+    if(fresh)dialog.showModal();
+    bindSuperLockEditor();
+    dialog.querySelector('.sl-panel-body').scrollTop=scroll;
+    const filters=dialog.querySelector('.sl-filters');if(filters)filters.scrollLeft=filterScroll;
+    if(focusAttr)Array.from(dialog.querySelectorAll('['+focusAttr+']')).find(b=>b.getAttribute(focusAttr)===focusValue)?.focus({preventScroll:true});
+  } else {el.innerHTML=superLockEditorHtml();bindSuperLockEditor();}
 }
+
 async function loadPropMenu(gameKey) {
   slLoading = true; refreshSuperLockEditor();
   let markets = [];
