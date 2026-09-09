@@ -397,6 +397,10 @@
   .sl-select:focus { outline:none; border-color:#46e08a; box-shadow:0 0 0 3px rgba(70,224,138,0.14); }
   .sl-select:disabled { opacity:0.5; }
   .sl-sides { display:flex; gap:8px; }
+  .sl-books { display:flex; flex-direction:column; gap:8px; }
+  .sl-book-row { display:grid; grid-template-columns:34px minmax(0,1fr); align-items:center; gap:10px; }
+  .sl-book-tag { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; letter-spacing:0.04em; color:#8fa398; text-transform:uppercase; }
+  .sl-side-empty { pointer-events:none; visibility:hidden; }
   .sl-side-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:9px 8px; border-radius:8px; background:#101315; border:1px solid #29302f; color:#c7cdcb; cursor:pointer; transition:all .12s; }
   .sl-side-btn:hover { border-color:#3a423e; }
   .sl-side-btn.active { background:rgba(244,207,90,0.12); border-color:#f4cf5a; color:#f4cf5a; }
@@ -3848,22 +3852,17 @@ function slCustomHtml(p) {
 function slCurrentGame() {
   return ((state.thisWeekData && state.thisWeekData.games) || []).find(g => `${g.away}@${g.home}` === slGameKey) || null;
 }
-// Best-priced side of a game LINE (spread/total) across FD+DK, mirroring the
-// board's Fav/Dog/Over/Under buttons. Returns the side + line + text the server
-// re-derives against, or null if the game doesn't offer that market.
-function slGameLineSide(g, bet) {
-  const books = g.books || {};
-  const cands = [];
-  for (const bk of ["fanduel", "draftkings"]) {
-    const b = books[bk]; if (!b) continue;
-    if (bet === "Favorite" && b.spread) cands.push({ book: bk, side: "fav", line: b.spread.line, price: b.spread.favPrice, text: `${b.spread.fav} ${b.spread.line}`, label: `${slShort(b.spread.fav)} ${b.spread.line}` });
-    else if (bet === "Dog" && b.spread) { const dog = b.spread.fav === g.home ? g.away : g.home; const dl = Math.abs(b.spread.line); cands.push({ book: bk, side: "dog", line: b.spread.line, price: b.spread.dogPrice, text: `${dog} +${dl}`, label: `${slShort(dog)} +${dl}` }); }
-    else if (bet === "Over" && b.total) cands.push({ book: bk, side: "over", line: b.total.point, price: b.total.overPrice, text: `${g.away} / ${g.home} O${b.total.point}`, label: `Over ${b.total.point}` });
-    else if (bet === "Under" && b.total) cands.push({ book: bk, side: "under", line: b.total.point, price: b.total.underPrice, text: `${g.away} / ${g.home} U${b.total.point}`, label: `Under ${b.total.point}` });
-  }
-  if (!cands.length) return null;
-  cands.sort((a, b) => (b.price ?? -1e9) - (a.price ?? -1e9)); // best payout first, same as props
-  return cands[0];
+// One side of a game LINE (spread/total) for a SPECIFIC book, mirroring the
+// board's Fav/Dog/Over/Under buttons. Returns the side + line + price + text the
+// server re-derives against, or null if that book doesn't offer the market. Books
+// are never combined — the line and odds always come from the same book.
+function slGameLineSideBook(g, book, bet) {
+  const b = (g.books || {})[book]; if (!b) return null;
+  if (bet === "Favorite" && b.spread) return { book, side: "fav", line: b.spread.line, price: b.spread.favPrice, text: `${b.spread.fav} ${b.spread.line}`, label: `${slShort(b.spread.fav)} ${b.spread.line}` };
+  if (bet === "Dog" && b.spread) { const dog = b.spread.fav === g.home ? g.away : g.home; const dl = Math.abs(b.spread.line); return { book, side: "dog", line: b.spread.line, price: b.spread.dogPrice, text: `${dog} +${dl}`, label: `${slShort(dog)} +${dl}` }; }
+  if (bet === "Over" && b.total) return { book, side: "over", line: b.total.point, price: b.total.overPrice, text: `${g.away} / ${g.home} O${b.total.point}`, label: `Over ${b.total.point}` };
+  if (bet === "Under" && b.total) return { book, side: "under", line: b.total.point, price: b.total.underPrice, text: `${g.away} / ${g.home} U${b.total.point}`, label: `Under ${b.total.point}` };
+  return null;
 }
 const BET_FOR_SIDE = { fav: "Favorite", dog: "Dog", over: "Over", under: "Under" };
 
@@ -3914,23 +3913,26 @@ function slBrowsePropsHtml() {
 // a lock button, reusing the prop picker's .sl-sides styling.
 function slGameLineSubHtml(g, kind) {
   const sides = kind === "spread" ? ["fav", "dog"] : ["over", "under"];
-  const btns = sides.map(sd => {
-    const info = slGameLineSide(g, BET_FOR_SIDE[sd]);
-    if (!info) return "";
-    return `<button class="sl-side-btn ${slDraft.side === sd ? "active" : ""}" data-slside="${sd}">
+  // One row per book, each showing that book's own line + odds — never combined.
+  const books = SL_BOOKS.filter(bk => sides.some(sd => slGameLineSideBook(g, bk, BET_FOR_SIDE[sd])));
+  const rows = books.map(bk => `<div class="sl-book-row"><span class="sl-book-tag">${bookShort(bk)}</span><div class="sl-sides">${sides.map(sd => {
+    const info = slGameLineSideBook(g, bk, BET_FOR_SIDE[sd]);
+    if (!info) return `<span class="sl-side-btn sl-side-empty" aria-hidden="true"></span>`;
+    const active = slDraft.side === sd && slDraft.book === bk;
+    return `<button class="sl-side-btn ${active ? "active" : ""}" data-slside="${sd}:${bk}">
       <span class="sl-side-lab">${escapeHtml(info.label)}</span>
-      <span class="sl-side-price">${fmtPrice(info.price)}${info.book ? " · " + bookShort(info.book) : ""}</span></button>`;
-  }).join("");
-  let out = `<div class="sl-sides mt-2">${btns}</div>`;
-  if (sides.includes(slDraft.side)) {
-    const info = slGameLineSide(g, BET_FOR_SIDE[slDraft.side]);
+      <span class="sl-side-price">${fmtPrice(info.price)}</span></button>`;
+  }).join("")}</div></div>`).join("");
+  let out = `<div class="sl-books mt-2">${rows || '<p class="sl-hint">No lines posted for this game yet.</p>'}</div>`;
+  if (sides.includes(slDraft.side) && slDraft.book) {
+    const info = slGameLineSideBook(g, slDraft.book, BET_FOR_SIDE[slDraft.side]);
     if (info) {
       const meets = info.price != null && Number(info.price) >= -120;
       const warn = (info.price != null && !meets)
         ? `<div class="sl-hint warn mt-1">${fmtPrice(info.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
         : (info.price == null ? `<div class="sl-hint warn mt-1">No price available for this side.</div>` : "");
       const dis = meets ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
-      out += `<button class="btn-primary w-full mt-2" id="sl-lock-line" ${dis}>Lock ${escapeHtml(info.label)} · ${fmtPrice(info.price)}</button>${warn}`;
+      out += `<button class="btn-primary w-full mt-2" id="sl-lock-line" ${dis}>Lock ${escapeHtml(info.label)} · ${fmtPrice(info.price)} · ${bookShort(info.book)}</button>${warn}`;
     }
   }
   return out;
@@ -4065,7 +4067,7 @@ function bindSuperLockEditor() {
   if (marketSel) marketSel.onchange = () => { slDraft.market = marketSel.value; slDraft.player = ""; slDraft.side = ""; slDraft.line = null; refreshSuperLockEditor(); };
   const playerSel = document.getElementById("sl-player");
   if (playerSel) playerSel.onchange = () => { slDraft.player = playerSel.value; slDraft.side = ""; slDraft.line = null; refreshSuperLockEditor(); };
-  root.querySelectorAll(".sl-side-btn[data-slside]").forEach(b => b.onclick = () => { slDraft.side = b.dataset.slside; slDraft.line = null; refreshSuperLockEditor(); });
+  root.querySelectorAll(".sl-side-btn[data-slside]").forEach(b => b.onclick = () => { const [side, book] = b.dataset.slside.split(":"); slDraft.side = side; slDraft.book = book || ""; slDraft.line = null; refreshSuperLockEditor(); });
   root.querySelectorAll(".sl-alt-btn[data-slalt]").forEach(b => b.onclick = () => { slDraft.line = Number(b.dataset.slalt); slDraft.side = "over"; refreshSuperLockEditor(); });
   const lock = document.getElementById("sl-lock");
   if (lock && !lock.disabled) lock.onclick = () => submitSl(lockStructuredProp);
@@ -4184,8 +4186,8 @@ async function lockStructuredProp() {
 async function lockGameLine() {
   const g = slCurrentGame();
   const bet = BET_FOR_SIDE[slDraft.side];
-  if (!g || !bet) return;
-  const info = slGameLineSide(g, bet);
+  if (!g || !bet || !slDraft.book) return;
+  const info = slGameLineSideBook(g, slDraft.book, bet);
   if (!info) return;
   const line_pick = { game_key: slGameKey, bet, side: info.side, book: info.book, line: info.line, price: info.price, pick_text: info.text };
   const msg = document.getElementById("mycard-sl-msg");

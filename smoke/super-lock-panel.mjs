@@ -24,7 +24,7 @@ for(const width of [375,390,844,1440]) {
  await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
  await page.evaluate(data=>{
   DATA=data;state.user={id:5,name:'Jacob'};state.serverConfig={season:2026,week:1,cutoff:'2026-09-13T17:00Z'};state.season='2026';state.view='thisweek';
-  const books={fanduel:{spread:{fav:'Philadelphia Eagles',line:-3.5,favPrice:-110,dogPrice:-110},total:{point:47.5,overPrice:-110,underPrice:-110}}};
+  const books={fanduel:{spread:{fav:'Philadelphia Eagles',line:-3.5,favPrice:-110,dogPrice:-110},total:{point:47.5,overPrice:-110,underPrice:-110}},draftkings:{spread:{fav:'Philadelphia Eagles',line:-3,favPrice:-115,dogPrice:-105},total:{point:48.5,overPrice:-108,underPrice:-112}}};
   state.thisWeekData={games:[{away:'Dallas Cowboys',home:'Philadelphia Eagles',kickoff:'2026-09-13T17:00Z',books},{away:'Chicago Bears',home:'Carolina Panthers',kickoff:'2026-09-13T20:25Z',books},{away:'Buffalo Bills',home:'New York Jets',kickoff:'2026-09-08T17:00Z',books}],source:'sharpapi'};
   currentMyPicks={};state.myCardOpen=true;document.getElementById('root').innerHTML=renderThisWeek();refreshSuperLockEditor();
  },JSON.parse(readFileSync(dir+'public/data/seasons.json','utf8')));
@@ -104,8 +104,14 @@ for(const width of [375,390,844,1440]) {
  assert.equal(await page.locator('#sl-lock').isEnabled(),true);checks++;
  rejectSave=false;await page.locator('#sl-lock').click();await page.waitForSelector('#sl-dialog',{state:'detached'});
  assert.equal(writes.at(-1).picks[0].prop.line,50.5);checks++;
- await page.locator('#sl-repick').click();await page.locator('[data-sltab="lines"]').click();await page.locator('[data-slmarket="__total__"]').click();await page.locator('[data-slside="over"]').click();await page.locator('#sl-lock-line').click();await page.waitForSelector('#sl-dialog',{state:'detached'});
- assert.equal(writes.at(-1).picks[0].line_pick.bet,'Over');checks++;
+ await page.locator('#sl-repick').click();await page.locator('[data-sltab="lines"]').click();await page.locator('[data-slmarket="__total__"]').click();
+ // Both books render their own total row (FD 47.5, DK 48.5); locking DK keeps DK's line+odds.
+ assert.equal(await page.locator('[data-slside^="over:"]').count(),2);checks++;
+ await page.locator('[data-slside="over:draftkings"]').click();
+ await page.locator('#sl-lock-line').click();await page.waitForSelector('#sl-dialog',{state:'detached'});
+ const dkPick=writes.at(-1).picks[0].line_pick;assert.equal(dkPick.bet,'Over');assert.equal(dkPick.book,'draftkings');assert.equal(dkPick.line,48.5);assert.equal(dkPick.price,-108);checks+=4;
+ await page.locator('#sl-repick').click();await page.locator('[data-sltab="lines"]').click();await page.locator('[data-slmarket="__total__"]').click();await page.locator('[data-slside="over:fanduel"]').click();await page.locator('#sl-lock-line').click();await page.waitForSelector('#sl-dialog',{state:'detached'});
+ const linePick=writes.at(-1).picks[0].line_pick;assert.equal(linePick.bet,'Over');assert.equal(linePick.book,'fanduel');assert.equal(linePick.line,47.5);assert.equal(linePick.price,-110);checks+=4;
  await page.locator('#sl-repick').click();await page.locator('[data-slmode="custom"]').click();await page.locator('#mycard-superlock').fill('Custom pick');await page.locator('#mycard-sl-price').fill('-130');await page.locator('#mycard-sl-save').click();assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.open),true);checks++;
  await page.locator('#mycard-sl-price').fill('150');await page.evaluate(()=>refreshSuperLockEditor());assert.equal(await page.locator('#mycard-superlock').inputValue(),'Custom pick');assert.equal(await page.locator('#mycard-sl-price').inputValue(),'150');checks+=2;await page.locator('#mycard-sl-save').click();await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(writes.at(-1).picks[0].price,150);checks++;
  await page.locator('#sl-repick').click();await page.keyboard.press('Escape');await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(await page.locator('#sl-repick').evaluate(e=>e===document.activeElement),true);checks++;
