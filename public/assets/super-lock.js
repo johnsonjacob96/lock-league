@@ -721,7 +721,7 @@ async function loadPropMenu(gameKey) {
   superLockState.loading = false;
   refreshSuperLockEditor();
   propRefreshTimer = setTimeout(() => {
-    if (!document.hidden && state.view === "thisweek" && superLockState.gameKey === gameKey && document.getElementById("mycard-sl-msg") && Date.parse(slCurrentGame()?.kickoff) > Date.now()) loadPropMenu(gameKey);
+    if (!document.hidden && superLockState.open && superLockState.tab === "props" && !superLockState.saving && state.view === "thisweek" && superLockState.gameKey === gameKey && document.getElementById("mycard-sl-msg") && Date.parse(slCurrentGame()?.kickoff) > Date.now()) loadPropMenu(gameKey);
   }, 60000);
 }
 // Client mirror of the server's canonical prop text (functions/_shared/props.js).
@@ -766,7 +766,7 @@ async function lockStructuredProp() {
       if(j.error==="quote-changed" || j.error==="prop-not-offered") {
         await loadPropMenu(superLockState.gameKey);
         const note=document.getElementById("mycard-sl-msg");
-        if(note)note.textContent=j.detail || "That line is no longer offered. Review the refreshed menu.";
+        if(note)note.textContent=j.detail || "THAT LINE IS NO LONGER OFFERED · REVIEW THE REFRESHED MENU";
         return;
       }
       if (msg)
