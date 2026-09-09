@@ -67,6 +67,23 @@ export function sharpPropRows() {
     R({ sportsbook: "fanduel",   market_type: "player_passing_yards", stat_category: "passing_yards", player_name: "Drake Maye", selection: "Under", selection_type: "under", line: 232.5, odds_american: -110, is_main_line: true }),
     R({ sportsbook: "draftkings", market_type: "player_passing_yards", stat_category: "passing_yards", player_name: "Drake Maye", selection: "Over",  selection_type: "over",  line: 232.5, odds_american: -112, is_main_line: true }),
     R({ sportsbook: "draftkings", market_type: "player_passing_yards", stat_category: "passing_yards", player_name: "Drake Maye", selection: "Under", selection_type: "under", line: 232.5, odds_american: -108, is_main_line: true }),
+    // DraftKings ships every ALTERNATE receiving-yards line as its own over/under
+    // row with is_main_line:false, and often omits the main flag entirely — only
+    // the real line (63.5) is two-sided. The resolver must pick 63.5 as DK's main,
+    // never the first alternate row (19.5). FanDuel posts the real main (64.5)
+    // two-sided plus an "N+" alt.
+    R({ market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "A.J. Brown", selection: "Over",  selection_type: "over",  line: 64.5, odds_american: -113 }),
+    R({ market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "A.J. Brown", selection: "Under", selection_type: "under", line: 64.5, odds_american: -113 }),
+    R({ market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "A.J. Brown", selection: "A.J. Brown 100+ Yards", selection_type: "other", odds_american: 320 }),
+    R({ sportsbook: "draftkings", market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "A.J. Brown", selection: "Over",  selection_type: "over",  line: 19.5, odds_american: 115, is_main_line: false }),
+    R({ sportsbook: "draftkings", market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "A.J. Brown", selection: "Over",  selection_type: "over",  line: 29.5, odds_american: 265, is_main_line: false }),
+    R({ sportsbook: "draftkings", market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "A.J. Brown", selection: "Over",  selection_type: "over",  line: 63.5, odds_american: -114, is_main_line: false }),
+    R({ sportsbook: "draftkings", market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "A.J. Brown", selection: "Under", selection_type: "under", line: 63.5, odds_american: -110, is_main_line: false }),
+    // JSN: DraftKings DOES flag its main (81.5) here; a stray 19.5 alternate must
+    // not win even though it appears first.
+    R({ sportsbook: "draftkings", market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "Jaxon Smith-Njigba", selection: "Over",  selection_type: "over",  line: 19.5, odds_american: -150, is_main_line: false }),
+    R({ sportsbook: "draftkings", market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "Jaxon Smith-Njigba", selection: "Over",  selection_type: "over",  line: 81.5, odds_american: -114, is_main_line: true }),
+    R({ sportsbook: "draftkings", market_type: "player_receiving_yards", stat_category: "receiving_yards", player_name: "Jaxon Smith-Njigba", selection: "Under", selection_type: "under", line: 81.5, odds_american: -110, is_main_line: true }),
     // Kenneth Walker rushing yards
     R({ market_type: "player_rushing_yards", stat_category: "rushing_yards", player_name: "Kenneth Walker III", selection: "Over", selection_type: "over", line: 68.5, odds_american: -114 }),
     R({ market_type: "player_rushing_yards", stat_category: "rushing_yards", player_name: "Kenneth Walker III", selection: "Under", selection_type: "under", line: 68.5, odds_american: -106 }),
