@@ -4,7 +4,7 @@
 // started/Monday guards, and grading. This is the primary bug net before Week 1.
 import { suite } from "./assert.mjs";
 import { normalizeSharp, fetchSharpRaw } from "../functions/api/odds.js";
-import { normalizeSharpProps } from "../functions/_shared/props.js";
+import { normalizeSharpProps, plausibleMainPrice } from "../functions/_shared/props.js";
 import { menuForGame } from "../functions/api/props.js";
 import { deriveProp, deriveGradable, findGame, findStartedGame, findMondayGame } from "../functions/api/picks.js";
 import { gradeProp } from "../functions/_shared/props.js";
@@ -44,6 +44,22 @@ export async function run() {
   s.ok("no player labelled 'Over'/'Under' (player_name used, not selection)",
     menu.every(m => m.players.every(p => !/^over$|^under$/i.test(p.player))));
 
+  // ── 2b. Safety net: an absurd MAIN O/U price (+1400 on a real 232.5 line) is dropped ──
+  const maye = player("pass_yds", /Maye/);
+  s.ok("Maye passing-yards prop present (line itself is fine)", !!maye);
+  s.eq("real main line 232.5 preserved", maye?.line, 232.5);
+  s.eq("FanDuel's bogus +1400 over is dropped (unlockable)", maye?.fanduel?.over, null);
+  s.eq("FanDuel's valid -110 under is kept", maye?.fanduel?.under, -110);
+  s.eq("DraftKings' real -112 over is kept", maye?.draftkings?.over, -112);
+  s.ok("plausibleMainPrice rejects +1400, accepts real juice",
+    !plausibleMainPrice(1400) && plausibleMainPrice(-112) && plausibleMainPrice(150) && !plausibleMainPrice(601));
+  // Anti-cheat: a pick that names FanDuel's over can't lock the dropped price…
+  s.eq("deriveProp(FD over) yields no price — cannot be locked",
+    deriveProp(menu, { market: "pass_yds", player: "Drake Maye", line: 232.5, side: "over", book: "fanduel" })?.price, null);
+  // …while the real DraftKings over still derives normally.
+  s.eq("deriveProp(DK over) re-derives the real -112",
+    deriveProp(menu, { market: "pass_yds", player: "Drake Maye", line: 232.5, side: "over", book: "draftkings" })?.price, -112);
+
   // ── 3. Pick anti-cheat: the server re-derives line/price from the live board ──
   const dMain = deriveProp(menu, { market: "receptions", player: "Cooper Kupp", line: 2.5, side: "over", book: "fanduel" });
   s.eq("main Kupp o2.5 re-derives to -148", dMain?.price, -148);
@@ -79,6 +95,7 @@ export async function run() {
   s.eq("grade Kupp o4.5 rec (actual 4) -> L", gradeProp({ market: "receptions", player: "Cooper Kupp", line: 4.5, side: "over" }, box), "L");
   s.eq("grade Kupp receptions exact line 4 -> P (push)", gradeProp({ market: "receptions", player: "Cooper Kupp", line: 4, side: "over" }, box), "P");
   s.eq("grade Maye pass_tds o1.5 (actual 2) -> W", gradeProp({ market: "pass_tds", player: "Drake Maye", line: 1.5, side: "over" }, box), "W");
+  s.eq("grade Maye pass_yds o232.5 (actual 268) -> W", gradeProp({ market: "pass_yds", player: "Drake Maye", line: 232.5, side: "over" }, box), "W");
   s.eq("grade Walker rush_yds o68.5 (actual 72) -> W", gradeProp({ market: "rush_yds", player: "Kenneth Walker III", line: 68.5, side: "over" }, box), "W");
   s.eq("grade Walker rush_yds u68.5 -> L", gradeProp({ market: "rush_yds", player: "Kenneth Walker III", line: 68.5, side: "under" }, box), "L");
   s.eq("grade Walker anytime TD yes (1 rush TD) -> W", gradeProp({ market: "anytime_td", player: "Kenneth Walker III", side: "yes" }, box), "W");
