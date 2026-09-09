@@ -24,3 +24,7 @@ Run `npm test`, `npm run smoke`, `npm run smoke:render`, `npm run smoke:super-lo
 This does not guarantee continuous FanDuel/DraftKings availability. Suspended, delayed or missing vendor markets remain unavailable for new picks. Previously saved picks and grading do not depend on current odds. The quota guard trades repeated unsuccessful calls for bounded retries; under heavy simultaneous prop browsing, some menus can be delayed. The existing manual Super Lock route remains available.
 
 Tables `feed_refresh` and `feed_budget` are additive and created on first use. Deployment needs no new secrets. Reverting this release restores the old refresh behavior; these cache tables may remain without affecting picks or payments.
+
+## Production follow-up: combined prop classification
+
+The mobile production screenshot exposed DraftKings' `player_passing_+_rushing_yards` (Drake Maye 259.5) being classified as rushing yards. Combined passing/rushing is not supported by the current single-stat grader and is now excluded before any stat-category fallback. Supported rushing+receiving remains intact. The same guard prevents longest/half/quarter labels from returning through a broad category. Prop cache keys advance to v5 so previously normalized bad labels cannot survive in last-good storage. A regression test covers each case; backend suite now has 108 passing tests.

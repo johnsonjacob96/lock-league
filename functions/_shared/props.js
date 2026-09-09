@@ -64,9 +64,15 @@ export const PROP_ORDER = [
 // disagree on wording ("player_rush_yds" vs "Rushing Yards" vs "rush_reception_yds"),
 // so we first fold the vocabulary to a common token set, then walk an explicit
 // decision tree (combos and TD/yardage variants before the plain keys).
+// Unsupported market labels must not become supported through a broad stat-category fallback.
+function unsupportedPropMarket(raw) {
+  const n = String(raw || "").toLowerCase().replace(/[_+]+/g, " ");
+  return /\b(longest|shortest|half|quarter|period|1st|2nd|3rd|4th|first|second|third|fourth|1h|2h|q1|q2|q3|q4)\b/.test(n) ||
+    (n.includes("pass") && n.includes("rush"));
+}
 export function marketKeyFromName(raw) {
   let n = String(raw || "").toLowerCase().replace(/[_+]+/g, " ");
-  if (!n) return null;
+  if (!n || unsupportedPropMarket(raw)) return null;
   // Reject derivative / non-full-game markets that share a base stat's keywords
   // and would otherwise mis-map onto it. A "longest reception" market contains
   // "reception"; a half/quarter split contains "receiving yards"; etc. These
@@ -169,6 +175,7 @@ export function normalizeSharpProps(rows) {
   const agg = new Map();
   for (const r of rows || []) {
     if (r.is_active === false || r.is_stale_pregame_price === true || r.is_impossible_scoreline === true) continue;
+    if (unsupportedPropMarket(r.market_type) || unsupportedPropMarket(r.stat_category)) continue;
     const isProp = r.is_player_prop === true ||
       /player|prop/i.test(String(r.market_type || "")) ||
       marketKeyFromName(r.market_type) != null;

@@ -14,7 +14,7 @@ const RETRY_MS = 60 * 1000;
 const cache = new Map();
 const inFlight = new Map();
 const atdInFlight = new Map();
-const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v4/${kind}/${encodeURIComponent(key)}`);
+const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v5/${kind}/${encodeURIComponent(key)}`);
 
 // Anytime-TD-scorer comes from The Odds API (1 credit per game), so cache it hard
 // per game with a global daily credit budget. Last-good stays visible during
@@ -247,7 +247,7 @@ export async function onRequestGet(context) {
   const key = `${season}:${week}:${away}@${home}`;
   let job = inFlight.get(key);
   if (!job) {
-    job = sharedFeed(env, `props-v4:${key}`, TTL_MS, ()=>loadGame(context, key, away, home, season, week)).finally(() => inFlight.delete(key));
+    job = sharedFeed(env, `props-v5:${key}`, TTL_MS, ()=>loadGame(context, key, away, home, season, week)).finally(() => inFlight.delete(key));
     inFlight.set(key, job);
   }
   const data = await job.catch(()=>({game_key:gameKey,markets:[],source:"unavailable",stale:true}));
