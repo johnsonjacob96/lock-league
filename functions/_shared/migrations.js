@@ -16,6 +16,25 @@ export async function ensureExtras(env) {
   // Per-category push preferences. NULL/missing key = on (opt-out, not opt-in),
   // so existing subscribers keep getting everything until they turn a category off.
   await ignoringConcurrentCreate(s`ALTER TABLE members ADD COLUMN IF NOT EXISTS notif_prefs JSONB`);
+  // Password recovery. is_admin marks the commissioner(s) who can issue a reset
+  // code for another member; session_epoch is bumped whenever a password changes
+  // so every cookie signed before the change stops verifying.
+  await ignoringConcurrentCreate(s`ALTER TABLE members ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE`);
+  await ignoringConcurrentCreate(s`ALTER TABLE members ADD COLUMN IF NOT EXISTS session_epoch INT NOT NULL DEFAULT 0`);
+  // One-time reset codes. Only the bcrypt hash is stored, so a database dump
+  // does not hand over live codes; attempts caps guessing at a handful of tries.
+  await ignoringConcurrentCreate(s`CREATE TABLE IF NOT EXISTS password_resets (
+    id         SERIAL PRIMARY KEY,
+    member_id  INT NOT NULL REFERENCES members(id),
+    code_h     TEXT NOT NULL,
+    channel    TEXT,
+    issued_by  INT REFERENCES members(id),
+    attempts   INT NOT NULL DEFAULT 0,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at    TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )`);
+  await ignoringConcurrentCreate(s`CREATE INDEX IF NOT EXISTS password_resets_member ON password_resets(member_id, created_at DESC)`);
   // Props: structured Super Lock. When set, holds the picked player prop
   // {market, player, line, side, price, book, game_key} so it auto-grades off
   // the ESPN box score. NULL = a free-text Super Lock (manual Hit/Miss/Push).
