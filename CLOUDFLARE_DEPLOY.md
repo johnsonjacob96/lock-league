@@ -53,6 +53,36 @@ This creates the schema, seeds 8 members with `<name>2026` passphrases, and impo
 
 > Note: the endpoint was renamed from `/api/_init` (Netlify) to `/api/init` since Cloudflare Pages Functions doesn't route filenames starting with `_`.
 
+## 4b. Name a commissioner (one-time, for password recovery)
+
+Members recover their own password from the sign-in screen ("Forgot password?"):
+the app pushes a one-time code to the devices they've turned notifications on
+for. A member with no registered device needs a commissioner to issue that code
+for them, and nobody is a commissioner until you say so:
+
+```bash
+curl -X POST -H "X-Cron-Secret: $CRON_SECRET" -H "Content-Type: application/json" \
+  -d '{"name":"Jacob"}' "$SITE/api/auth?action=set-admin"
+```
+
+That member then gets an **Issue a reset code** control in their Account modal;
+they read the code out to whoever is locked out. Codes are single-use, expire in
+20 minutes, and lock out after 5 wrong tries. Pass `{"name":"Jacob","admin":false}`
+to take the role away.
+
+There is no in-app way to grant the role — a stolen session can't promote
+itself. Which also means the commissioner can't be reset from inside the app, so
+recover them with the same secret:
+
+```bash
+curl -X POST -H "X-Cron-Secret: $CRON_SECRET" -H "Content-Type: application/json" \
+  -d '{"name":"Jacob"}' "$SITE/api/auth?action=reset-issue"
+```
+
+The response carries the code; redeem it on the reset screen. Any successful
+reset or password change also signs that member out everywhere else (it bumps
+`members.session_epoch`, which every session cookie is stamped with).
+
 ## 5. Set up GitHub Actions cron
 
 In the GitHub repo: **Settings → Secrets and variables → Actions** → add:
