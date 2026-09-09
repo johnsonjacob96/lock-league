@@ -3435,7 +3435,7 @@ function scoreFor(g) {
 }
 
 const ODDS_CLIENT_TTL_MS = 40 * 1000; // re-fetch on view revisit after this
-const ODDS_POLL_MS = 60 * 1000;       // live line refresh while the board is open
+const ODDS_POLL_MS = 15 * 1000;       // live line refresh while the board is open
 // Monday (MNF) games can't be picked in this league, so they never appear on the
 // board or in any picker. Weekday is computed in Central (the league's timezone)
 // so an MNF kickoff — which falls on Tuesday in UTC — is correctly read as Monday.
@@ -3889,9 +3889,10 @@ function bookShort(k) {
 }
 
 function bookUpdateLabel(book) {
+  if (book && (quoteDelayed(book.spread, book) || quoteDelayed(book.total, book))) return "Quote delayed · refreshing";
   const t = Date.parse(book?.updated);
   if (!Number.isFinite(t)) return "";
-  return `As of ${new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${book.supplemental ? " · refreshes every 15 min" : ""}`;
+  return `As of ${new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${book.supplemental ? " · backup" : ""}`;
 }
 function renderGameCard(g, requestedBook) {
   const gameKey = `${g.away}@${g.home}`;
@@ -3956,6 +3957,10 @@ function renderGameCard(g, requestedBook) {
   `;
 }
 
+function quoteDelayed(quote, parent) {
+  const stamp = quote?.updated || parent?.updated;
+  return !!quote?.stale || !!parent?.stale || (!!stamp && (Date.now() - Date.parse(stamp) > 120000 || Date.parse(stamp) > Date.now()+5000));
+}
 function renderBookButtons(bookKey, book, game) {
   const s = book.spread;
   const t = book.total;
@@ -4119,10 +4124,14 @@ async function clickPickButton(btn) {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ season, week, picks: [{ bet_type, pick_text, game_key, side, line, book, price }] }),
+      body: JSON.stringify({ season, week, picks: [{ bet_type, pick_text, game_key, side, line, book, price, expected_quote: {book,line,price} }] }),
     });
     const j = await r.json();
     if (!r.ok) {
+      if(j.error==="quote-changed") {
+        const fresh=await fetch("/api/odds",{credentials:"include"});
+        if(fresh.ok)applyLiveOdds(state.thisWeekData,await fresh.json(),true);
+      }
       showToast(j.error === "locked" ? "PICKS LOCKED FOR THIS WEEK"
         : j.error === "game-started" ? "GAME STARTED, PICK LOCKED"
         : j.detail || ("ERROR: " + (j.error || "unknown")), "err");
@@ -4330,6 +4339,8 @@ function startOddsPoll() {
   clearInterval(oddsTimer);
   oddsTimer = setInterval(async () => {
     if (state.view !== "thisweek") { clearInterval(oddsTimer); oddsTimer = null; return; }
+    if (document.hidden) return;
+    if (state.thisWeekData?.games?.length && !state.thisWeekData.games.some(g => Date.parse(g.kickoff) > Date.now())) return;
     const prev = state.thisWeekData;
     let next;
     try {
@@ -4342,6 +4353,11 @@ function startOddsPoll() {
   }, ODDS_POLL_MS);
 }
 
+document.addEventListener("visibilitychange", async()=>{
+  if(document.hidden || state.view!=="thisweek")return;
+  try { const r=await fetch("/api/odds",{credentials:"include"});if(r.ok && state.view==="thisweek")applyLiveOdds(state.thisWeekData,await r.json()); }catch{}
+});
+
 const gameKeyOf = g => `${g.away}@${g.home}`;
 function shownBookFor(gameKey, g) {
   const card = document.querySelector(`.game-card[data-game-key="${CSS.escape(gameKey)}"]`);
@@ -4351,7 +4367,7 @@ function shownBookFor(gameKey, g) {
 }
 
 const deferredOdds = new Map();
-function applyLiveOdds(prev, next) {
+function applyLiveOdds(prev, next, force = false) {
   dropMondayGames(next); // MNF games are never pickable — keep them off the board
   state.thisWeekData = next;
   state.thisWeekFetchedAt = Date.now();
@@ -4377,7 +4393,8 @@ function applyLiveOdds(prev, next) {
     const priceMoved =
       (nb.spread && pb.spread && (nb.spread.favPrice !== pb.spread.favPrice || nb.spread.dogPrice !== pb.spread.dogPrice)) ||
       (nb.total && pb.total && (nb.total.overPrice !== pb.total.overPrice || nb.total.underPrice !== pb.total.underPrice));
-    if (!spreadMoved && !totalMoved && !priceMoved) {
+    const availabilityMoved = !!nb.spread !== !!pb.spread || !!nb.total !== !!pb.total;
+    if (!spreadMoved && !totalMoved && !priceMoved && !availabilityMoved && !force) {
       const label = document.querySelector(`.game-card[data-game-key="${CSS.escape(key)}"] [data-book-updated]`);
       if (label) label.textContent = bookUpdateLabel(nb);
       continue;
@@ -4385,7 +4402,7 @@ function applyLiveOdds(prev, next) {
 
     const card = document.querySelector(`.game-card[data-game-key="${CSS.escape(key)}"]`);
     // Don't yank a card out from under someone actively using it; catch it next cycle.
-    if (!card || card.matches(":hover") || card.contains(document.activeElement)) { deferredOdds.set(key, prevG); continue; }
+    if (!card || (!force && (card.matches(":hover") || card.contains(document.activeElement)))) { deferredOdds.set(key, prevG); continue; }
     deferredOdds.delete(key);
 
     const spreadDir = spreadMoved ? Math.sign(Math.abs(nb.spread.line) - Math.abs(pb.spread.line)) : 0;

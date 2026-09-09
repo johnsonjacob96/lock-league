@@ -168,6 +168,7 @@ export function normalizeSharpProps(rows) {
   // key = `${market}|${player}` -> aggregate across books + over/under sides.
   const agg = new Map();
   for (const r of rows || []) {
+    if (r.is_active === false || r.is_stale_pregame_price === true || r.is_impossible_scoreline === true) continue;
     const isProp = r.is_player_prop === true ||
       /player|prop/i.test(String(r.market_type || "")) ||
       marketKeyFromName(r.market_type) != null;
@@ -203,7 +204,7 @@ export function normalizeSharpProps(rows) {
     if (def.kind === "yes") {
       // Anytime TD: yes/no, or an O/U 0.5 (over == yes). Ignore alt/"other" rows.
       const b = e.byBook[book] || (e.byBook[book] = { over: null, under: null, yes: null, line: null, main: false });
-      if (stype === "yes" || stype === "over") { b.yes = price; if (Number.isFinite(line)) b.line = line; }
+      if (stype === "yes" || stype === "over") { b.yes = price; b.updated = r.timestamp || null; if (Number.isFinite(line)) b.line = line; }
       else if (stype === "no" || stype === "under") b.no = price;
       else continue;
       if (isMain) b.main = true;
@@ -218,7 +219,7 @@ export function normalizeSharpProps(rows) {
       if (!Number.isFinite(line)) continue;
       const m = e.ouByBook[book] || (e.ouByBook[book] = new Map());
       const slot = m.get(line) || m.set(line, { over: null, under: null, main: false }).get(line);
-      if (slot[stype] == null) slot[stype] = price;
+      if (slot[stype] == null) { slot[stype] = price; (slot.updated ||= {})[stype] = r.timestamp || null; }
       if (isMain) slot.main = true;
     } else {
       // Alternate over line: a cumulative "N+ <Stat>" selection -> over at N-0.5
@@ -226,6 +227,7 @@ export function normalizeSharpProps(rows) {
       const n = altThreshold(r.selection);
       if (n != null && price != null) {
         (e.altByBook[book] || (e.altByBook[book] = new Map())).set(n - 0.5, price);
+        ((e.altUpdated ||= {})[book] ||= new Map()).set(n - 0.5, r.timestamp || null);
       }
     }
   }
@@ -298,6 +300,21 @@ export function normalizeSharpProps(rows) {
       draftkings: dkMain ? { line: dkMain.line, over: dkMain.over, under: dkMain.under, yes: null } : null,
       alts,
     });
+  }
+  for (const p of out) {
+    const e = agg.get(`${p.market}|${p.player.toLowerCase()}`);
+    for (const book of ['fanduel', 'draftkings']) {
+      const b = p[book];
+      if (b) {
+        const slot = e.ouByBook[book]?.get(b.line);
+        const stamps = p.kind === 'yes' ? [e.byBook[book]?.updated] : [slot?.updated?.over, slot?.updated?.under];
+        if (stamps.some(Boolean)) b.updated = stamps.every(Boolean) ? stamps.sort()[0] : null;
+      }
+      for (const alt of p.alts || []) {
+        const stamp = e.altUpdated?.[book]?.get(alt.line) || e.ouByBook[book]?.get(alt.line)?.updated?.over;
+        if (stamp) (alt.updated ||= {})[book] = stamp;
+      }
+    }
   }
   return out;
 }

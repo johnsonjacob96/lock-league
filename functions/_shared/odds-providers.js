@@ -1,3 +1,4 @@
+import { providerFetch, sharedFeed } from "./feed-cache.js";
 // Provider adapters: request/normalization semantics are independent of cache policy.
 import {
   currentNflWeek,
@@ -5,6 +6,7 @@ import {
   REGULAR_SEASON_WEEKS,
   seasonTypeFor,
   testConfig,
+  pickCutoff,
 } from "./nfl.js";
 import { espnScoreboardEvents } from "./espn.js";
 import { loadScoreboardSeed } from "./scoreseed.js";
@@ -72,7 +74,7 @@ async function fetchOddsApi(env) {
   apiUrl.searchParams.set("commenceTimeFrom", win.from);
   apiUrl.searchParams.set("commenceTimeTo", win.to);
 
-  const r = await fetch(apiUrl, { signal: AbortSignal.timeout(5000) });
+  const r = await providerFetch(env, "oddsapi", apiUrl, { signal: AbortSignal.timeout(5000) }, 2);
   if (!r.ok) throw new Error(`odds-api ${r.status}: ${await r.text()}`);
   const events = await r.json();
   return {
@@ -331,6 +333,7 @@ function resolveSpread(rows, g) {
     line: -Math.abs(pick.mag),
     favPrice: pick.fav?.price ?? null,
     dogPrice: pick.dog?.price ?? null,
+    ...(pick.fav?.updated && pick.dog?.updated ? {updated:[pick.fav.updated,pick.dog.updated].sort()[0]} : {}),
   };
 }
 function resolveTotal(rows) {
@@ -358,6 +361,7 @@ function resolveTotal(rows) {
     point: pick.point,
     overPrice: pick.over?.price ?? null,
     underPrice: pick.under?.price ?? null,
+    ...(pick.over?.updated && pick.under?.updated ? {updated:[pick.over.updated,pick.under.updated].sort()[0]} : {}),
   };
 }
 
@@ -520,8 +524,9 @@ export function normalizeSharp(rows) {
           price,
           isMain,
           marketId: row.market_id,
+          updated: row.timestamp,
         });
-      } else b._total.push({ point: pt, ou, price, isMain });
+      } else b._total.push({ point: pt, ou, price, isMain, updated: row.timestamp });
     } else {
       const side = String(row.team_side ?? stype).toLowerCase();
       const team =
@@ -541,8 +546,9 @@ export function normalizeSharp(rows) {
           price,
           isMain,
           marketId: row.market_id,
+          updated: row.timestamp,
         });
-      } else b._spread.push({ point: pt, team, price, isMain });
+      } else b._spread.push({ point: pt, team, price, isMain, updated: row.timestamp });
     }
   }
   // Second pass: resolve each book's main spread + total, drop empties.
@@ -584,13 +590,15 @@ export async function fetchSharpRaw(env, maxPages = 8, overrides = null) {
     ...(overrides || {}),
   };
   const all = [];
+  const deadline = Date.now() + 6000;
   let cursor = null;
   for (let page = 0; page < maxPages; page++) {
+    if (Date.now() >= deadline) break;
     const url = new URL(base);
     for (const [k, v] of Object.entries(q))
       if (v !== undefined && v !== null) url.searchParams.set(k, v);
     if (cursor) url.searchParams.set("cursor", cursor);
-    const r = await fetch(url, {
+    const r = await providerFetch(env, "sharp", url, {
       headers: { "X-API-Key": env.SHARPAPI_KEY },
       signal: AbortSignal.timeout(3000),
     });
@@ -720,7 +728,18 @@ export function espnDraftKingsRows(events, games, updatedAt, now = Date.now()) {
 }
 
 async function fetchSharpApi(env) {
-  const raw = await fetchSharpRaw(env);
+  const curPeriod = currentSeasonWeek(env);
+  if (Date.now() >= pickCutoff(curPeriod.season, curPeriod.week, env).getTime())
+    return {source:"sharpapi",live:false,locked:true,games:[],fetched_at:new Date().toISOString()};
+  const window = weekWindow(curPeriod.week,env);
+  const catalog = await sharedFeed(env,`sharp-catalog:${curPeriod.season}:${curPeriod.week}`,10*60*1000,async()=>{
+    const rows = await fetchSharpRaw(env);
+    const current = rows.filter(r=>Date.parse(r.event_start_time)>=Date.parse(window.from) && Date.parse(r.event_start_time)<Date.parse(window.to));
+    return { rows:current,ids:[...new Set(current.map(r=>r.event_id).filter(Boolean))],fetched_at:new Date().toISOString() };
+  });
+  const eligibleIds = [...new Set(catalog.rows.filter(r => Date.parse(r.event_start_time) > Date.now()).map(r => r.event_id).filter(Boolean))];
+  const raw = Date.now()-Date.parse(catalog.fetched_at)<10000 ? catalog.rows
+    : eligibleIds.length ? await fetchSharpRaw(env,8,{event_id:eligibleIds.join(',')}) : [];
   const all = normalizeSharp(raw);
   // SharpAPI returns the whole season; scope to the current pick week's
   // kickoff window, exactly like the The-Odds-API path.
@@ -748,7 +767,7 @@ async function fetchSharpApi(env) {
     let updatedAt = events?.source_updated_at;
     if (
       missing &&
-      (!updatedAt || Date.now() - Date.parse(updatedAt) > 15 * 60 * 1000)
+      (!updatedAt || Date.now() - Date.parse(updatedAt) > 60 * 1000)
     ) {
       try {
         events = await espnScoreboardEvents(

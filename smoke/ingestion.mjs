@@ -1,7 +1,12 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { neonConfig } from '@neondatabase/serverless';
-import { onRequestGet, onRequestPost, scopedPayload, fetchSharpRaw, normalizeSharp } from '../functions/api/odds.js';
+// These exercise the provider/edge layer; feed-cache.mjs exercises global SQL coordination.
+mock.module('../functions/_shared/feed-cache.js', { namedExports: {
+  sharedFeed: async (_env, _key, _ttl, load) => load(),
+  providerFetch: async (_env, _provider, url, init) => fetch(url, init),
+} });
+const { getUnshared: onRequestGet, onRequestPost, scopedPayload, fetchSharpRaw, normalizeSharp } = await import('../functions/api/odds.js');
 import { espnBoxscore, espnSummary } from '../functions/_shared/espn.js';
 import { fetchScoreboard, pushWeekResults } from '../functions/_shared/grader.js';
 import { seedWeeks, seedRegularSeason } from '../scripts/seed-regular-season.mjs';
@@ -378,7 +383,7 @@ function recoveryPair(book, type, line, alternate=true, id='main') {
 }
 test('mislabeled FD spread recovers from nearby main DK spread with its own prices',()=>{
   const g=normalizeSharp([...recoveryPair('fanduel','spread',3.5),...recoveryPair('draftkings','spread',3,false)])[0];
-  assert.deepEqual(g.books.fanduel.spread,{fav:'Seattle Seahawks',line:-3.5,favPrice:-102,dogPrice:-120});
+  assert.deepEqual(g.books.fanduel.spread,{fav:'Seattle Seahawks',line:-3.5,favPrice:-102,dogPrice:-120,updated:'2026-09-09T19:36Z'});
   assert.equal(g.books.draftkings.spread.line,-3);
 });
 test('both books mislabeled can corroborate a unique balanced market',()=>{
@@ -435,7 +440,7 @@ test('ESPN named DraftKings current quotes restore missing book and corroborate 
   assert.equal(rows.length,4);
   const g=normalizeSharp([...recoveryPair('fanduel','spread',3.5),...rows])[0];
   assert.equal(g.books.fanduel.spread.line,-3.5);
-  assert.deepEqual(g.books.draftkings.spread,{fav:'Seattle Seahawks',line:-3,favPrice:-108,dogPrice:-112});
+  assert.deepEqual(g.books.draftkings.spread,{fav:'Seattle Seahawks',line:-3,favPrice:-108,dogPrice:-112,updated});
   assert.equal(g.books.draftkings.total.point,44.5);
   assert.equal(g.books.draftkings.updated,updated);
   assert.equal(g.books.draftkings.provider,'DraftKings via ESPN');
