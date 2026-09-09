@@ -50,13 +50,14 @@ const env = { SESSION_SECRET: 'test-only-session-secret' };
 let cookie, oddsDown = false, propsDown = false;
 let fetchCalls = 0, oddsCalls = 0, oddsFailAfter = Infinity;
 const liveGames = events.map(e => ({ ...e, books: { fanduel: { spread: { fav: e.home, line: -3.5, favPrice: -110, dogPrice: -110 }, total: { point: 44.5, overPrice: -110, underPrice: -110 } } } }));
-mock.method(globalThis, 'fetch', async url => {
+const fixtureFetch = async url => {
  fetchCalls++;
  const props = String(url).includes('/api/props');
  if (!props && oddsCalls++ >= oddsFailAfter) throw new Error('provider unavailable');
  if (props ? propsDown : oddsDown) throw new Error('provider unavailable');
- return Response.json(props ? {markets:[{ market:'receptions', kind:'ou', players:[{player:'Test Receiver',line:3.5,fanduel:{line:3.5,over:110,under:-110},alts:[]}]}]} : { source: 'sharpapi', games: liveGames });
-});
+ for(const g of liveGames)for(const b of Object.values(g.books))b.updated=new Date().toISOString();
+ return Response.json(props ? {markets:[{ market:'receptions', kind:'ou', players:[{player:'Test Receiver',line:3.5,fanduel:{line:3.5,over:110,under:-110,updated:new Date().toISOString()},alts:[]}]}]} : { source: 'sharpapi', games: liveGames });
+};
 const key = i => `${events[i].away}@${events[i].home}`;
 const pick = (bet_type='Favorite', i=1) => ({ bet_type, game_key:key(i), side:({Favorite:'fav',Dog:'dog',Over:'over',Under:'under'})[bet_type], line:999, price:999, pick_text:'fabricated' });
 async function request(body, action='', signed=true, method='POST') {
@@ -80,6 +81,7 @@ before(async()=>{
  await db.query('INSERT INTO members(id,name,passphrase_h) VALUES(1,$1,$2),(2,$3,$2)',['Jacob',await bcrypt.hash('test-password',4),'Jared']);
 });
 beforeEach(async()=>{
+ mock.method(globalThis, "fetch", fixtureFetch);
  mock.timers.reset(); mock.timers.enable({apis:['Date'],now:Date.parse('2026-09-11T12:00:00Z')});
  cookie=await cookieFor(1);
  await db.exec('DELETE FROM picks'); oddsDown=false; propsDown=false; board=events; fetchCalls=0; oddsCalls=0; oddsFailAfter=Infinity; beforeWrite=null; statements=[];
@@ -479,4 +481,18 @@ test('board picks cannot save without a provider price',async()=>{
   assert.equal((await request({season:2026,week:1,picks:[pick('Under')]})).status,503);
   assert.equal((await db.query('SELECT * FROM picks')).rows.length,0);
  } finally {total.underPrice=previous;}
+});
+
+test('changed displayed quote rejects the entire submission and preserves saved picks', async()=>{
+ await insertOld({i:1});
+ const before=(await db.query('SELECT * FROM picks')).rows;
+ const result=await request({season:2026,week:1,picks:[{...pick(),book:'fanduel',expected_quote:{book:'fanduel',line:-3.5,price:-115}}]});
+ assert.equal(result.status,409);assert.equal(result.body.error,'quote-changed');
+ assert.deepEqual((await db.query('SELECT * FROM picks')).rows,before);
+ const retry=await request({season:2026,week:1,picks:[{...pick(),book:'fanduel',expected_quote:{book:'fanduel',line:-3.5,price:-110}}]});
+ assert.equal(retry.status,200);
+});
+test('missing requested sportsbook never silently changes to another book',async()=>{
+ const result=await request({season:2026,week:1,picks:[{...pick(),book:'draftkings'}]});
+ assert.equal(result.status,422);assert.equal((await db.query('SELECT * FROM picks')).rows.length,0);
 });

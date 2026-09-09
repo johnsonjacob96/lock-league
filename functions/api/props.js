@@ -1,28 +1,28 @@
+import { providerFetch, sharedFeed } from "../_shared/feed-cache.js";
 // Lazy, per-game player props: use every SharpAPI event ID represented by the
 // current odds board (FD and DK can use different IDs). Never scan the whole
 // league merely to open one player's menu.
 import { json } from "../_shared/auth.js";
 import { sameTeam } from "../_shared/grader.js";
 import { normalizeSharpProps, PROP_ORDER, PROP_DEFS } from "../_shared/props.js";
-import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS } from "../_shared/nfl.js";
+import { currentNflWeek, weekWindow, REGULAR_SEASON_WEEKS, pickCutoff } from "../_shared/nfl.js";
 import { fetchAnytimeTdMarket } from "../_shared/oddsapi-props.js";
 
-const TTL_MS = 5 * 60 * 1000;
+const TTL_MS = 60 * 1000;
 const LASTGOOD_TTL_S = 30 * 60;
 const RETRY_MS = 60 * 1000;
 const cache = new Map();
 const inFlight = new Map();
 const atdInFlight = new Map();
-const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v2/${kind}/${encodeURIComponent(key)}`);
+const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v4/${kind}/${encodeURIComponent(key)}`);
 
 // Anytime-TD-scorer comes from The Odds API (1 credit per game), so cache it hard
-// per game: a 15-min fresh window keeps credit use low even as the league opens
-// menus, and a 6-hour last-good survives a quota/API hiccup without dropping the
-// market. Keys are per week+game.
-const ATD_TTL_S = 15 * 60;
+// per game with a global daily credit budget. Last-good stays visible during
+// outages, but only source-fresh quotes pass the pick submission guard.
+const ATD_TTL_S = 60;
 const ATD_LASTGOOD_TTL_S = 6 * 3600;
 const atdKey = (period, away, home, kind) =>
-  new Request(`https://lock-league.internal/cache/atd/${kind}/${period}/${encodeURIComponent(away)}@${encodeURIComponent(home)}`);
+  new Request(`https://lock-league.internal/cache/atd-v4/${kind}/${period}/${encodeURIComponent(away)}@${encodeURIComponent(home)}`);
 
 // Fetch (or serve cached) the anytime-TD market for one game. Fail-soft: returns
 // null on any error so an Odds API hiccup never breaks the SharpAPI prop menu.
@@ -62,11 +62,11 @@ function pickWeek(env) {
   return { season: cur.season || 2026, week };
 }
 
-async function getJson(url, init, timeout) {
+async function getJson(url, init, timeout, env = null) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
-    const response = await fetch(url, { ...init, signal: ctrl.signal });
+    const response = await (env ? providerFetch(env,"sharp",url,{...init,signal:ctrl.signal},1,"props") : fetch(url,{...init,signal:ctrl.signal}));
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
   } finally { clearTimeout(timer); }
@@ -96,7 +96,7 @@ async function fetchGameProps(env, request, away, home, week) {
       url.searchParams.set(key, value);
     }
     try {
-      const data = await getJson(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } }, remaining);
+      const data = await getJson(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } }, remaining, env);
       pages++;
       const rows = Array.isArray(data) ? data : (data.data ?? data.odds ?? data.results ?? []);
       if (!Array.isArray(rows)) break;
@@ -120,22 +120,24 @@ async function fetchGameProps(env, request, away, home, week) {
 // pull. Never splice prices from two different main lines within one book.
 export function mergePartialProps(previous, fresh) {
   const key = p => `${p.market}:${p.player.toLowerCase()}`;
-  const merged = new Map(previous.map(p => [key(p), p]));
+  const merged = new Map(previous.map(p => [key(p), {...p,
+    fanduel:p.fanduel?{...p.fanduel,stale:true}:null,draftkings:p.draftkings?{...p.draftkings,stale:true}:null,
+    alts:(p.alts || []).map(a=>({...a,stale:true}))}]));
   for (const p of fresh) {
     const old = merged.get(key(p));
     if (!old) { merged.set(key(p), p); continue; }
     const next = { ...old, ...p };
     for (const book of ["fanduel", "draftkings"]) {
       const cur = p[book], prev = old[book];
-      if (!cur) next[book] = prev;
+      if (!cur) next[book] = prev ? {...prev,stale:true} : prev;
       else if (prev && cur.line === prev.line) {
-        next[book] = { ...cur, over: cur.over ?? prev.over, under: cur.under ?? prev.under, yes: cur.yes ?? prev.yes };
+        next[book] = { ...cur, stale: p.kind === "yes" ? cur.yes == null : cur.over == null || cur.under == null, updated: cur.updated || null, over: cur.over ?? prev.over, under: cur.under ?? prev.under, yes: cur.yes ?? prev.yes };
       }
     }
     const alts = new Map((old.alts || []).map(a => [a.line, a]));
     for (const alt of p.alts || []) {
       const prev = alts.get(alt.line);
-      alts.set(alt.line, { ...alt, fanduel: alt.fanduel ?? prev?.fanduel ?? null,
+      alts.set(alt.line, { ...alt, stale:!!prev && (alt.fanduel==null || alt.draftkings==null), updated:{fanduel:alt.fanduel!=null?alt.updated?.fanduel:prev?.updated?.fanduel,draftkings:alt.draftkings!=null?alt.updated?.draftkings:prev?.updated?.draftkings}, fanduel: alt.fanduel ?? prev?.fanduel ?? null,
         draftkings: alt.draftkings ?? prev?.draftkings ?? null });
     }
     next.alts = [...alts.values()].filter(a => a.line > next.line).sort((a, b) => a.line - b.line);
@@ -177,7 +179,7 @@ async function loadGame(context, key, away, home, season, week) {
   // populates its own cache; it cannot hold up the SharpAPI menu indefinitely.
   let atdJob = atdInFlight.get(key);
   if (!atdJob) {
-    atdJob = fetchCachedAnytimeTd(env, `${season}:${week}`, away, home, edge, waitUntil).catch(() => null)
+    atdJob = sharedFeed(env, `atd-v4:${season}:${week}:${away}@${home}`, ATD_TTL_S*1000, ()=>fetchCachedAnytimeTd(env, `${season}:${week}`, away, home, edge, waitUntil)).catch(() => null)
       .finally(() => atdInFlight.delete(key));
     atdInFlight.set(key, atdJob);
   }
@@ -190,8 +192,7 @@ async function loadGame(context, key, away, home, season, week) {
   const markets = menuForGame(props, away, home);
   if (atd?.players?.length) {
     const duplicate = markets.findIndex(m => m.market === "anytime_td");
-    if (duplicate >= 0) markets.splice(duplicate, 1);
-    markets.unshift(atd);
+    if (duplicate < 0) markets.unshift(atd);
   }
   const source = stale && props.length ? "stale" : result.source;
   const data = { game_key: `${away}@${home}`, away, home, season, week, source, stale,
@@ -242,12 +243,13 @@ export async function onRequestGet(context) {
     return json({ error: "missing-game_key", markets: [] }, { status: 400 });
   }
   const { season, week } = pickWeek(env);
+  if (Date.now() >= pickCutoff(season, week, env).getTime()) return json({game_key:gameKey,markets:[],locked:true,source:"locked"}, {headers:{"Cache-Control":"no-store"}});
   const key = `${season}:${week}:${away}@${home}`;
   let job = inFlight.get(key);
   if (!job) {
-    job = loadGame(context, key, away, home, season, week).finally(() => inFlight.delete(key));
+    job = sharedFeed(env, `props-v4:${key}`, TTL_MS, ()=>loadGame(context, key, away, home, season, week)).finally(() => inFlight.delete(key));
     inFlight.set(key, job);
   }
-  const data = await job;
+  const data = await job.catch(()=>({game_key:gameKey,markets:[],source:"unavailable",stale:true}));
   return json(data, { headers: { "Cache-Control": "no-store", "X-Prop-Source": data.source } });
 }

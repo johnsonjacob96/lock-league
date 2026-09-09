@@ -1,3 +1,4 @@
+import { verifiedGames, verifiedMarkets, quoteChanged } from "../_shared/quote-freshness.js";
 // /api/picks  GET (read) / POST (submit) / POST ?action=mark-super-lock
 import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
@@ -49,7 +50,7 @@ async function fetchLiveOdds(request, timeoutMs = 9000) {
     const r = await fetch(new URL("/api/odds", request.url), { signal: ctrl.signal });
     if (!r.ok) return null;
     const j = await r.json();
-    return j.source !== "mock" && Array.isArray(j.games) && j.games.length ? j.games : null;
+    return j.source !== "mock" && Array.isArray(j.games) && j.games.length ? verifiedGames(j) : null;
   } catch {
     return null;
   } finally {
@@ -68,7 +69,7 @@ export function findGame(games, gameKey) { // exported for smoke tests; CF ignor
 function pickBookFor(game, side, preferred) {
   const books = game.books || {};
   const offers = (b) => !!b && (side === "fav" || side === "dog" ? !!b.spread : !!b.total);
-  if (preferred && offers(books[preferred])) return { book: preferred, data: books[preferred] };
+  if (preferred) return offers(books[preferred]) ? { book: preferred, data: books[preferred] } : null;
   for (const key of ["fanduel", "draftkings", ...Object.keys(books)]) {
     if (offers(books[key])) return { book: key, data: books[key] };
   }
@@ -109,7 +110,7 @@ async function fetchLiveProps(request, gameKey) {
     const r = await fetch(u, { signal: ctrl.signal });
     if (!r.ok) return null;
     const j = await r.json();
-    return Array.isArray(j.markets) ? j.markets : null;
+    return verifiedMarkets(j);
   } catch {
     return null;
   } finally {
@@ -125,7 +126,7 @@ export function deriveProp(markets, prop) { // exported for tests; CF ignores no
   if (!m) return null;
   const pl = m.players.find((x) => samePlayer(x.player, prop.player));
   if (!pl) return null;
-  const book = prop.book && pl[prop.book] ? prop.book : (pl.fanduel ? "fanduel" : (pl.draftkings ? "draftkings" : null));
+  const book = prop.book ? (pl[prop.book] ? prop.book : null) : (pl.fanduel ? "fanduel" : (pl.draftkings ? "draftkings" : null));
   const bk = book ? pl[book] : null;
   if (m.kind === "yes") {
     const price = bk ? (bk.yes ?? null) : null;
@@ -142,7 +143,7 @@ export function deriveProp(markets, prop) { // exported for tests; CF ignores no
   if (side === "over" && prop.line != null && Number(prop.line) !== Number(mainLine) && Array.isArray(pl.alts)) {
     const alt = pl.alts.find((a) => Number(a.line) === Number(prop.line));
     if (!alt) return null; // requested alt line isn't on the board
-    const altBook = (prop.book && alt[prop.book] != null) ? prop.book
+    const altBook = prop.book ? (alt[prop.book] != null ? prop.book : null)
       : (alt.fanduel != null ? "fanduel" : (alt.draftkings != null ? "draftkings" : null));
     const altPrice = altBook ? alt[altBook] : null;
     if (altPrice == null) return null;
@@ -270,6 +271,7 @@ export function validPickPeriod(season, week, env) {
   const cur = currentNflWeek(new Date(), env);
   return season === (cur.season || 2026) && week === (cur.status === "offseason" ? 1 : cur.week);
 }
+const changedQuote = quote => json({error:"quote-changed",detail:"The line or price changed. Review the current quote and lock again. Your saved picks are unchanged.",quote},{status:409});
 const unavailableOdds = () => json({ error: "odds-unavailable", detail: "Cannot verify the offered line right now. Your saved picks are unchanged; try again shortly." }, { status: 503 });
 const hasNumber = n => n !== null && n !== undefined && n !== "" && Number.isFinite(Number(n));
 
@@ -483,6 +485,7 @@ export async function onRequest({ request, env }) {
           const d = deriveGradable(g, p.bet_type, p.side, p.book);
           if (!d) return json({ error: "line-not-offered", game_key: p.game_key, bet_type: p.bet_type }, { status: 422 });
           if (!hasNumber(d.price) || Math.abs(Number(d.price)) < 100) return unavailableOdds();
+          if (quoteChanged(p.expected_quote,d)) return changedQuote(d);
           p.line = d.line; p.price = d.price; p.book = d.book; p.pick_text = d.pick_text;
 
         }
@@ -502,6 +505,7 @@ export async function onRequest({ request, env }) {
       if (d.price != null && !(Number(d.price) >= -120)) {
         return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: d.price, player: d.player }, { status: 400 });
       }
+      if (quoteChanged(p.expected_quote,d)) return changedQuote(d);
       p.prop = { market: d.market, player: d.player, line: d.line, side: d.side, price: d.price, book: d.book, game_key: p.game_key };
       p.pick_text = d.pick_text; p.price = d.price; p.book = d.book;
     }
@@ -521,6 +525,7 @@ export async function onRequest({ request, env }) {
           const d = deriveGradable(g, lp.bet, lp.side, lp.book);
           if (!d) return json({ error: "line-not-offered", game_key: lp.game_key, bet_type: "Super Lock" }, { status: 422 });
           if (!hasNumber(d.price) || Math.abs(Number(d.price)) < 100) return unavailableOdds();
+          if (quoteChanged(p.expected_quote,d)) return changedQuote(d);
           p.line = d.line; p.price = d.price; p.book = d.book; p.pick_text = d.pick_text; p.side = lp.side;
 
         }

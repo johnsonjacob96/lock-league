@@ -102,7 +102,7 @@ export async function run() {
           game.books.draftkings = {...structuredClone(game.books.fanduel), updated:new Date().toISOString(), supplemental:true};
           game.books.draftkings.spread.line = -6.5;
           host.innerHTML = renderGameCard(game,"draftkings");
-          out.checks.backupBookVisible = host.querySelectorAll(".book-toggle").length === 2 && host.querySelector(".book-toggle.on").dataset.book === "draftkings" && host.textContent.includes("6.5") && host.textContent.includes("every 15 min");
+          out.checks.backupBookVisible = host.querySelectorAll(".book-toggle").length === 2 && host.querySelector(".book-toggle.on").dataset.book === "draftkings" && host.textContent.includes("6.5") && host.textContent.includes("backup");
         } catch (e) { out.err = String(e && e.stack || e); }
         return out;
       }, markets);

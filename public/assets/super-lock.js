@@ -700,7 +700,9 @@ function refreshSuperLockEditor() {
   }
 }
 
+let propRefreshTimer = null;
 async function loadPropMenu(gameKey) {
+  clearTimeout(propRefreshTimer);
   superLockState.loading = true;
   refreshSuperLockEditor();
   let markets = [];
@@ -718,6 +720,9 @@ async function loadPropMenu(gameKey) {
   superLockState.markets = markets;
   superLockState.loading = false;
   refreshSuperLockEditor();
+  propRefreshTimer = setTimeout(() => {
+    if (!document.hidden && superLockState.open && superLockState.tab === "props" && !superLockState.saving && state.view === "thisweek" && superLockState.gameKey === gameKey && document.getElementById("mycard-sl-msg") && Date.parse(slCurrentGame()?.kickoff) > Date.now()) loadPropMenu(gameKey);
+  }, 60000);
 }
 // Client mirror of the server's canonical prop text (functions/_shared/props.js).
 function propTextClient(prop, m) {
@@ -753,11 +758,17 @@ async function lockStructuredProp() {
       body: JSON.stringify({
         season: 2026,
         week: myCardWeek(),
-        picks: [{ bet_type: "Super Lock", prop }],
+        picks: [{ bet_type: "Super Lock", prop, expected_quote: {book:sel.book,line:prop.line,price:best.price} }],
       }),
     });
     const j = await r.json();
     if (!r.ok) {
+      if(j.error==="quote-changed" || j.error==="prop-not-offered") {
+        await loadPropMenu(superLockState.gameKey);
+        const note=document.getElementById("mycard-sl-msg");
+        if(note)note.textContent=j.detail || "THAT LINE IS NO LONGER OFFERED · REVIEW THE REFRESHED MENU";
+        return;
+      }
       if (msg)
         msg.textContent =
           j.error === "locked"
@@ -819,11 +830,19 @@ async function lockGameLine() {
       body: JSON.stringify({
         season: 2026,
         week: myCardWeek(),
-        picks: [{ bet_type: "Super Lock", line_pick }],
+        picks: [{ bet_type: "Super Lock", line_pick, expected_quote: {book:info.book,line:info.line,price:info.price} }],
       }),
     });
     const j = await r.json();
     if (!r.ok) {
+      if (j.error === "quote-changed") {
+        const fresh = await fetch("/api/odds", {credentials:"include"});
+        if (fresh.ok) applyLiveOdds(state.thisWeekData, await fresh.json(), true);
+        refreshSuperLockEditor();
+        const note = document.getElementById("mycard-sl-msg");
+        if (note) note.textContent = j.detail;
+        return;
+      }
       if (msg)
         msg.textContent =
           j.error === "locked"

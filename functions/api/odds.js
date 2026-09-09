@@ -1,3 +1,5 @@
+import { sharedFeed } from "../_shared/feed-cache.js";
+import { loadScoreboardSeed } from "../_shared/scoreseed.js";
 // /api/odds — live NFL spreads + totals.
 //
 // Sources, in order:
@@ -6,7 +8,8 @@
 //      out of credits, or not enabled yet (so the board is never empty)
 //   3. Neon last-good snapshot — served stale only if every live source fails
 //
-// Delivery is layered so a burst of pickers never becomes a burst of upstream
+// A global Postgres lease/budget coordinates all colos ahead of the existing
+// cache layers. Delivery is layered so a burst of pickers never becomes a burst of upstream
 // calls: L1 warm-isolate memory, L2 colo-shared Cache API, L3 Neon snapshot.
 // Freshness (ODDS_TTL_S, default 60s) is tuned for live line movement — the
 // client polls on top of this while the board is open.
@@ -209,7 +212,7 @@ function putEdge(edge, payload, ttlS) {
   }));
 }
 
-export async function onRequestGet(context) {
+export async function getUnshared(context, coordinated = false) {
   const { request, env } = context;
   const waitUntil = context.waitUntil ? context.waitUntil.bind(context) : () => {};
   const url = new URL(request.url);
@@ -217,7 +220,7 @@ export async function onRequestGet(context) {
   const wantMock = url.searchParams.get("mock") === "1";
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   const admin = !!env.CRON_SECRET && request.headers.get("X-Cron-Secret") === env.CRON_SECRET;
-  const force = requestedFresh && (local || admin);
+  const force = coordinated || (requestedFresh && (local || admin));
   if ((wantMock || url.searchParams.has("debug")) && !local && !admin) {
     return json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
   }
@@ -261,7 +264,7 @@ export async function onRequestGet(context) {
       // fall through during the preseason test window, so during the regular
       // season an empty-but-200 primary response was accepted as success and
       // overwrote the last-good snapshot, poisoning the stale fallback too.)
-      if (payload.games && payload.games.length) {
+      if (payload.locked || (payload.games && payload.games.length)) {
         cache = { ts: Date.now(), data: payload };
         waitUntil(putEdge(edge, payload, ttlS));
         waitUntil(saveSnapshot(env, payload));
@@ -373,4 +376,34 @@ export async function onRequestPost(context) {
   const ok = (rawEvents ? scoreboardSeeded : oddsSeeded) && summariesSeeded === summaries.length;
   return json({ ok, games: games.length, source: body.source || "espn", oddsSeeded, scoreboardSeeded,
     summariesSeeded }, { status: ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
+}
+
+// The schedule owns the game list; a partial odds response owns only its quotes.
+export function retainSchedule(payload, events) {
+  const map = new Map((payload.games || []).map(g=>[`${g.away}@${g.home}`,g]));
+  for(const ev of events || []) {
+    const cs=ev.competitions?.[0]?.competitors || [];
+    const home=cs.find(c=>c.homeAway==='home')?.team?.displayName;
+    const away=cs.find(c=>c.homeAway==='away')?.team?.displayName;
+    if(home && away && !map.has(`${away}@${home}`))map.set(`${away}@${home}`,{
+      id:ev.id,home,away,kickoff:ev.date,books:{},odds_unavailable:true});
+  }
+  return {...payload,games:[...map.values()].sort((a,b)=>Date.parse(a.kickoff)-Date.parse(b.kickoff))};
+}
+export async function onRequestGet(context) {
+  const url=new URL(context.request.url);
+  if(!context.env?.DATABASE_URL || url.searchParams.has('debug') || url.searchParams.has('mock'))return getUnshared(context);
+  const cur=currentSeasonWeek(context.env);
+  try {
+    const data=await sharedFeed(context.env,`board-v4:${cur.season}:${cur.week}`,30000,async()=>{
+      const r=await getUnshared(context,true);const payload=await r.json();
+      if(!r.ok)throw Error('odds-unavailable');
+      const events=await loadScoreboardSeed(context.env,cur.season,cur.week,2);
+      return retainSchedule(payload,events);
+    });
+    return json(data,hdr(data.stale?'SHARED-DELAYED':'SHARED'));
+  } catch {
+    const events=await loadScoreboardSeed(context.env,cur.season,cur.week,2);
+    return json(retainSchedule({source:'unavailable',live:false,stale:true,games:[]},events),hdr('SCHEDULE'));
+  }
 }

@@ -1,3 +1,4 @@
+import { providerFetch, sharedFeed } from "./feed-cache.js";
 // Anytime-TD-scorer props from The Odds API.
 //
 // SharpAPI (our primary prop feed) does NOT carry an anytime-TD-scorer market —
@@ -17,6 +18,10 @@ const BOOKS = { draftkings: "draftkings", fanduel: "fanduel" };
 
 // Events list — FREE. Returns [{id, home_team, away_team, commence_time}, ...].
 export async function oddsApiEvents(env) {
+  const result = await sharedFeed(env, "oddsapi-events", 600000, async () => ({events: await loadOddsApiEvents(env)}));
+  return result.events;
+}
+async function loadOddsApiEvents(env) {
   const r = await fetch(`${HOST}/events?apiKey=${env.ODDS_API_KEY}`, { signal: AbortSignal.timeout(3000) });
   if (!r.ok) throw new Error(`oddsapi events ${r.status}: ${(await r.text()).slice(0, 120)}`);
   const j = await r.json();
@@ -31,7 +36,7 @@ async function anytimeTdForEvent(env, eventId) {
   u.searchParams.set("markets", "player_anytime_td");
   u.searchParams.set("oddsFormat", "american");
   u.searchParams.set("bookmakers", "draftkings,fanduel");
-  const r = await fetch(u, { signal: AbortSignal.timeout(3000) });
+  const r = await providerFetch(env, "oddsapi", u, { signal: AbortSignal.timeout(3000) });
   if (!r.ok) throw new Error(`oddsapi odds ${r.status}: ${(await r.text()).slice(0, 120)}`);
   return await r.json();
 }
@@ -53,7 +58,7 @@ export function anytimeTdMarketFromOdds(payload) {
       const price = Number(o.price);
       if (!player || !Number.isFinite(price)) continue;
       const e = byPlayer.get(player) || byPlayer.set(player, {}).get(player);
-      e[book] = { yes: price };
+      e[book] = { yes: price, updated: m.last_update || bk.last_update || null };
     }
   }
   // Order by the odds the picker actually shows (it displays the highest-payout
