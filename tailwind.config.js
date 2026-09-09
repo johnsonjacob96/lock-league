@@ -5,7 +5,7 @@
 import forms from "@tailwindcss/forms";
 
 export default {
-  content: ["./public/index.html"],
+  content: ["./public/index.html", "./public/assets/*.js"],
   darkMode: "class",
   theme: {
     extend: {

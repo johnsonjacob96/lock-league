@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: npm install
+      - run: npm run build:data
+      - run: git diff --exit-code -- public/assets/nfl-teams.js
       - run: npm run smoke
       - run: npm test
       - name: Live prod probe (manual dispatch only)
@@ -41,3 +43,4 @@ jobs:
         run: npm install --no-save playwright@1 && npx playwright install --with-deps chromium
       - run: npm run smoke:render
       - run: npm run smoke:browser
+      - run: npm run smoke:super-lock

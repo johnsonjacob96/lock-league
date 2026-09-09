@@ -1,3 +1,4 @@
+import {snapshot} from './snapshot.mjs';
 import {readFileSync, mkdirSync} from 'node:fs';
 import {execSync} from 'node:child_process';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -34,7 +35,7 @@ for(const width of [375,390,844,1440]){
  },JSON.parse(readFileSync(dir+'/public/data/seasons.json','utf8')));
  for(const [view,name] of [['standings','home'],['thisweek','picks'],['warroom','live']]){
  await p.evaluate(view=>{state.view=view;syncNavActive();renderUserArea();document.getElementById('root').innerHTML=view==='standings'?renderStandings():view==='thisweek'?renderThisWeek():renderWarRoom();if(view==='warroom') attachWarRoomHandlers();document.getElementById('root').scrollTop=0;},view);
- await p.waitForTimeout(350);await p.screenshot({path:`${output}/${name}-${width}.png`});
+ await p.waitForTimeout(350);await snapshot(p,{path:`${output}/${name}-${width}.png`});
  const overflows=await p.evaluate(()=>document.getElementById('root').scrollWidth>document.getElementById('root').clientWidth+1);
  if(overflows) throw new Error(`Overflow ${view} at ${width}px`);
  console.log(JSON.stringify({width,view,...await p.evaluate(()=>({overflow:document.getElementById('root').scrollWidth>document.getElementById('root').clientWidth,firstGame:document.querySelector('.game-card')?.getBoundingClientRect().top,text:document.getElementById('root').innerText.slice(0,160)}))}));
@@ -46,10 +47,10 @@ for(const width of [375,390,844,1440]){
  if(await p.locator('#live-member').inputValue()!=='4')throw new Error('Leaderboard did not select participant');
  await p.waitForTimeout(100);
  if(!await p.locator('.comparison-anchor').count()) throw new Error('Own card missing during comparison');
- await p.screenshot({path:`${output}/compare-${width}.png`});
+ await snapshot(p,{path:`${output}/compare-${width}.png`});
  await p.evaluate(()=>{state.season='2025';state.view='standings';syncNavActive();document.getElementById('root').innerHTML=renderStandings();document.getElementById('root').scrollTop=0;});
  if(!await p.locator('.champion-glow').count())throw new Error('Champion hero missing');
- await p.screenshot({path:`${output}/champion-${width}.png`});
+ await snapshot(p,{path:`${output}/champion-${width}.png`});
  if(width<768) {
    await p.evaluate(()=>document.documentElement.style.setProperty('--safe-top','47px'));
    const headerHeight=await p.locator('header.below-ticker').evaluate(el=>el.getBoundingClientRect().height);

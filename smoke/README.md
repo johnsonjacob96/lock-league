@@ -63,3 +63,9 @@ secrets and uses a different, unverified database connection. It is not a
 production-equivalent provider test. Run integration tests locally; after
 deploying, run live verification and seed
 acknowledgment checks before declaring production ready.
+
+## Current Super Lock panel
+
+`npm run smoke:super-lock` exercises the active modal at 375/390/844/1440 px. It is included in the GitHub render job and `smoke:all`. It covers every supported market, per-book selection, alternate lines, saving/error recovery, portraits, keyboard behavior, and sorting. Backend requests are intercepted; it cannot submit production picks. Portrait image fixtures are checked in under `smoke/assets/`.
+
+`smoke/playwright.mjs` resolves local Playwright first (CI), then a global developer installation. `smoke/snapshot.mjs` waits for fonts/images and disables animation during capture for comparable screenshots.
