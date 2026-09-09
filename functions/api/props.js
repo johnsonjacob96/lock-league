@@ -113,21 +113,7 @@ async function fetchGameProps(env, request, away, home, week) {
     return (!Number.isFinite(t) || (t >= from && t < to)) &&
       sameTeam(p.away, away) && sameTeam(p.home, home);
   });
-  // TEMP DEBUG (auth-gated): distinct market signatures from the raw feed so we
-  // can see exactly what strings the mapper receives. Carried in cached data.
-  const seen = new Set(), rawSigs = [];
-  for (const r of raw) {
-    const sig = `${r.sportsbook}|${r.market_type}|${r.stat_category}`;
-    if (seen.has(sig)) continue;
-    seen.add(sig);
-    rawSigs.push({ sb: r.sportsbook, mt: r.market_type, sc: r.stat_category, sel: r.selection, st: r.selection_type, line: r.line, main: r.is_main_line });
-  }
-  // TEMP DEBUG: every raw row for A.J. Brown / JSN receiving-yards, undeduped, to
-  // see whether DK flags a main line or lets an alt stick.
-  const rawRows = raw
-    .filter(r => /brown|njigba/i.test(String(r.player_name || "")) && /receiv|reception|longest/i.test(`${r.market_type} ${r.stat_category}`))
-    .map(r => ({ sb: r.sportsbook, player: r.player_name, mt: r.market_type, st: r.selection_type, sel: r.selection, line: r.line, main: r.is_main_line, odds: r.odds_american }));
-  return { source: props.length ? "sharpapi" : "unavailable", props, complete, ids, pages, rawSigs, rawRows };
+  return { source: props.length ? "sharpapi" : "unavailable", props, complete, ids, pages };
 }
 
 // Retain omitted players/books/alternates only through an incomplete provider
@@ -210,7 +196,7 @@ async function loadGame(context, key, away, home, season, week) {
   const source = stale && props.length ? "stale" : result.source;
   const data = { game_key: `${away}@${home}`, away, home, season, week, source, stale,
     complete: result.complete, live: markets.length > 0, markets, fetched_at: new Date().toISOString(),
-    sharp_event_ids: result.ids, pages: result.pages, _rawSigs: result.rawSigs || [], _rawRows: result.rawRows || [] };
+    sharp_event_ids: result.ids, pages: result.pages };
   const entry = { key, ts: Date.now(), expires: Date.now() + (stale ? RETRY_MS : TTL_MS), data };
   cache.set(key, entry);
   persist(edge, propKey(key, "fresh"), entry, stale ? RETRY_MS / 1000 : TTL_MS / 1000, waitUntil);
@@ -263,9 +249,5 @@ export async function onRequestGet(context) {
     inFlight.set(key, job);
   }
   const data = await job;
-  if (url.searchParams.has("rawdump") && env.CRON_SECRET && request.headers.get("X-Cron-Secret") === env.CRON_SECRET) {
-    return json({ source: data.source, stale: data.stale, rawSigs: data._rawSigs || [], rawRows: data._rawRows || [] }, { headers: { "Cache-Control": "no-store" } });
-  }
-  const { _rawSigs, _rawRows, ...clean } = data;
-  return json(clean, { headers: { "Cache-Control": "no-store", "X-Prop-Source": data.source } });
+  return json(data, { headers: { "Cache-Control": "no-store", "X-Prop-Source": data.source } });
 }

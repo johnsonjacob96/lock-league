@@ -199,21 +199,27 @@ export function normalizeSharpProps(rows) {
 
     const id = `${market}|${player.toLowerCase()}`;
     let e = agg.get(id);
-    if (!e) { e = { market, label: def.label, unit: def.unit, kind: def.kind, player, home, away, kickoff, byBook: {}, altByBook: {} }; agg.set(id, e); }
-    const b = e.byBook[book] || (e.byBook[book] = { over: null, under: null, yes: null, line: null, main: false });
+    if (!e) { e = { market, label: def.label, unit: def.unit, kind: def.kind, player, home, away, kickoff, byBook: {}, ouByBook: {}, altByBook: {} }; agg.set(id, e); }
     if (def.kind === "yes") {
       // Anytime TD: yes/no, or an O/U 0.5 (over == yes). Ignore alt/"other" rows.
+      const b = e.byBook[book] || (e.byBook[book] = { over: null, under: null, yes: null, line: null, main: false });
       if (stype === "yes" || stype === "over") { b.yes = price; if (Number.isFinite(line)) b.line = line; }
       else if (stype === "no" || stype === "under") b.no = price;
       else continue;
       if (isMain) b.main = true;
     } else if (stype === "over" || stype === "under") {
-      // Main Over/Under line: keep the book's main line (the main-flagged row wins).
-      if (Number.isFinite(line) && (b.line == null || (isMain && !b.main))) b.line = line;
-      // Safety: only accept a plausible main-line price. An absurd side price
-      // (e.g. +1400 on a real 232.5 line) is dropped so it can't be locked.
-      b[stype] = plausibleMainPrice(price) ? price : null;
-      if (isMain) b.main = true;
+      // Over/Under row. Books disagree on how they ship the line ladder: FanDuel
+      // posts only the MAIN line as over/under (alternates come as "other" "N+"
+      // rows, handled below), but DraftKings posts EVERY alternate line as its own
+      // over/under row with is_main_line=false — and often doesn't flag the real
+      // main at all. So we can't treat "first over/under row" as the main line
+      // (that let a DK alt like 19.5 masquerade as A.J. Brown's 63.5 line). Collect
+      // every line per book here; resolveMainLine() picks the true main in flatten.
+      if (!Number.isFinite(line)) continue;
+      const m = e.ouByBook[book] || (e.ouByBook[book] = new Map());
+      const slot = m.get(line) || m.set(line, { over: null, under: null, main: false }).get(line);
+      if (slot[stype] == null) slot[stype] = price;
+      if (isMain) slot.main = true;
     } else {
       // Alternate over line: a cumulative "N+ <Stat>" selection -> over at N-0.5
       // with its own odds. Bucket per book so the picker can offer buy-up lines.
@@ -223,32 +229,73 @@ export function normalizeSharpProps(rows) {
       }
     }
   }
+  // Pick a book's true main line out of the collected over/under ladder: prefer a
+  // line flagged is_main_line (and, among those, one that is two-sided), then any
+  // two-sided line (both over and under — alternates are over-only), then any line
+  // carrying an under. A ladder of over-only lines has no genuine main -> null.
+  const resolveMainLine = (m) => {
+    if (!m || !m.size) return null;
+    const lines = [...m.keys()];
+    const twoSided = (l) => m.get(l).over != null && m.get(l).under != null;
+    const flagged = lines.filter((l) => m.get(l).main);
+    const pick =
+      flagged.find(twoSided) ??
+      (flagged.length ? Math.min(...flagged) : undefined) ??
+      (lines.some(twoSided) ? Math.min(...lines.filter(twoSided)) : undefined) ??
+      (lines.some((l) => m.get(l).under != null) ? Math.min(...lines.filter((l) => m.get(l).under != null)) : undefined);
+    if (pick === undefined) return null;
+    const slot = m.get(pick);
+    // Keep the +1400-style price safety: an implausible main-line price is dropped.
+    return { line: pick, over: plausibleMainPrice(slot.over) ? slot.over : null, under: plausibleMainPrice(slot.under) ? slot.under : null };
+  };
   // Flatten to the picker shape: one entry per (market, player) with the best
   // available line + both books' prices.
   const out = [];
   for (const e of agg.values()) {
-    const books = e.byBook;
-    const fd = books.fanduel, dk = books.draftkings;
-    const line = (fd && fd.line != null) ? fd.line : (dk && dk.line != null ? dk.line : null);
-    if (e.kind === "ou" && line == null) continue;
-    // Alternate OVER lines above the main line — "buy up the line" for longer odds.
-    // Union the thresholds across books, keep the best (longest) price per book,
-    // sorted by line. Only lines above the main one (higher = harder = longer odds).
-    let alts = [];
-    if (e.kind === "ou") {
-      const lineSet = new Set();
-      for (const bk of Object.keys(e.altByBook)) for (const ln of e.altByBook[bk].keys()) if (ln > line) lineSet.add(ln);
-      alts = [...lineSet].sort((a, b) => a - b).map((ln) => ({
-        line: ln,
-        fanduel: e.altByBook.fanduel ? (e.altByBook.fanduel.get(ln) ?? null) : null,
-        draftkings: e.altByBook.draftkings ? (e.altByBook.draftkings.get(ln) ?? null) : null,
-      }));
+    if (e.kind === "yes") {
+      // Anytime TD: yes/no market, no line ladder.
+      const fd = e.byBook.fanduel, dk = e.byBook.draftkings;
+      const line = (fd && fd.line != null) ? fd.line : (dk && dk.line != null ? dk.line : null);
+      out.push({
+        market: e.market, label: e.label, unit: e.unit, kind: e.kind,
+        player: e.player, home: e.home, away: e.away, kickoff: e.kickoff, line,
+        fanduel: fd ? { line: fd.line, over: fd.over, under: fd.under, yes: fd.yes } : null,
+        draftkings: dk ? { line: dk.line, over: dk.over, under: dk.under, yes: dk.yes } : null,
+        alts: [],
+      });
+      continue;
     }
+    // Over/Under: resolve each book's true main line from its ladder.
+    const fdMain = resolveMainLine(e.ouByBook.fanduel);
+    const dkMain = resolveMainLine(e.ouByBook.draftkings);
+    const line = (fdMain && fdMain.line != null) ? fdMain.line : (dkMain && dkMain.line != null ? dkMain.line : null);
+    if (line == null) continue;
+    // Every over line other than the main one is an alternate (a "buy up the
+    // line" price). Fold DraftKings' explicit alternate over/under rows into the
+    // same alt map that carries FanDuel's "N+" alternates, without clobbering.
+    for (const bk of ["fanduel", "draftkings"]) {
+      const m = e.ouByBook[bk]; if (!m) continue;
+      const mainLine = bk === "fanduel" ? fdMain?.line : dkMain?.line;
+      for (const [ln, slot] of m) {
+        if (ln === mainLine || slot.over == null) continue;
+        const map = e.altByBook[bk] || (e.altByBook[bk] = new Map());
+        if (!map.has(ln)) map.set(ln, slot.over);
+      }
+    }
+    // Alternate OVER lines above the main line — union thresholds across books,
+    // keep each book's price, sorted by line (higher = harder = longer odds).
+    const lineSet = new Set();
+    for (const bk of Object.keys(e.altByBook)) for (const ln of e.altByBook[bk].keys()) if (ln > line) lineSet.add(ln);
+    const alts = [...lineSet].sort((a, b) => a - b).map((ln) => ({
+      line: ln,
+      fanduel: e.altByBook.fanduel ? (e.altByBook.fanduel.get(ln) ?? null) : null,
+      draftkings: e.altByBook.draftkings ? (e.altByBook.draftkings.get(ln) ?? null) : null,
+    }));
     out.push({
       market: e.market, label: e.label, unit: e.unit, kind: e.kind,
       player: e.player, home: e.home, away: e.away, kickoff: e.kickoff, line,
-      fanduel: fd ? { line: fd.line, over: fd.over, under: fd.under, yes: fd.yes } : null,
-      draftkings: dk ? { line: dk.line, over: dk.over, under: dk.under, yes: dk.yes } : null,
+      fanduel: fdMain ? { line: fdMain.line, over: fdMain.over, under: fdMain.under, yes: null } : null,
+      draftkings: dkMain ? { line: dkMain.line, over: dkMain.over, under: dkMain.under, yes: null } : null,
       alts,
     });
   }

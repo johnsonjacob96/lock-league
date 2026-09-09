@@ -56,6 +56,16 @@ export async function run() {
   s.eq("Kupp receptions DK line stays 2.5 (longest-reception 15.5 dropped)", kupp?.draftkings?.line, 2.5);
   s.ok("no bogus Kupp entry leaked into receiving yards", !player("rec_yds", /Kupp/));
 
+  // ── 2c. Main-line resolution: DK ships alternates as their own over/under rows;
+  //        the true main is the flagged / two-sided line, never the first alt. ──
+  const brownRy = player("rec_yds", /Brown/);
+  s.ok("Brown receiving-yards prop present", !!brownRy);
+  s.eq("Brown FD main line 64.5", brownRy?.fanduel?.line, 64.5);
+  s.eq("Brown DK main resolves to the two-sided 63.5, NOT the first alt (19.5)", brownRy?.draftkings?.line, 63.5);
+  s.eq("Brown DK main over price is the 63.5 price (-114), not the 19.5 alt (+115)", brownRy?.draftkings?.over, -114);
+  const jsnRy = player("rec_yds", /Njigba/);
+  s.eq("JSN DK main uses the flagged 81.5 even though a 19.5 alt appears first", jsnRy?.draftkings?.line, 81.5);
+
   // ── 2b. Safety net: an absurd MAIN O/U price (+1400 on a real 232.5 line) is dropped ──
   const maye = player("pass_yds", /Maye/);
   s.ok("Maye passing-yards prop present (line itself is fine)", !!maye);
