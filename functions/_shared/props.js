@@ -38,6 +38,22 @@ export const PROP_DEFS = {
   anytime_td:   { label: "Anytime TD",       unit: "TD",       kind: "yes", stat: ["rushingTouchdowns", "receivingTouchdowns", "kickReturnTouchdowns", "puntReturnTouchdowns", "interceptionTouchdowns", "defensiveTouchdowns"] },
 };
 
+// Plausible price band for a MAIN two-sided over/under prop side. A main line is
+// set near the median outcome, so both the over and under carry near-even juice
+// (roughly -300..+250 in the wild). A "main" O/U side priced far outside this
+// band — e.g. +1400 on a 232.5 passing-yards over — is bad or mislabeled data (a
+// longshot alt bucketed as main, or a feed error), never a real main line. Such a
+// price must not become a lockable Super Lock (the league's floor rule only bars
+// odds SHORTER than -120, so a bogus +1400 would otherwise pass and be the most
+// tempting thing to lock). We drop the price at normalization so the side is not
+// lockable. Alt buy-up lines are stored separately and keep their own long odds,
+// so legitimate longshot alternates are unaffected.
+const MAIN_OU_PRICE_MIN = -2500, MAIN_OU_PRICE_MAX = 600;
+export function plausibleMainPrice(price) {
+  const n = Number(price);
+  return Number.isFinite(n) && n >= MAIN_OU_PRICE_MIN && n <= MAIN_OU_PRICE_MAX;
+}
+
 // Preferred order in the picker (most-locked first).
 export const PROP_ORDER = [
   "anytime_td", "rush_yds", "rec_yds", "receptions", "pass_yds", "pass_tds",
@@ -186,7 +202,9 @@ export function normalizeSharpProps(rows) {
     } else if (stype === "over" || stype === "under") {
       // Main Over/Under line: keep the book's main line (the main-flagged row wins).
       if (Number.isFinite(line) && (b.line == null || (isMain && !b.main))) b.line = line;
-      b[stype] = price;
+      // Safety: only accept a plausible main-line price. An absurd side price
+      // (e.g. +1400 on a real 232.5 line) is dropped so it can't be locked.
+      b[stype] = plausibleMainPrice(price) ? price : null;
       if (isMain) b.main = true;
     } else {
       // Alternate over line: a cumulative "N+ <Stat>" selection -> over at N-0.5

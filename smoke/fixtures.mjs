@@ -48,6 +48,15 @@ export function sharpPropRows() {
     R({ market_type: "player_touchdowns", stat_category: "touchdowns", player_name: "Drake Maye", selection: "Over", selection_type: "over", line: 1.5, odds_american: 150 }),
     R({ market_type: "player_touchdowns", stat_category: "touchdowns", player_name: "Drake Maye", selection: "Under", selection_type: "under", line: 1.5, odds_american: -180 }),
     R({ market_type: "player_touchdowns", stat_category: "touchdowns", player_name: "Drake Maye", selection: "Drake Maye 3+ Passing Touchdowns", selection_type: "other", odds_american: 400 }),
+    // Drake Maye passing yards: the LINE is correct (232.5), but FanDuel posts an
+    // absurd +1400 price on the main over — a mislabeled longshot / feed error. A
+    // main two-sided O/U is near-even, so +1400 is not a real main price; the
+    // safety must drop it (leaving the over unlockable) while DraftKings' real
+    // -112/-108 stays. Under -110 on FD is a valid main price and is kept.
+    R({ sportsbook: "fanduel",   market_type: "player_passing_yards", stat_category: "passing_yards", player_name: "Drake Maye", selection: "Over",  selection_type: "over",  line: 232.5, odds_american: 1400, is_main_line: true }),
+    R({ sportsbook: "fanduel",   market_type: "player_passing_yards", stat_category: "passing_yards", player_name: "Drake Maye", selection: "Under", selection_type: "under", line: 232.5, odds_american: -110, is_main_line: true }),
+    R({ sportsbook: "draftkings", market_type: "player_passing_yards", stat_category: "passing_yards", player_name: "Drake Maye", selection: "Over",  selection_type: "over",  line: 232.5, odds_american: -112, is_main_line: true }),
+    R({ sportsbook: "draftkings", market_type: "player_passing_yards", stat_category: "passing_yards", player_name: "Drake Maye", selection: "Under", selection_type: "under", line: 232.5, odds_american: -108, is_main_line: true }),
     // Kenneth Walker rushing yards
     R({ market_type: "player_rushing_yards", stat_category: "rushing_yards", player_name: "Kenneth Walker III", selection: "Over", selection_type: "over", line: 68.5, odds_american: -114 }),
     R({ market_type: "player_rushing_yards", stat_category: "rushing_yards", player_name: "Kenneth Walker III", selection: "Under", selection_type: "under", line: 68.5, odds_american: -106 }),
