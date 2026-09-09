@@ -30,12 +30,28 @@ for(const width of [375,390,844,1440]) {
  },JSON.parse(readFileSync(dir+'public/data/seasons.json','utf8')));
  await page.locator('#sl-open').click();
  assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.open),true);checks++;
+ const ordering=await page.evaluate(()=>{
+  const g=(id,total,kickoff='2026-09-13T17:00Z')=>({id,kickoff,books:{fanduel:{total:{point:total}}}});
+  const higher=g('highest',49.5);higher.books.draftkings={total:{point:51.5}};
+  return slSortGames([g('missing',null),g('low',42.5),g('started',60,'2026-09-08T17:00Z'),higher,g('tied-later',51.5,'2026-09-13T20:25Z')]).map(x=>x.id);
+ });assert.deepEqual(ordering,['highest','tied-later','low','missing','started']);checks++;
  assert.equal(await page.locator('[data-slgame]:disabled').count(),1);checks++;
  await page.locator('#sl-close').focus();
  await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.getElementById('sl-dialog').contains(document.activeElement)),true);checks++;
  await page.screenshot({path:`${output}/games-${width}.png`});
  await page.locator('[data-slgame="Dallas Cowboys@Philadelphia Eagles"]').click();
  await page.waitForSelector('[data-slmarket="pass_int"]');
+ await page.waitForFunction(()=>!!slPhotoIndex);
+ const photo=page.locator('[data-slportrait="Jalen Hurts"] img').first();
+ assert.match(await photo.getAttribute('src'),/4040715\.png/);checks++;
+ await photo.evaluate(img=>img.dispatchEvent(new Event('error')));
+ assert.equal(await page.locator('[data-slportrait="Jalen Hurts"]').first().innerText(),'JH');checks++;
+ const photoSafety=await page.evaluate(()=>{
+  const previous=slPhotoIndex;
+  slPhotoIndex=new Map([['duplicate',[{id:'1',photo:'https://a.espncdn.com/one.png'},{id:'2',photo:'https://a.espncdn.com/two.png'}]],['unsafe',[{id:'3',photo:'https://example.com/photo.png'}]]]);
+  const result=[slPlayerPhoto('Duplicate'),slPlayerPhoto('Unsafe'),slPlayerPhoto('Unknown')];slPhotoIndex=previous;return result;
+ });assert.deepEqual(photoSafety,[null,null,null]);checks++;
+
  assert.equal(await page.locator('[data-slmarket]').count(),14);checks++;
  await page.locator('#sl-search').fill('nobody');assert.equal(await page.locator('#sl-no-results').isVisible(),true);checks++;
  await page.locator('#sl-search').fill('hurts');assert.equal(await page.locator('.sl-prop-row:visible').count(),13);checks++;
@@ -51,6 +67,7 @@ for(const width of [375,390,844,1440]) {
  await page.locator('[data-slchoose$=":under"]').click();
  assert.equal(await page.evaluate(()=>slPropSel(slMarkets.find(m=>m.market==='rush_yds'),slMarkets.find(m=>m.market==='rush_yds').players[0]).book),'fanduel');checks++;
  assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1),true);checks++;
+ await page.waitForFunction(()=>{const img=document.querySelector('[data-slportrait="Jalen Hurts"] img');return img?.complete&&img.naturalWidth>0;});
  await page.screenshot({path:`${output}/props-${width}.png`});
  await page.locator('.sl-alt-wrap summary').click();await page.locator('[data-slchoose$=":50.5"]').click();
  rejectSave=true;await page.locator('#sl-lock').click();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('NO LONGER'));

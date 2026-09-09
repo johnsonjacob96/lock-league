@@ -1074,7 +1074,7 @@
   .sl-panel-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #29322e}.sl-panel-head h2{font-family:Oswald,sans-serif;font-size:24px}.sl-panel-head button{min-width:44px;min-height:44px;font-size:26px}.sl-panel-body{padding:20px;max-height:calc(90dvh - 70px);overflow-y:auto;scroll-padding:20px 0 160px}.sl-panel-body h3{font-family:Oswald,sans-serif;font-size:28px;margin-bottom:10px}
   .sl-game-list{display:grid;gap:12px;margin-top:20px}.sl-game-choice{padding:16px;border:1px solid #303936;border-radius:12px;background:#191f1d;text-align:center}.sl-game-choice:disabled{opacity:.45}.sl-matchup{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}.sl-matchup>span{display:flex;align-items:center;gap:10px}.sl-game-choice small,.sl-player-heading small{display:block;color:#a1ada7}.sl-selected-game{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin-bottom:12px}.sl-tabs{display:flex;margin:20px 0}.sl-tabs button{flex:1;padding:14px;border-bottom:2px solid #303936}.sl-tabs [aria-pressed=true]{border-color:#37db89;color:#37db89}
   .sl-search-label{display:block;font-size:13px;color:#abb8b0;margin-bottom:6px}#sl-search{width:100%}.sl-filters{display:flex;overflow-x:auto;gap:8px;margin:16px 0}.sl-filters button{flex-shrink:0;white-space:nowrap;padding:10px 12px;min-height:44px;border:1px solid #344039;border-radius:20px;font-size:12px}.sl-filters [aria-pressed=true]{background:#203d2e;color:#65ec9f;border-color:#37db89}
-  .sl-prop-row{padding:16px 0;border-bottom:1px solid #2c3530}.sl-prop-row[hidden]{display:none}.sl-player-heading{display:flex;align-items:center;gap:12px;margin-bottom:12px}.sl-avatar{display:grid;place-items:center;width:40px;height:40px;background:#28372f;border-radius:50%;font-size:13px;color:#b5c8bd}.sl-player-heading strong{font-size:16px}.sl-player-heading small{font-size:12px;margin-top:3px}.sl-prop-row .sl-side-btn{min-height:56px}.sl-prop-row .sl-side-btn.active{color:#64e89e;border-color:#37db89;background:#1b3025}.sl-alt-wrap summary{padding:12px 0;cursor:pointer}.sl-alt-btn span{display:block}.sl-confirm{position:sticky;bottom:-20px;background:#101514;border-top:1px solid #3b4c41;padding:16px 0 20px;margin-top:20px}.sl-confirm strong,.sl-confirm small{display:block}.sl-selection-line{display:block;font-size:14px;color:#c5d0c9;margin:8px 0}.sl-confirm .btn-primary{font-family:inherit;letter-spacing:0;font-size:16px;min-height:48px;text-transform:none}.sl-confirm small{font-size:11px;color:#aab8af;margin:6px 0}.sl-custom-link{display:block;margin:24px auto 4px;padding:12px}#sl-dialog button:focus-visible,#sl-dialog input:focus-visible,#sl-dialog summary:focus-visible{outline:2px solid #70e8a6;outline-offset:3px}
+  .sl-prop-row{padding:16px 0;border-bottom:1px solid #2c3530}.sl-prop-row[hidden]{display:none}.sl-player-heading{display:flex;align-items:center;gap:12px;margin-bottom:12px}.sl-avatar{position:relative;overflow:hidden;flex-shrink:0;display:grid;place-items:center;width:48px;height:48px;background:#28372f;border-radius:50%;font-size:13px;color:#b5c8bd}.sl-avatar img{opacity:0;position:absolute;inset:0;width:48px;height:48px;object-fit:cover;background:#18221d}.sl-total-label{display:block;color:#dbe8df;font-size:15px;margin-bottom:6px}.sl-player-heading strong{font-size:16px}.sl-player-heading small{font-size:12px;margin-top:3px}.sl-prop-row .sl-side-btn{min-height:56px}.sl-prop-row .sl-side-btn.active{color:#64e89e;border-color:#37db89;background:#1b3025}.sl-alt-wrap summary{padding:12px 0;cursor:pointer}.sl-alt-btn span{display:block}.sl-confirm{position:sticky;bottom:-20px;background:#101514;border-top:1px solid #3b4c41;padding:16px 0 20px;margin-top:20px}.sl-confirm strong,.sl-confirm small{display:block}.sl-selection-line{display:block;font-size:14px;color:#c5d0c9;margin:8px 0}.sl-confirm .btn-primary{font-family:inherit;letter-spacing:0;font-size:16px;min-height:48px;text-transform:none}.sl-confirm small{font-size:11px;color:#aab8af;margin:6px 0}.sl-custom-link{display:block;margin:24px auto 4px;padding:12px}#sl-dialog button:focus-visible,#sl-dialog input:focus-visible,#sl-dialog summary:focus-visible{outline:2px solid #70e8a6;outline-offset:3px}
   @media(max-width:640px){#sl-dialog{width:100%;height:100dvh;max-height:100dvh;max-width:100vw;border:0;border-radius:0;margin:0}.sl-panel-head{padding-top:max(12px,env(safe-area-inset-top))}.sl-panel-body{max-height:calc(100dvh - 80px - env(safe-area-inset-top));padding-bottom:max(20px,env(safe-area-inset-bottom))}}
 
 </style>
@@ -3696,6 +3696,50 @@ function slPropSel(m, pl) {
   return null;
 }
 
+let slPhotoIndex = null, slPhotoRequest = null;
+function slPlayerNameKey(name) {
+  return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\.?$/,'').replace(/[^a-z0-9]/g,'');
+}
+function slPlayerPhoto(name) {
+  const candidates=slPhotoIndex?.get(slPlayerNameKey(name)) || [];
+  const g=slCurrentGame();
+  const inGame=candidates.filter(p=>p.teams?.some(t=>t===g?.away||t===g?.home));
+  const matches=inGame.length?inGame:candidates;
+  return matches.length===1 && /^https:\/\/(?:[a-z0-9-]+\.)*espncdn\.com\//i.test(matches[0].photo) ? matches[0].photo : null;
+}
+function slPlayerAvatarHtml(name) {
+  const photo=slPlayerPhoto(name);
+  return `<span class="sl-avatar" data-slportrait="${escapeHtml(name)}" aria-hidden="true"><span>${escapeHtml(name.split(' ').map(x=>x[0]).slice(0,2).join(''))}</span>${photo?`<img src="${escapeHtml(photo)}" alt="" width="48" height="48" loading="lazy" onload="this.style.opacity=1" onerror="this.remove()">`:''}</span>`;
+}
+async function loadSlPlayerPhotos() {
+  if(slPhotoIndex)return;
+  if(slPhotoRequest)return slPhotoRequest;
+  slPhotoRequest=(async()=>{
+    try {
+      const r=await fetch('/data/player-photos.json');if(!r.ok)return;
+      const data=await r.json();if(!Array.isArray(data.players))return;
+      slPhotoIndex=new Map();
+      for(const p of data.players){const key=slPlayerNameKey(p.name);const group=slPhotoIndex.get(key)||[];if(!group.some(x=>x.id===p.id))group.push(p);slPhotoIndex.set(key,group);}
+      // Patch portraits only: loading photos must not reset a selection, scroll, or typed input.
+      document.querySelectorAll('#sl-dialog [data-slportrait]').forEach(el=>{el.outerHTML=slPlayerAvatarHtml(el.dataset.slportrait);});
+    } catch { /* Portraits are optional; preserve the usable initials. */ }
+    finally {slPhotoRequest=null;}
+  })();
+  return slPhotoRequest;
+}
+function slGameTotal(g) {
+  const totals=['fanduel','draftkings'].map(book=>g.books?.[book]?.total?.point).filter(n=>typeof n==='number'&&Number.isFinite(n)&&n>0);
+  return totals.length?Math.max(...totals):null;
+}
+function slSortGames(games,now=Date.now()) {
+  return games.slice().sort((a,b)=>{
+    const aTime=new Date(a.kickoff).getTime(),bTime=new Date(b.kickoff).getTime();
+    const started=Number(aTime<=now)-Number(bTime<=now);if(started)return started;
+    const aTotal=slGameTotal(a),bTotal=slGameTotal(b);
+    if(aTotal!==bTotal)return (bTotal??-Infinity)-(aTotal??-Infinity);
+    return (aTime||0)-(bTime||0);
+  });
+}
 let slPanelOpen = false, slSearch = "", slTab = "props", slSaving = false;
 function superLockEditorHtml() {
   const p = currentMyPicks["Super Lock"];
@@ -3714,6 +3758,7 @@ function closeSlPanel() {
   document.getElementById('sl-repick')?.focus();
 }
 function openSlPanel() {
+  void loadSlPlayerPhotos();
   slPanelOpen = true; slEditing = true;
   refreshSuperLockEditor();
 }
@@ -3793,12 +3838,12 @@ const BET_FOR_SIDE = { fav: "Favorite", dog: "Dog", over: "Over", under: "Under"
 
 function slBoardPickerHtml() {
   if (!slGameKey) {
-    const games = (state.thisWeekData?.games || []).slice().sort((a,b)=>new Date(a.kickoff)-new Date(b.kickoff));
-    return `<h3>Choose your game</h3><p class="sl-hint">Odds must be -120 or longer</p><div class="sl-game-list">${games.map(g=>{
+    const games = slSortGames(state.thisWeekData?.games || []);
+    return `<h3>Choose your game</h3><p class="sl-hint">Highest game totals first · Odds -120 or longer</p><div class="sl-game-list">${games.map(g=>{
       const started = new Date(g.kickoff).getTime() <= Date.now();
       return `<button class="sl-game-choice" data-slgame="${escapeHtml(g.away+'@'+g.home)}" ${started?'disabled':''}>
         <span class="sl-matchup"><span>${teamLogoMark(g.away,'w-8 h-8','text-xs')}<b>${escapeHtml(slShort(g.away))}</b></span><small>@</small><span>${teamLogoMark(g.home,'w-8 h-8','text-xs')}<b>${escapeHtml(slShort(g.home))}</b></span></span>
-        <small>${started?'Game started':escapeHtml(new Date(g.kickoff).toLocaleString('en-US',{weekday:'short',hour:'numeric',minute:'2-digit',timeZone:'America/Chicago',timeZoneName:'short'}))}</small></button>`;
+        <span class="sl-total-label">${slGameTotal(g)==null?'Total unavailable':'O/U '+slGameTotal(g)}</span><small>${started?'Game started':escapeHtml(new Date(g.kickoff).toLocaleString('en-US',{weekday:'short',hour:'numeric',minute:'2-digit',timeZone:'America/Chicago',timeZoneName:'short'}))}</small></button>`;
     }).join('') || '<p>No games available for this week.</p>'}</div><button class="sl-link sl-custom-link" data-slmode="custom">Enter a custom pick instead</button>`;
   }
   const g = slCurrentGame();
@@ -3815,7 +3860,7 @@ function slBrowsePropsHtml() {
   const rows = markets.flatMap((m,mi)=> (selectedMarket && selectedMarket!==m.market ? [] : m.players.map((pl,pi)=>{
     const selected = slDraft.market===m.market && slDraft.player===pl.player;
     const sides = m.kind==='yes'?['yes']:['over','under'];
-    return `<article class="sl-prop-row" data-player-search="${escapeHtml(pl.player.toLowerCase())}"><div class="sl-player-heading"><span class="sl-avatar" aria-hidden="true">${escapeHtml(pl.player.split(' ').map(x=>x[0]).slice(0,2).join(''))}</span><div><strong>${escapeHtml(pl.player)}</strong><small>${escapeHtml(m.label)}</small></div></div>
+    return `<article class="sl-prop-row" data-player-search="${escapeHtml(pl.player.toLowerCase())}"><div class="sl-player-heading">${slPlayerAvatarHtml(pl.player)}<div><strong>${escapeHtml(pl.player)}</strong><small>${escapeHtml(m.label)}</small></div></div>
       <div class="sl-sides">${sides.map(side=>{
         const best=slBestSide(pl,side), active=selected&&slDraft.side===side&&slDraft.line==null;
         return `<button class="sl-side-btn ${active?'active':''}" data-slchoose="${mi}:${pi}:${side}" aria-pressed="${active}" ${best.price==null?'disabled':''}><span class="sl-side-lab">${side==='yes'?'Anytime TD':(side==='over'?'Over ':'Under ')+(best.line??pl.line)}</span><span class="sl-side-price">${fmtPrice(best.price)}${best.book?' · '+bookShort(best.book):''}</span></button>`;
