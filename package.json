@@ -11,9 +11,11 @@
     "smoke": "node smoke/run.mjs",
     "smoke:render": "node smoke/run.mjs --render",
     "smoke:live": "node smoke/run.mjs --live",
-    "smoke:all": "node smoke/run.mjs --all",
+    "smoke:all": "node smoke/run.mjs --all && npm run smoke:super-lock",
     "test": "node --experimental-test-module-mocks --test smoke/handlers.mjs smoke/ingestion.mjs smoke/prop-fetch.mjs smoke/cron.mjs smoke/notifications.mjs",
-    "smoke:browser": "RUN_BROWSER=1 node --experimental-test-module-mocks --test smoke/handlers.mjs"
+    "smoke:browser": "RUN_BROWSER=1 node --experimental-test-module-mocks --test smoke/handlers.mjs",
+    "smoke:super-lock": "node smoke/super-lock-panel.mjs",
+    "build:data": "node scripts/build-team-data.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0",

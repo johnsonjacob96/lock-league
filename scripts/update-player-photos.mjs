@@ -1,7 +1,6 @@
 // Refresh verified ESPN roster portraits. No API key or per-player requests.
 import {readFileSync,writeFileSync} from 'node:fs';
-const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
-const teams=JSON.parse(html.match(/const TEAM_ABBR = (\{[\s\S]*?\});/)[1].replace(/,\s*}/g,'}'));
+const teams=JSON.parse(readFileSync(new URL('../public/data/nfl-teams.json',import.meta.url),'utf8'));
 const players=new Map();
 const queue=Object.entries(teams);
 await Promise.all(Array.from({length:4},async()=>{
