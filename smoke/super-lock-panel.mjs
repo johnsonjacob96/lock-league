@@ -67,15 +67,23 @@ for(const width of [375,390,844,1440]) {
  await page.locator('#sl-search').fill('hurts');assert.equal(await page.locator('.sl-prop-row:visible').count(),13);checks++;
  for(const market of Object.keys(PROP_DEFS)){
   await page.locator(`[data-slmarket="${market}"]`).click();
+  // The first side button is FanDuel's (books render FD then DK); its line and
+  // odds come from the same book — never combined.
   await page.locator('[data-slchoose]').first().click();
   assert.equal(await page.locator('#sl-lock').isEnabled(),true);checks++;
   await page.locator('#sl-lock').click();await page.waitForSelector('#sl-dialog',{state:'detached'});
-  const pick=writes.at(-1).picks[0].prop;assert.equal(pick.market,market);assert.equal(pick.book,'draftkings');assert.equal(pick.line,market==='anytime_td'?null:40.5);checks+=3;
+  const pick=writes.at(-1).picks[0].prop;assert.equal(pick.market,market);assert.equal(pick.book,'fanduel');assert.equal(pick.line,market==='anytime_td'?null:39.5);checks+=3;
   await page.locator('#sl-repick').click();
  }
+ // Locking DraftKings' under pairs DK's line (40.5) with DK's under odds (-125),
+ // proving each book keeps its own line/odds combo.
  await page.locator('[data-slmarket="rush_yds"]').click();
- await page.locator('[data-slchoose$=":under"]').click();
- assert.equal(await page.evaluate(()=>slPropSel(slMarkets.find(m=>m.market==='rush_yds'),slMarkets.find(m=>m.market==='rush_yds').players[0]).book),'fanduel');checks++;
+ await page.locator('[data-slchoose$=":under:draftkings"]').click();
+ const dkUnder=await page.evaluate(()=>slPropSel(slMarkets.find(m=>m.market==='rush_yds'),slMarkets.find(m=>m.market==='rush_yds').players[0]));
+ assert.equal(dkUnder.book,'draftkings');assert.equal(dkUnder.line,40.5);assert.equal(dkUnder.price,-125);checks+=3;
+ await page.locator('[data-slchoose$=":under:fanduel"]').click();
+ const fdUnder=await page.evaluate(()=>slPropSel(slMarkets.find(m=>m.market==='rush_yds'),slMarkets.find(m=>m.market==='rush_yds').players[0]));
+ assert.equal(fdUnder.book,'fanduel');assert.equal(fdUnder.line,39.5);assert.equal(fdUnder.price,-110);checks+=3;
  assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1),true);checks++;
  await page.waitForFunction(()=>{const img=document.querySelector('[data-slportrait="Jalen Hurts"] img');return img?.complete&&img.naturalWidth>0;});
  await page.screenshot({path:`${output}/props-${width}.png`});
@@ -87,11 +95,11 @@ for(const width of [375,390,844,1440]) {
  assert.deepEqual(await page.locator('.sl-player-heading strong').allTextContents(),['Saquon Barkley','Jalen Hurts','Dak Prescott']);checks++;
  await page.locator('[data-slchoose]').first().click();
  assert.equal(await page.evaluate(()=>slDraft.player),'Saquon Barkley');checks++;
- assert.equal(await page.locator('[data-slchoose]').first().getAttribute('data-slchoose'),'5:1:over');checks++;
+ assert.equal(await page.locator('[data-slchoose]').first().getAttribute('data-slchoose'),'5:1:over:fanduel');checks++;
  await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-slportrait] img')).every(img=>img.complete&&img.naturalWidth>0));
  await page.screenshot({path:`${output}/yardage-${width}.png`});
- await page.evaluate(()=>{slMarkets.find(x=>x.market==='rush_yds').players=window.originalRushPlayers;slDraft={market:'rush_yds',player:'Jalen Hurts',side:'under',line:null};slSearch='hurts';refreshSuperLockEditor();});
- await page.locator('.sl-alt-wrap summary').click();await page.locator('[data-slchoose$=":50.5"]').click();
+ await page.evaluate(()=>{slMarkets.find(x=>x.market==='rush_yds').players=window.originalRushPlayers;slDraft={market:'rush_yds',player:'Jalen Hurts',side:'under',book:'fanduel',line:null};slSearch='hurts';refreshSuperLockEditor();});
+ await page.locator('.sl-alt-wrap summary').click();await page.locator('[data-slchoose$=":fanduel:50.5"]').click();
  rejectSave=true;await page.locator('#sl-lock').click();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('NO LONGER'));
  assert.equal(await page.locator('#sl-lock').isEnabled(),true);checks++;
  rejectSave=false;await page.locator('#sl-lock').click();await page.waitForSelector('#sl-dialog',{state:'detached'});

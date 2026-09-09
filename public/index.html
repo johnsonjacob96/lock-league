@@ -1083,6 +1083,7 @@
   .sl-selected-game{padding:4px 0 8px}.sl-selected-game>span{display:flex;align-items:center;gap:10px}.sl-selected-game strong{font-size:20px}.sl-selected-game small{display:block;font-size:12px;font-weight:400;color:#a5afa9}.sl-selected-game img{width:42px;height:42px}#sl-change-game{display:block;margin:0 auto;text-transform:none;font-family:inherit;letter-spacing:0;font-size:13px}
   .sl-tabs{margin:14px 0 18px}.sl-tabs button{padding:12px}.sl-filters{margin:12px 0;gap:6px}.sl-filters button{padding:8px 12px;border-radius:10px;min-height:44px}.sl-filters [aria-pressed=true]{background:#30d784;color:#082315;border-color:#30d784}
   .sl-prop-row{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px 12px;padding:16px 0;border-bottom:1px solid #222d27}.sl-player-heading{display:contents}.sl-player-heading>div{grid-column:2;grid-row:1;align-self:center}.sl-player-heading .sl-avatar{grid-column:1;grid-row:1 / span 2;align-self:start}.sl-avatar{width:64px;height:78px;border-radius:10px;background:#1b2922}.sl-avatar img{width:64px;height:78px;object-fit:cover;object-position:center top}.sl-player-heading strong{font-size:16px;line-height:1.25}.sl-player-heading small{margin-top:3px;font-size:12px}
+  .sl-prop-row>.sl-books{grid-column:2;grid-row:2;display:flex;flex-direction:column;gap:8px}.sl-book-row{display:grid;grid-template-columns:34px minmax(0,1fr);align-items:center;gap:10px}.sl-book-tag{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.04em;color:#8fa398;text-transform:uppercase}.sl-side-empty{pointer-events:none;visibility:hidden}
   .sl-prop-row>.sl-sides{grid-column:2;grid-row:2;gap:8px}.sl-prop-row .sl-side-btn{padding:8px 4px;min-height:54px;border-radius:9px;background:#151d19}.sl-prop-row .sl-side-lab{font-family:inherit;text-transform:none;letter-spacing:0;font-size:14px;font-weight:600}.sl-prop-row .sl-side-price{font-family:inherit;letter-spacing:0;font-size:12px;color:#b4c0b8;margin-top:3px}.sl-prop-row .sl-side-btn.active{box-shadow:inset 0 0 0 1px #37db89;background:#182a20;color:#e9fff1}.sl-prop-row>.sl-alt-wrap{grid-column:2;margin:0}.sl-alt-wrap summary{font-size:12px;color:#a5b4aa;padding:4px 0;min-height:28px}.sl-prop-row .sl-alts{padding-top:8px}
   #sl-dialog>.sl-confirm{position:static;flex-shrink:0;margin:0;padding:12px 20px max(16px,env(safe-area-inset-bottom));border-top:1px solid #34453a;background:#101714}.sl-confirm strong{font-size:14px}.sl-confirm small{margin:4px 0}.sl-selection-line{font-size:13px;margin:6px 0}.sl-confirm .btn-primary{margin-top:8px;background:#37db89;color:#082315;border-radius:8px}.sl-custom-link{margin:20px auto 4px;text-transform:none;font-family:inherit;letter-spacing:0;font-size:13px}
 
@@ -3661,7 +3662,7 @@ let slMode = "board";          // "board" | "custom"
 let slGameKey = "";            // game selected for prop picking
 let slMarkets = null;          // loaded prop menu for slGameKey (null=unloaded, []=none)
 let slLoading = false;
-let slDraft = { market: "", player: "", side: "", line: null }; // line=null -> main line; a number -> an alt "buy up" line
+let slDraft = { market: "", player: "", side: "", book: "", line: null }; // line=null -> main line; a number -> an alt "buy up" line
 let slEditing = false;         // "Change pick" forces the entry UI over a locked pick
 
 function slMeta(p) { return (p && (p.prop_meta || p.prop)) || null; }
@@ -3695,13 +3696,35 @@ function slBestAlt(pl, line) {
   cands.sort((a, b) => b.price - a.price);
   return cands[0];
 }
+// Book-specific reads. FanDuel and DraftKings each carry their own line for a
+// prop, so we NEVER combine them: a locked pick is always one book's line paired
+// with that same book's odds. Mixing "best price" across books produced mismatched
+// line/odds combos (e.g. FD's over line shown with DK's under odds).
+const SL_BOOKS = ["fanduel", "draftkings"];
+function slBookSide(pl, book, side) {
+  const b = pl && pl[book];
+  return b && b[side] != null ? { book, price: b[side], line: b.line } : null;
+}
+function slBookAlt(pl, book, line) {
+  const a = (pl.alts || []).find(x => Number(x.line) === Number(line));
+  return a && a[book] != null ? { book, price: a[book], line: Number(line) } : null;
+}
+// Representative line for sorting a market highest-first: the largest line shown
+// across the books (so "highest numbers first" ranks by the biggest visible line).
+function slPropLine(pl) {
+  const lines = [];
+  for (const bk of SL_BOOKS) { const b = pl[bk]; if (b && typeof b.line === "number" && Number.isFinite(b.line)) lines.push(b.line); }
+  if (typeof pl.line === "number" && Number.isFinite(pl.line)) lines.push(pl.line);
+  return lines.length ? Math.max(...lines) : -Infinity;
+}
 // Resolve the current draft selection (main O/U, an alt buy-up line, or anytime
 // TD) into a single {side, line, price, book, label}. Single source of truth for
-// the side buttons' active state, the lock button, and the lock request.
+// the side buttons' active state, the lock button, and the lock request. Reads the
+// drafted book only — line and odds always come from the same book.
 function slPropSel(m, pl) {
-  if (m.kind === "yes") { const b = slBestSide(pl, "yes"); return { side: "yes", line: null, price: b.price, book: b.book, label: `${slShort(pl.player)} anytime TD` }; }
-  if (slDraft.line != null) { const a = slBestAlt(pl, slDraft.line); return { side: "over", line: Number(slDraft.line), price: a.price, book: a.book, label: `Over ${slDraft.line}` }; }
-  if (slDraft.side === "over" || slDraft.side === "under") { const b = slBestSide(pl, slDraft.side); const ln = b.line ?? pl.line; return { side: slDraft.side, line: ln, price: b.price, book: b.book, label: `${slDraft.side === "over" ? "Over" : "Under"} ${ln}` }; }
+  if (m.kind === "yes") { const b = slBookSide(pl, slDraft.book, "yes"); if (!b) return null; return { side: "yes", line: null, price: b.price, book: b.book, label: `${slShort(pl.player)} anytime TD` }; }
+  if (slDraft.line != null) { const a = slBookAlt(pl, slDraft.book, slDraft.line); if (!a) return null; return { side: "over", line: Number(slDraft.line), price: a.price, book: a.book, label: `Over ${slDraft.line}` }; }
+  if (slDraft.side === "over" || slDraft.side === "under") { const b = slBookSide(pl, slDraft.book, slDraft.side); if (!b) return null; return { side: slDraft.side, line: b.line, price: b.price, book: b.book, label: `${slDraft.side === "over" ? "Over" : "Under"} ${b.line}` }; }
   return null;
 }
 
@@ -3745,10 +3768,7 @@ function slSortedPlayers(m) {
   // attempts, completions, TDs, …). Anytime TD has no line, so it keeps its
   // board order (best odds first).
   if(m.kind==='yes')return rows;
-  const line=pl=>{
-    const value=slBestSide(pl,'over').line ?? slBestSide(pl,'under').line ?? pl.line;
-    return typeof value==='number'&&Number.isFinite(value)?value:-Infinity;
-  };
+  const line=pl=>slPropLine(pl);
   return rows.sort((a,b)=>line(a.pl)===line(b.pl)?a.pi-b.pi:line(b.pl)-line(a.pl));
 }
 let slPanelOpen = false, slSearch = "", slTab = "props", slSaving = false;
@@ -3870,13 +3890,18 @@ function slBrowsePropsHtml() {
   const selectedMarket = slDraft.market.startsWith('__') ? '' : slDraft.market;
   const rows = markets.flatMap((m,mi)=> (selectedMarket && selectedMarket!==m.market ? [] : slSortedPlayers(m).map(({pl,pi})=>{
     const selected = slDraft.market===m.market && slDraft.player===pl.player;
-    const sides = m.kind==='yes'?['yes']:['over','under'];
+    const sideList = m.kind==='yes'?['yes']:['over','under'];
+    // One row per book, each showing that book's OWN line + odds. Books are never
+    // combined, so the line you lock always matches the odds beside it.
+    const books = SL_BOOKS.filter(bk=>sideList.some(sd=>slBookSide(pl,bk,sd)));
     return `<article class="sl-prop-row" data-player-search="${escapeHtml(pl.player.toLowerCase())}"><div class="sl-player-heading">${slPlayerAvatarHtml(pl.player)}<div><strong>${escapeHtml(pl.player)}</strong><small>${escapeHtml(m.label)}</small></div></div>
-      <div class="sl-sides">${sides.map(side=>{
-        const best=slBestSide(pl,side), active=selected&&slDraft.side===side&&slDraft.line==null;
-        return `<button class="sl-side-btn ${active?'active':''}" data-slchoose="${mi}:${pi}:${side}" aria-pressed="${active}" ${best.price==null?'disabled':''}><span class="sl-side-lab">${side==='yes'?'Anytime TD':(side==='over'?'Over ':'Under ')+(best.line??pl.line)}</span><span class="sl-side-price">${fmtPrice(best.price)}${best.book?' · '+bookShort(best.book):''}</span></button>`;
-      }).join('')}</div>
-      ${pl.alts?.length?`<details class="sl-alt-wrap"><summary>Alternate lines</summary><div class="sl-alts">${pl.alts.map(alt=>{const best=slBestAlt(pl,alt.line);return best.price==null?'':`<button class="sl-alt-btn ${selected&&Number(slDraft.line)===Number(alt.line)?'active':''}" data-slchoose="${mi}:${pi}:over:${alt.line}">Over ${alt.line}<span>${fmtPrice(best.price)} · ${bookShort(best.book)}</span></button>`;}).join('')}</div></details>`:''}</article>`;
+      <div class="sl-books">${books.map(bk=>`<div class="sl-book-row"><span class="sl-book-tag">${bookShort(bk)}</span><div class="sl-sides">${sideList.map(side=>{
+        const info=slBookSide(pl,bk,side);
+        if(!info)return `<span class="sl-side-btn sl-side-empty" aria-hidden="true"></span>`;
+        const active=selected&&slDraft.book===bk&&slDraft.side===side&&slDraft.line==null;
+        return `<button class="sl-side-btn ${active?'active':''}" data-slchoose="${mi}:${pi}:${side}:${bk}" aria-pressed="${active}"><span class="sl-side-lab">${side==='yes'?'Anytime TD':(side==='over'?'Over ':'Under ')+info.line}</span><span class="sl-side-price">${fmtPrice(info.price)}</span></button>`;
+      }).join('')}</div></div>`).join('')}</div>
+      ${pl.alts?.length?`<details class="sl-alt-wrap"><summary>Alternate lines</summary><div class="sl-alts">${pl.alts.flatMap(alt=>SL_BOOKS.map(bk=>{const a=slBookAlt(pl,bk,alt.line);return !a?'':`<button class="sl-alt-btn ${selected&&slDraft.book===bk&&Number(slDraft.line)===Number(alt.line)?'active':''}" data-slchoose="${mi}:${pi}:over:${bk}:${alt.line}">Over ${alt.line}<span>${fmtPrice(a.price)} · ${bookShort(bk)}</span></button>`;})).join('')}</div></details>`:''}</article>`;
   })));
   const m=markets.find(x=>x.market===slDraft.market),pl=m?.players.find(x=>x.player===slDraft.player);
   return `<label class="sl-search-label" for="sl-search">Find a player</label><input id="sl-search" class="pick-input" type="search" value="${escapeHtml(slSearch)}" placeholder="Search player name">
@@ -4033,7 +4058,7 @@ function bindSuperLockEditor() {
   // Board picker: game -> market -> player -> side -> lock.
   const gameSel = document.getElementById("sl-game");
   if (gameSel) gameSel.onchange = () => {
-    slGameKey = gameSel.value; slDraft = { market: "", player: "", side: "", line: null }; slMarkets = null;
+    slGameKey = gameSel.value; slDraft = { market: "", player: "", side: "", book: "", line: null }; slMarkets = null;
     if (slGameKey) loadPropMenu(slGameKey); else refreshSuperLockEditor();
   };
   const marketSel = document.getElementById("sl-market");
@@ -4062,17 +4087,17 @@ async function submitSl(action) {
 function bindSlPanelControls(root) {
   root.querySelector('#sl-open')?.addEventListener('click',openSlPanel);
   root.querySelector('#sl-close')?.addEventListener('click',closeSlPanel);
-  const back=()=>{ slGameKey='';slSearch='';slMode='board';slDraft={market:'',player:'',side:'',line:null}; refreshSuperLockEditor(); };
+  const back=()=>{ slGameKey='';slSearch='';slMode='board';slDraft={market:"",player:"",side:"",book:"",line:null}; refreshSuperLockEditor(); };
   root.querySelector('#sl-back')?.addEventListener('click',back);
   root.querySelector('#sl-change-game')?.addEventListener('click',back);
   root.querySelector('#sl-retry')?.addEventListener('click',()=>loadPropMenu(slGameKey));
   root.querySelectorAll('[data-slmode]').forEach(b=>b.onclick=()=>{slMode=b.dataset.slmode;refreshSuperLockEditor();});
-  root.querySelectorAll('[data-slgame]').forEach(b=>b.onclick=()=>{slGameKey=b.dataset.slgame;slTab='props';slSearch='';slDraft={market:'',player:'',side:'',line:null};slMarkets=null;loadPropMenu(slGameKey);});
-  root.querySelectorAll('[data-sltab]').forEach(b=>b.onclick=()=>{slTab=b.dataset.sltab;slDraft={market:'',player:'',side:'',line:null};refreshSuperLockEditor();});
-  root.querySelectorAll('[data-slmarket]').forEach(b=>b.onclick=()=>{slDraft={market:b.dataset.slmarket,player:'',side:'',line:null};refreshSuperLockEditor();});
+  root.querySelectorAll('[data-slgame]').forEach(b=>b.onclick=()=>{slGameKey=b.dataset.slgame;slTab='props';slSearch='';slDraft={market:"",player:"",side:"",book:"",line:null};slMarkets=null;loadPropMenu(slGameKey);});
+  root.querySelectorAll('[data-sltab]').forEach(b=>b.onclick=()=>{slTab=b.dataset.sltab;slDraft={market:"",player:"",side:"",book:"",line:null};refreshSuperLockEditor();});
+  root.querySelectorAll('[data-slmarket]').forEach(b=>b.onclick=()=>{slDraft={market:b.dataset.slmarket,player:'',side:'',book:"",line:null};refreshSuperLockEditor();});
   root.querySelectorAll('[data-slchoose]').forEach(b=>b.onclick=()=>{
-    const [mi,pi,side,line]=b.dataset.slchoose.split(':');const m=slMarkets[mi],pl=m.players[pi];
-    slDraft={market:m.market,player:pl.player,side,line:line==null?null:Number(line)};refreshSuperLockEditor();
+    const [mi,pi,side,book,line]=b.dataset.slchoose.split(':');const m=slMarkets[mi],pl=m.players[pi];
+    slDraft={market:m.market,player:pl.player,side,book,line:line==null?null:Number(line)};refreshSuperLockEditor();
   });
   const search=root.querySelector('#sl-search');
   const filter=()=>{let visible=0;root.querySelectorAll('[data-player-search]').forEach(row=>{row.hidden=!row.dataset.playerSearch.includes(slSearch.trim().toLowerCase());if(!row.hidden)visible++;});const empty=root.querySelector('#sl-no-results');if(empty)empty.hidden=visible>0;};
@@ -4150,7 +4175,7 @@ async function lockStructuredProp() {
       return;
     }
     currentMyPicks["Super Lock"] = j.picks?.find(p => p.bet_type === "Super Lock") || { pick_text: propTextClient(prop, m), prop, book: best.book, price: best.price, locked_at: new Date().toISOString() };
-    slEditing = false; slDraft = { market: "", player: "", side: "", line: null };
+    slEditing = false; slDraft = { market: "", player: "", side: "", book: "", line: null };
     showToast("SUPER LOCK LOCKED");
     refreshMyCard();
     refreshSuperLockEditor();
@@ -4182,7 +4207,7 @@ async function lockGameLine() {
     }
     const meta = { kind: bet === "Over" || bet === "Under" ? "total" : "spread", bet, side: info.side, line: info.line, book: info.book, price: info.price, game_key: slGameKey };
     currentMyPicks["Super Lock"] = j.picks?.find(p => p.bet_type === "Super Lock") || { pick_text: info.text, prop: meta, book: info.book, price: info.price, locked_at: new Date().toISOString() };
-    slEditing = false; slDraft = { market: "", player: "", side: "" };
+    slEditing = false; slDraft = { market: "", player: "", side: "", book: "" };
     showToast("SUPER LOCK LOCKED");
     refreshMyCard();
     refreshSuperLockEditor();
