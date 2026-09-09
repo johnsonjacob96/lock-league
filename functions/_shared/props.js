@@ -67,6 +67,14 @@ export const PROP_ORDER = [
 export function marketKeyFromName(raw) {
   let n = String(raw || "").toLowerCase().replace(/[_+]+/g, " ");
   if (!n) return null;
+  // Reject derivative / non-full-game markets that share a base stat's keywords
+  // and would otherwise mis-map onto it. A "longest reception" market contains
+  // "reception"; a half/quarter split contains "receiving yards"; etc. These
+  // arrive as their own main-flagged Over/Under rows and, bucketed onto
+  // receptions / receiving yards, overwrite the real full-game line (observed on
+  // DraftKings: Kupp/Doubs receptions showing 15+, A.J. Brown receiving yards
+  // showing ~19). We only grade full-game totals, so drop them here.
+  if (/\b(longest|shortest|half|quarter|period|1st|2nd|3rd|4th|first|second|third|fourth|1h|2h|q1|q2|q3|q4)\b/.test(n)) return null;
   const pre = n; // separators normalized to spaces, before the stat folds below
   n = n
     .replace(/yds/g, "yards")

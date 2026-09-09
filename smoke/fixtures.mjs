@@ -44,6 +44,16 @@ export function sharpPropRows() {
     R({ market_type: "player_receptions", stat_category: "receptions", player_name: "Cooper Kupp", selection: "Cooper Kupp 3+ Receptions", selection_type: "other", odds_american: 130 }),
     R({ market_type: "player_receptions", stat_category: "receptions", player_name: "Cooper Kupp", selection: "Cooper Kupp 4+ Receptions", selection_type: "other", odds_american: 280 }),
     R({ market_type: "player_receptions", stat_category: "receptions", player_name: "Cooper Kupp", selection: "Cooper Kupp 5+ Receptions", selection_type: "other", odds_american: 450 }),
+    // DraftKings also posts Kupp's real receptions O/U (2.5) AND a "longest
+    // reception" market whose main O/U line (15.5 yards) shares the "reception"
+    // keyword. The derivative must be dropped so it can't overwrite the real
+    // 2.5 receptions line. A "longest reception yards" variant (with "yards")
+    // must likewise not pollute receiving yards.
+    R({ sportsbook: "draftkings", market_type: "player_receptions", stat_category: "receptions", player_name: "Cooper Kupp", selection: "Over", selection_type: "over", line: 2.5, odds_american: -150 }),
+    R({ sportsbook: "draftkings", market_type: "player_receptions", stat_category: "receptions", player_name: "Cooper Kupp", selection: "Under", selection_type: "under", line: 2.5, odds_american: 122 }),
+    R({ sportsbook: "draftkings", market_type: "player_longest_reception", stat_category: "longest_reception", player_name: "Cooper Kupp", selection: "Over", selection_type: "over", line: 15.5, odds_american: -110 }),
+    R({ sportsbook: "draftkings", market_type: "player_longest_reception_yards", stat_category: "longest_reception_yards", player_name: "Cooper Kupp", selection: "Over", selection_type: "over", line: 15.5, odds_american: -110 }),
+    R({ sportsbook: "draftkings", market_type: "player_1st_half_receiving_yards", stat_category: "receiving_yards_1st_half", player_name: "Cooper Kupp", selection: "Over", selection_type: "over", line: 14.5, odds_american: -115, is_main_line: true }),
     // Drake Maye passing TDs (generic player_touchdowns, subtype via "N+ Passing Touchdowns")
     R({ market_type: "player_touchdowns", stat_category: "touchdowns", player_name: "Drake Maye", selection: "Over", selection_type: "over", line: 1.5, odds_american: 150 }),
     R({ market_type: "player_touchdowns", stat_category: "touchdowns", player_name: "Drake Maye", selection: "Under", selection_type: "under", line: 1.5, odds_american: -180 }),

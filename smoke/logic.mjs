@@ -4,7 +4,7 @@
 // started/Monday guards, and grading. This is the primary bug net before Week 1.
 import { suite } from "./assert.mjs";
 import { normalizeSharp, fetchSharpRaw } from "../functions/api/odds.js";
-import { normalizeSharpProps, plausibleMainPrice } from "../functions/_shared/props.js";
+import { normalizeSharpProps, plausibleMainPrice, marketKeyFromName } from "../functions/_shared/props.js";
 import { menuForGame } from "../functions/api/props.js";
 import { deriveProp, deriveGradable, findGame, findStartedGame, findMondayGame } from "../functions/api/picks.js";
 import { gradeProp } from "../functions/_shared/props.js";
@@ -43,6 +43,18 @@ export async function run() {
     (kupp?.alts || []).map(a => a.line), [3.5, 4.5]);
   s.ok("no player labelled 'Over'/'Under' (player_name used, not selection)",
     menu.every(m => m.players.every(p => !/^over$|^under$/i.test(p.player))));
+
+  // ── 2a. Derivative markets (longest reception, half/quarter splits) are rejected
+  //        so they can't overwrite a real full-game line (the DK receptions bug). ──
+  s.eq("marketKeyFromName maps base receptions", marketKeyFromName("player_receptions"), "receptions");
+  s.eq("marketKeyFromName maps base receiving yards", marketKeyFromName("player_receiving_yards"), "rec_yds");
+  s.eq("longest reception -> null (not receptions)", marketKeyFromName("player_longest_reception"), null);
+  s.eq("longest reception yards -> null (not rec_yds)", marketKeyFromName("player_longest_reception_yards"), null);
+  s.eq("1st-half receiving yards -> null (not rec_yds)", marketKeyFromName("player_1st_half_receiving_yards"), null);
+  s.eq("2nd-half rushing yards -> null", marketKeyFromName("player_2nd_half_rushing_yards"), null);
+  // Kupp's real DK receptions line (2.5) survives; the 15.5 "longest reception" is dropped.
+  s.eq("Kupp receptions DK line stays 2.5 (longest-reception 15.5 dropped)", kupp?.draftkings?.line, 2.5);
+  s.ok("no bogus Kupp entry leaked into receiving yards", !player("rec_yds", /Kupp/));
 
   // ── 2b. Safety net: an absurd MAIN O/U price (+1400 on a real 232.5 line) is dropped ──
   const maye = player("pass_yds", /Maye/);
