@@ -1,0 +1,51 @@
+.standings-mode {display:flex;gap:4px;padding:4px;border:1px solid #303b35;border-radius:9px;width:max-content;margin:0 0 20px;background:#151a18}
+.standings-mode button {min-height:44px;padding:8px 25px;border-radius:6px;color:#bbc5bf;font-size:14px}
+.standings-mode button[aria-pressed="true"] {background:#234734;color:#68e4a0}
+.standings-week-layout {display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:22px;align-items:start}
+.week-league,.week-member-card {background:#151b18;border:1px solid #303a34;border-radius:9px;overflow:hidden;min-width:0}
+.week-league-heading,.week-card-heading {padding:20px;border-bottom:1px solid #303a34}
+.week-league-heading h3,.week-card-heading h3 {font-family:Oswald,sans-serif;text-transform:uppercase;font-size:25px;line-height:1.3}
+.week-league-heading h3>span {font:12px Inter,sans-serif;color:#aebbb3;margin-left:10px;text-transform:none}
+.week-league-heading p,.week-card-heading p {font:12px/1.5 Inter,sans-serif;color:#aebbb3;margin-top:6px}
+.week-league-labels,.week-member-row {display:grid;grid-template-columns:30px minmax(0,1fr) 70px;gap:12px;align-items:center;padding:14px 20px}
+.week-league-labels {font:11px Inter,sans-serif;color:#aebbb3;letter-spacing:.07em;border-bottom:1px solid #303a34;text-transform:uppercase}
+.week-league-labels>:last-child {text-align:right}
+.week-member-row {width:100%;min-height:78px;text-align:left;border-bottom:1px solid #29332d;cursor:pointer;border-left:3px solid transparent;padding-left:17px}
+.week-member-row:hover {background:#202b24}
+.week-member-row.selected {background:#1b3024;border-left-color:#46e08a}
+.week-member-row.is-you .week-member-name,.week-member-row.is-you .week-record {color:#67e39e}
+.week-rank {font:600 22px Oswald,sans-serif;color:#bdc8c0}
+.week-member-name {font:600 15px Inter,sans-serif}
+.week-member-name small {display:block;font:12px/1.6 Inter,sans-serif;color:#aebbb3;margin-top:5px}
+.week-record {font:600 19px/1.2 Inter,sans-serif;font-variant-numeric:tabular-nums;text-align:right}
+.week-you {display:inline-block;font:600 10px Inter,sans-serif;background:#365641;color:#9ef4bc;padding:3px 6px;border-radius:4px;vertical-align:middle;margin-left:5px}
+.week-hint {font-size:12px;color:#aebbb3;padding:16px 20px}
+.week-desktop-card {position:sticky;top:20px;min-width:0}
+.week-mobile-card {display:none}
+.week-slip {display:grid;grid-template-columns:35px minmax(0,1fr) auto;gap:10px;padding:17px 16px;border-bottom:1px solid #29332d;align-items:start}
+.week-slip:last-child {border-bottom:0}
+.week-slip-category {font:600 10px/1.6 Inter,sans-serif;color:#acbab1;padding-top:3px}
+.week-slip-body {min-width:0}
+.week-slip-pick {display:flex;align-items:center;gap:10px;margin-bottom:5px}
+.week-slip-body strong {font:600 13px/1.5 Inter,sans-serif;overflow-wrap:anywhere}
+.week-slip-body small,.week-slip-clock {font:11px/1.6 Inter,sans-serif;color:#aebbb3}
+.week-slip-clock {margin-top:8px}
+.week-slip-status {font:600 10px/1.5 Inter,sans-serif;border:1px solid #54635a;border-radius:4px;padding:3px 5px;color:#bfcbc3}
+.week-slip-status.hit {color:#73e8a4;border-color:#42845a}
+.week-slip-status.miss {color:#f19898;border-color:#965e5e}
+.week-slip-status.live {color:#7dcdf2;border-color:#487b95}
+.week-slip-status.push {color:#e2cc8e;border-color:#8b7b4c}
+.week-player-photo {width:44px;height:44px;object-fit:contain;border-radius:8px;background:#253028;flex-shrink:0}
+.week-player-photo[hidden] {display:none}
+.week-team-logos {display:flex;gap:3px;flex-shrink:0}
+.week-slip .pick-progress {margin-top:10px}
+.week-slip .quiet-copy,.week-slip .pick-progress-label {font-size:11px}
+.standings-mode button:focus-visible,.week-member-row:focus-visible {outline:2px solid #7dcdf2;outline-offset:-3px}
+@media(max-width:1100px) {
+ .standings-week-layout {display:block}.week-desktop-card {display:none}.week-mobile-card {display:block;background:#18241d;padding:0 10px 12px}.week-mobile-card .week-member-card {border-color:#3c5c47}.week-card-heading {position:relative}.week-card-heading [data-close-week-card] {position:absolute;right:14px;top:15px;min-height:44px}.week-member-row {min-height:72px}
+}
+@media(max-width:480px) {
+ .week-league-labels,.week-member-row {padding-right:13px;gap:8px;grid-template-columns:24px minmax(0,1fr) 60px}.week-member-name {font-size:14px}.week-member-name small {font-size:11px}.week-record {font-size:16px}.week-slip {padding:14px 10px;gap:7px;grid-template-columns:31px minmax(0,1fr) auto}.week-team-logos img {width:20px;height:20px}.week-league-heading h3,.week-card-heading h3 {font-size:22px}
+}
+
+.week-slip .pick-progress-fill {background:#7dcdf2}
