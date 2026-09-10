@@ -175,10 +175,18 @@ function slSortGames(games) {
 }
 function slSortedPlayers(m) {
   const rows = m.players.map((pl, pi) => ({ pl, pi }));
-  // Sort every over/under market highest-line-first (yards, receptions,
-  // attempts, completions, TDs, …). Anytime TD has no line, so it keeps its
-  // board order (best odds first).
-  if (m.kind === "yes") return rows;
+  // Touchdown favorites first, using the shortest displayed quote across books.
+  // Keep source indices so sorting cannot change which player a button selects.
+  if (m.kind === "yes") {
+    const odds = (pl) => {
+      const prices = SL_BOOKS.map(bk => pl[bk]?.yes)
+        .filter(p => typeof p === "number" && Number.isFinite(p) && Math.abs(p) >= 100);
+      return prices.length ? Math.min(...prices) : Infinity;
+    };
+    return rows.sort((a, b) => odds(a.pl) === odds(b.pl)
+      ? a.pi - b.pi : odds(a.pl) - odds(b.pl));
+  }
+  // Over/under markets retain highest-line-first ordering.
   const line = (pl) => slPropLine(pl);
   return rows.sort((a, b) =>
     line(a.pl) === line(b.pl) ? a.pi - b.pi : line(b.pl) - line(a.pl),
