@@ -46,9 +46,16 @@ for(const width of [375,390,844,1440]) {
  assert.equal(await page.locator('[data-slgame]:disabled').count(),1);checks++;
  const yardage=await page.evaluate(()=>{
   const m={market:'rush_yds',kind:'ou',players:[{player:'Low',line:20,fanduel:{line:20,over:-110}},{player:'High',line:70,fanduel:{line:70,over:-115},draftkings:{line:80,over:-105}},{player:'Missing'},{player:'Tie',line:80,fanduel:{line:80,over:-110}}]};
-  // Every O/U market sorts highest-line-first; anytime TD (kind 'yes', no line) keeps board order.
+  // Missing touchdown prices retain stable source order.
   return {yards:slSortedPlayers(m).map(x=>[x.pl.player,x.pi]),other:slSortedPlayers({...m,market:'anytime_td',kind:'yes'}).map(x=>x.pl.player)};
  });assert.deepEqual(yardage.yards,[['High',1],['Tie',3],['Low',0],['Missing',2]]);assert.deepEqual(yardage.other,['Low','High','Missing','Tie']);checks+=2;
+ const scorers=await page.evaluate(()=>slSortedPlayers({kind:'yes',players:[
+  {player:'Alphabetical first',fanduel:{yes:600}},
+  {player:'Favorite',fanduel:{yes:-110},draftkings:{yes:-120}},
+  {player:'Missing'}, {player:'Even',draftkings:{yes:100}},
+  {player:'Tie',fanduel:{yes:600}}, {player:'Invalid',fanduel:{yes:0}}
+ ]}).map(x=>[x.pl.player,x.pi]));
+ assert.deepEqual(scorers,[['Favorite',1],['Even',3],['Alphabetical first',0],['Tie',4],['Missing',2],['Invalid',5]]);checks++;
  // Non-yardage counting markets (receptions/attempts/TDs/…) now sort highest-first too.
  const counting=await page.evaluate(()=>{
   const m={market:'receptions',kind:'ou',players:[{player:'Two',line:2.5,fanduel:{line:2.5,over:-120}},{player:'Seven',line:7.5,fanduel:{line:7.5,over:-115}},{player:'Five',line:5.5,fanduel:{line:5.5,over:-110}}]};
