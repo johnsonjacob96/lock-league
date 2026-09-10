@@ -1375,7 +1375,7 @@ function mergeLiveSeason(rows, season = 2026) {
     if (!p.member_name || Number(p.season) !== Number(season)) continue;
     const m = byMember[p.member_name] || (byMember[p.member_name] = {});
     const bt = m[p.bet_type] || (m[p.bet_type] = {});
-    bt[p.week] = { text: p.pick_text || "", result: p.result || "", price: p.price ?? p.prop?.price ?? p.prop_meta?.price ?? null, book: p.book || null };
+    bt[p.week] = { text: p.pick_text || "", result: p.result || "", price: p.price ?? p.prop?.price ?? p.prop_meta?.price ?? null, book: p.book || null, game_key: p.game_key || null };
   }
   const names = [...new Set([...MEMBERS_ALL, ...Object.keys(byMember)])].sort();
 
@@ -2106,7 +2106,10 @@ function pickStatusChips(picks) {
     const p = picks.find(p => p.bet_type === bt);
     const result = p?.result || (p?.final ? ({win:"W",lose:"L",push:"P"}[p.status]) : null);
     const filled = !!(p?.pick_text || p?.text);
-    const label = p?.kind === "hidden" ? "HIDDEN" : p?.kind === "missing" ? "MISSED" : ({W:"HIT",L:"MISS",P:"PUSH"}[result]) || (p?.state === "in" && !p.final ? "LIVE" : filled ? "PENDING" : "—");
+    const [away, home] = String(p?.game_key || "").split("@");
+    const game = away && home ? scoreFor({away, home}) : null;
+    const live = !result && !p?.final && (p?.state === "in" || (!p?.state && game?.state === "in"));
+    const label = p?.kind === "hidden" ? "HIDDEN" : p?.kind === "missing" ? "MISSED" : ({W:"HIT",L:"MISS",P:"PUSH"}[result]) || (live ? "LIVE" : filled ? "PENDING" : "—");
     return `<span class="card-chip ${result || (label === "LIVE" ? "live" : "")}" aria-label="${escapeHtml(bt)}: ${label}">${btShort(bt)}<strong>${label}</strong></span>`;
   }).join("")}</div>`;
 }
@@ -4305,15 +4308,18 @@ async function renderPayments() {
     <div id="settle-mount">${settleCardHtml()}</div>`;
 }
 
-// Poll live scores every 60s while This Week is open; re-render on change.
+// Keep current-season Home and Picks status aligned with the live scoreboard.
 let scoresTimer = null;
 function startScoresPoll() {
   clearInterval(scoresTimer);
   scoresTimer = setInterval(async () => {
-    if (state.view !== "thisweek") { clearInterval(scoresTimer); scoresTimer = null; return; }
+    const home = state.view === "standings" && state.season === "2026";
+    if (state.view !== "thisweek" && !home) { clearInterval(scoresTimer); scoresTimer = null; return; }
+    if (document.hidden) return;
     const before = JSON.stringify(state.liveScores || null);
     await loadScores(true);
-    if (state.view === "thisweek" && JSON.stringify(state.liveScores || null) !== before) render();
+    if (home && state.view === "standings" && state.season === "2026") render();
+    else if (state.view === "thisweek" && JSON.stringify(state.liveScores || null) !== before) render();
   }, 60000);
 }
 
@@ -4884,7 +4890,7 @@ async function render() {
   }
   // Live season data comes from the DB; load it before views that show it.
   if ((state.view === "standings" && state.season === "2026") || state.view === "lifetime") {
-    await Promise.all([ensureLive2026(), state.view === "standings" && state.user && !state.pot ? loadPot() : Promise.resolve()]);
+    await Promise.all([ensureLive2026(), state.view === "standings" ? loadScores() : Promise.resolve(), state.view === "standings" && state.user && !state.pot ? loadPot() : Promise.resolve()]);
   }
   renderTickerWeekSelect();
   renderTicker();
@@ -4892,6 +4898,7 @@ async function render() {
   if (state.view === "standings") {
     root.innerHTML = renderStandings();
     attachStandingsHandlers();
+    if (state.season === "2026") startScoresPoll();
     const yearSelect = document.getElementById("home-year");
     if (yearSelect) yearSelect.onchange = () => { state.season = yearSelect.value; state.expanded = null; render(); };
     bindSeasonPrep();
