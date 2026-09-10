@@ -2115,18 +2115,6 @@ function pickStatusChips(picks) {
     return `<span class="card-chip ${result || (label === "LIVE" ? "live" : "")}" aria-label="${escapeHtml(bt)}: ${label}">${btShort(bt)}<strong>${label}</strong></span>`;
   }).join("")}</div>`;
 }
-function renderHomeWeek(season) {
-  const week = currentNflWeekClient().week || 1;
-  const standings = buildStandings(season);
-  const status = !standings.some(r => r.seasonRec.w + r.seasonRec.l) ? "Awaiting first results" : !seasonLeader(standings) ? "Tied at the top" : "Follow this week’s games and results";
-  const md = state.user && DATA.members[state.user.name]?.[season];
-  const picks = BET_TYPES_ORDER.map(bt => ({...md?.byType?.[bt]?.picks?.[week], bet_type:bt}));
-  const w = picks.filter(p => p.result === "W").length, l = picks.filter(p => p.result === "L").length, pushes = picks.filter(p => p.result === "P").length;
-  const units = picks.reduce((sum,p) => sum + (pickUnits(p,season) || 0),0);
-  const unpriced = picks.filter(p => ["W","L"].includes(p.result) && pickUnits(p,season) === null).length;
-  return `<div class="compact-panel compact-heading"><div><h2>${season} season · Week ${String(week).padStart(2,"0")}</h2><p class="quiet-copy">${status}</p></div><button class="text-action" data-go="warroom">Open Live →</button></div>
-    ${state.user ? `<section class="compact-panel home-overview"><div class="compact-heading"><h3>My week</h3><button class="text-action" data-go="thisweek">View card →</button></div><div class="home-record">${w}–${l}${pushes ? "–"+pushes : ""}<span>${fmtUnits(units)}u</span></div><p class="quiet-copy">Settled results${unpriced ? ` · ${unpriced} missing odds` : ""}</p>${pickStatusChips(picks)}</section>` : `<div class="compact-panel compact-heading"><p class="quiet-copy">Sign in to see your weekly card.</p><button class="text-action" data-account>Sign in →</button></div>`}`;
-}
 function liveMemberSummary(m, season) {
   let units = 0, unpriced = 0;
   for (const p of m.picks) {
@@ -2257,7 +2245,7 @@ function renderStandings() {
 
   return `
     ${renderSeasonPrep()}
-    ${isLive ? renderHomeWeek(season) : `<!-- Champion hero -->
+    ${isLive ? "" : `<!-- Champion hero -->
     <section class="relative w-full rounded-xl overflow-hidden mb-6 hero-bg champion-glow">
       <div class="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent z-10"></div>
       <div class="relative z-20 px-5 md:px-8 py-5 md:py-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -2295,7 +2283,7 @@ function renderStandings() {
     </section>`}
 
     <!-- Year selector + section header -->
-    <section class="mb-stack-lg">
+    <section class="mb-stack-lg standings-section">
       <div class="flex items-center justify-between mb-stack-md gap-3 flex-wrap">
         <h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface uppercase flex items-center gap-3">
           <span class="w-2 h-8 bg-primary-fixed inline-block"></span> ${season} Standings
@@ -4323,16 +4311,7 @@ function startScoresPoll() {
     if (document.hidden) return;
     const before = JSON.stringify(state.liveScores || null);
     await loadScores(true);
-    if (home && standingsWeekActive()) {
-      await ensureLive2026();
-      if (standingsWeekActive()) {
-        const fragment = document.createElement('div');
-        fragment.innerHTML = renderHomeWeek(state.season);
-        const current = document.querySelector('.home-overview');
-        const updated = fragment.querySelector('.home-overview');
-        if (current && updated) current.replaceWith(updated);
-      }
-    } else if (home && state.view === "standings" && state.season === "2026") render();
+    if (home && state.view === "standings" && state.season === "2026" && !standingsWeekActive()) render();
     else if (state.view === "thisweek" && JSON.stringify(state.liveScores || null) !== before) render();
   }, 60000);
 }

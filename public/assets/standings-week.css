@@ -49,3 +49,11 @@
 }
 
 .week-slip .pick-progress-fill {background:#7dcdf2}
+
+/* Standings lead the page; stronger primary labels, quiet supporting detail. */
+.standings-section > div:first-child > h3 {font-weight:700}
+.home-table thead th {font-weight:700}
+.home-table .member-row > td {font-weight:600}
+.home-table .member-row .font-display-lg {font-weight:700}
+.week-member-name,.week-record,.week-rank {font-weight:700}
+.week-league-heading h3,.week-card-heading h3 {font-weight:600}

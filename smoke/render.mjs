@@ -152,7 +152,7 @@ export async function run() {
         DATA = {seasons:{},members:{}}; state.season='2026';
         state.serverConfig = {season:2026,week:1,cutoff:'2099-01-01T00:00:00Z'};
         mergeLiveSeason([]); normalizeRecords(DATA);
-        checks.noFakeLeader = seasonLeader(buildStandings('2026')) === null && renderStandings().includes('Awaiting first results') && !renderStandings().includes('workspace_premium');
+        checks.noFakeLeader = seasonLeader(buildStandings('2026')) === null && !renderStandings().includes('home-overview') && !renderStandings().includes('workspace_premium');
         const rows = [{member_name:'Jacob',season:2026,week:1,bet_type:'Super Lock',result:'W',price:250,pick_text:'Test prop'},
           {member_name:'Jacob',season:2026,week:1,bet_type:'Favorite',result:'L',price:-120},
           {member_name:'Jared',season:2026,week:1,bet_type:'Favorite',result:'W',price:-110}];
@@ -162,7 +162,7 @@ export async function run() {
         checks.soleLeader = seasonLeader(buildStandings('2026'))?.name === 'Jared';
         rows.push({member_name:'Jared',season:2026,week:1,bet_type:'Dog',result:'L',price:110});
         mergeLiveSeason(rows);normalizeRecords(DATA);
-        checks.tied = seasonLeader(buildStandings('2026')) === null && renderStandings().includes('Tied at the top');
+        checks.tied = seasonLeader(buildStandings('2026')) === null && !renderStandings().includes('champion-glow');
         checks.unitsLeader = computeSeasonStats('2026').unitsLeader.name === 'Jacob';
         DATA.members.Jacob['2026'].byType.Over={picks:{1:{result:'W'}}};normalizeRecords(DATA);
         checks.unpriced = memberUnits(DATA.members.Jacob['2026'],2026).unpriced === 1 && unitsSummary(DATA.members.Jacob['2026'],2026).includes('missing odds') && computeSeasonStats('2026').unitsLeader === null;
