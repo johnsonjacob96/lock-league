@@ -181,6 +181,10 @@ export async function oddsDiagnostics(env, url) {
         url.searchParams.get("nomarket") === "1"
           ? { market: undefined }
           : { market: url.searchParams.get("market") || "player_props" };
+      const sportsbook = url.searchParams.get("sportsbook");
+      const eventId = url.searchParams.get("event_id");
+      if (sportsbook && ["fanduel", "draftkings"].includes(sportsbook)) overrides.sportsbook = sportsbook;
+      if (eventId && /^[A-Za-z0-9_-]+$/.test(eventId)) overrides.event_id = eventId;
       const raw = await fetchSharpRaw(env, 3, overrides);
       // Summarize what came back: distinct market fields + which rows are props.
       const marketVals = {},
@@ -206,6 +210,8 @@ export async function oddsDiagnostics(env, url) {
           requested: overrides,
           count: raw.length,
           propCount,
+          books: Object.fromEntries(["fanduel", "draftkings"].map(book => [book, raw.filter(r => r.sportsbook === book).length])),
+          touchdownSamples: raw.filter(r => /touchdown|scorer/i.test(String(r.market_type))).slice(0, 12),
           distinctMarket: marketVals,
           distinctMarketType: typeVals,
           propSamples,
