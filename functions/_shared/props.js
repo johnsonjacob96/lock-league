@@ -67,7 +67,7 @@ export const PROP_ORDER = [
 // Unsupported market labels must not become supported through a broad stat-category fallback.
 function unsupportedPropMarket(raw) {
   const n = String(raw || "").toLowerCase().replace(/[_+]+/g, " ");
-  return /\b(longest|shortest|half|quarter|period|1st|2nd|3rd|4th|first|second|third|fourth|1h|2h|q1|q2|q3|q4)\b/.test(n) ||
+  return /\b(longest|shortest|half|quarter|period|1st|2nd|3rd|4th|first|last|second|third|fourth|1h|2h|q1|q2|q3|q4)\b/.test(n) ||
     (n.includes("pass") && n.includes("rush"));
 }
 export function marketKeyFromName(raw) {
@@ -80,7 +80,7 @@ export function marketKeyFromName(raw) {
   // receptions / receiving yards, overwrite the real full-game line (observed on
   // DraftKings: Kupp/Doubs receptions showing 15+, A.J. Brown receiving yards
   // showing ~19). We only grade full-game totals, so drop them here.
-  if (/\b(longest|shortest|half|quarter|period|1st|2nd|3rd|4th|first|second|third|fourth|1h|2h|q1|q2|q3|q4)\b/.test(n)) return null;
+  if (/\b(longest|shortest|half|quarter|period|1st|2nd|3rd|4th|first|last|second|third|fourth|1h|2h|q1|q2|q3|q4)\b/.test(n)) return null;
   const pre = n; // separators normalized to spaces, before the stat folds below
   n = n
     .replace(/yds/g, "yards")
@@ -142,10 +142,11 @@ const SHARP_BOOK = (sb) => {
 // gradable market. Unknown/absent subtype -> the row is dropped (grade-safe).
 function tdSubtypeFromSelection(sel) {
   const s = String(sel || "").toLowerCase();
+  if (/\b(first|last)\b/.test(s)) return null;
   if (s.includes("passing")) return "pass_tds";
   if (s.includes("rushing")) return "rush_tds";
   if (s.includes("receiving")) return "rec_tds";
-  if (/\banytime\b|to score a touchdown|first touchdown|last touchdown/.test(s)) return "anytime_td";
+  if (/\banytime\b|to score a touchdown/.test(s)) return "anytime_td";
   return null;
 }
 
@@ -181,7 +182,9 @@ export function normalizeSharpProps(rows) {
       marketKeyFromName(r.market_type) != null;
     if (!isProp) continue;
     // Player name lives in `player_name` (the `selection` field is the O/U side).
-    const player = String(r.player_name ?? r.player ?? "").trim();
+    const namedScorerMarket = marketKeyFromName(r.market_type) === "anytime_td";
+    const player = String(r.player_name ?? r.player ?? (namedScorerMarket ? r.selection : "")).trim();
+    if (namedScorerMarket && /\b(defen[cs]e|d\/st|special teams|no touchdown|no scorer|other|field|yes|no|over|under)\b/i.test(player)) continue;
     if (!player) continue;
     // Resolve the gradable market from the market_type, falling back to the
     // semantic stat_category (both use the same tolerant token map, so
@@ -209,11 +212,14 @@ export function normalizeSharpProps(rows) {
     let e = agg.get(id);
     if (!e) { e = { market, label: def.label, unit: def.unit, kind: def.kind, player, home, away, kickoff, byBook: {}, ouByBook: {}, altByBook: {} }; agg.set(id, e); }
     if (def.kind === "yes") {
-      // Anytime TD: yes/no, or an O/U 0.5 (over == yes). Ignore alt/"other" rows.
+      // Named scorer markets use selection_type=other and is_player_prop=false.
+      // Only a named player's unlined anytime outcome is equivalent to Yes.
+      const namedScorer = namedScorerMarket && stype === "other" && r.line == null &&
+        r.is_alternate_line !== true && String(r.selection || "").trim().toLowerCase() === player.toLowerCase();
+      const yes = stype === "yes" || (stype === "over" && line === 0.5) || namedScorer;
+      if (!yes || price == null || Math.abs(price) < 100) continue;
       const b = e.byBook[book] || (e.byBook[book] = { over: null, under: null, yes: null, line: null, main: false });
-      if (stype === "yes" || stype === "over") { b.yes = price; b.updated = r.timestamp || null; if (Number.isFinite(line)) b.line = line; }
-      else if (stype === "no" || stype === "under") b.no = price;
-      else continue;
+      b.yes = price; b.updated = r.timestamp || null;
       if (isMain) b.main = true;
     } else if (stype === "over" || stype === "under") {
       // Over/Under row. Books disagree on how they ship the line ladder: FanDuel
@@ -264,6 +270,7 @@ export function normalizeSharpProps(rows) {
     if (e.kind === "yes") {
       // Anytime TD: yes/no market, no line ladder.
       const fd = e.byBook.fanduel, dk = e.byBook.draftkings;
+      if (fd?.yes == null && dk?.yes == null) continue;
       const line = (fd && fd.line != null) ? fd.line : (dk && dk.line != null ? dk.line : null);
       out.push({
         market: e.market, label: e.label, unit: e.unit, kind: e.kind,

@@ -55,7 +55,7 @@ test('per-game request filters all FD/DK IDs, drops unrelated events and reuses 
   assert.ok(first.markets[0].players[0].draftkings);
   assert.equal(providerUrls.length, 1);
   assert.equal(providerUrls[0].searchParams.get('event_id'), 'fd-123,dk-456');
-  assert.equal(providerUrls[0].searchParams.get('market'), 'props');
+  assert.equal(providerUrls[0].searchParams.get('market'), 'props,anytime_touchdown_scorer');
   assert.equal(providerUrls[0].searchParams.get('limit'), '200');
   await h.request();
   assert.equal(providerUrls.length, 1);
@@ -199,4 +199,41 @@ test('combined passing+rushing cannot overwrite rushing, including broad stat ca
   assert.equal(marketKeyFromName('player_rushing_+_receiving_yards'),'rush_rec_yds');
   assert.deepEqual(normalizeSharpProps(pair('player_longest_reception',15.5,'receptions')),[]);
   assert.deepEqual(normalizeSharpProps(pair('player_1st_half_rushing_yards',20.5,'rushing_yards')),[]);
+});
+
+const scorer = (book='fanduel', player='Rashid Shaheed', price=600) => ({
+  ...row(book,player),market_type:'anytime_touchdown_scorer',stat_category:'anytime_td',
+  is_player_prop:false,selection_type:'other',selection:player,line:null,
+  odds_american:price,is_active:true,is_alternate_line:false,timestamp:new Date().toISOString(),
+});
+test('native scorer market includes both books and skips the paid backup entirely', async t => {
+  const h=await setup(t);let calls=0;
+  t.mock.method(globalThis,'fetch',async input=>{
+    const u=new URL(input);
+    if(u.pathname==='/api/odds')return json(board(['fd-123','dk-456']));
+    assert.equal(u.hostname,'api.sharpapi.io'); // no event discovery or paid odds calls
+    assert.equal(u.searchParams.get('market'),'props,anytime_touchdown_scorer');
+    calls++;return json({data:[scorer(),scorer('draftkings','Rashid Shaheed',550),row()],pagination:{has_more:false}});
+  });
+  const response=await h.request(KEY,{...env,ODDS_API_KEY:'exhausted-test-key'});
+  const menu=await response.json(),td=menu.markets.find(m=>m.market==='anytime_td');
+  assert.equal(calls,1);assert.equal(td.players[0].player,'Rashid Shaheed');
+  assert.equal(td.players[0].fanduel.yes,600);assert.equal(td.players[0].draftkings.yes,550);
+  assert.equal(td.players[0].line,null);assert.ok(td.players[0].fanduel.updated);
+  await h.drain();
+});
+test('named scorers map to Yes without admitting defenses, first/last TDs or 2+ TD lines', async()=>{
+  const {normalizeSharpProps}=await import('../functions/_shared/props.js');
+  const valid=scorer();
+  const invalid=[scorer('fanduel','Seattle Defense'),scorer('draftkings','No Touchdown Scorer'),
+    scorer('fanduel','Seattle D/ST'),scorer('fanduel','Any Other Player'),{...valid,market_type:'first_touchdown_scorer'},
+    {...valid,market_type:'last_touchdown_scorer',is_player_prop:true},
+    {...valid,line:1.5,selection_type:'over'}, {...valid,is_active:false},
+    {...valid,is_stale_pregame_price:true}, {...valid,is_alternate_line:true},
+    {...valid,odds_american:0}, {...valid,selection:'Yes',player_name:null}];
+  for(const r of invalid)assert.deepEqual(normalizeSharpProps([r]),[],JSON.stringify(r));
+  const fallback=normalizeSharpProps([{...valid,player_name:undefined}]);
+  assert.equal(fallback[0].player,'Rashid Shaheed');assert.equal(fallback[0].fanduel.yes,600);
+  const ou=normalizeSharpProps([{...valid,selection_type:'over',line:0.5,selection:'Over'}]);
+  assert.equal(ou[0].market,'anytime_td');assert.equal(ou[0].fanduel.yes,600);
 });

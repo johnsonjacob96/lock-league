@@ -1,12 +1,9 @@
 import { providerFetch, sharedFeed } from "./feed-cache.js";
 // Anytime-TD-scorer props from The Odds API.
 //
-// SharpAPI (our primary prop feed) does NOT carry an anytime-TD-scorer market —
-// only QB passing TDs. The Odds API does (`player_anytime_td`), FD+DK, so we pull
-// it from there and shape it exactly like a normalizeSharpProps `anytime_td`
-// market. That means the existing menu (menuForGame), lock anti-cheat (deriveProp,
-// kind==="yes" branch), and box-score grading (PROP_DEFS.anytime_td) all handle it
-// unchanged — this module only sources the lines.
+// SharpAPI's anytime_touchdown_scorer is primary. This adapter remains an
+// optional backup when the native market is missing. The normalized output
+// uses the same menu, save validation and anytime-TD grading paths.
 //
 // Cost: The Odds API `/events` list is FREE (no odds); each `/events/{id}/odds`
 // pull is 1 credit. So callers cache aggressively and fetch per game lazily.

@@ -14,9 +14,9 @@ const RETRY_MS = 60 * 1000;
 const cache = new Map();
 const inFlight = new Map();
 const atdInFlight = new Map();
-const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v5/${kind}/${encodeURIComponent(key)}`);
+const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v6/${kind}/${encodeURIComponent(key)}`);
 
-// Anytime-TD-scorer comes from The Odds API (1 credit per game), so cache it hard
+// Optional Anytime-TD backup from The Odds API costs 1 credit per game; cache it
 // per game with a global daily credit budget. Last-good stays visible during
 // outages, but only source-fresh quotes pass the pick submission guard.
 const ATD_TTL_S = 60;
@@ -92,7 +92,7 @@ async function fetchGameProps(env, request, away, home, week) {
     if (remaining <= 0) break;
     const url = new URL("https://api.sharpapi.io/api/v1/odds");
     for (const [key, value] of Object.entries({ league: "nfl", sportsbook: "fanduel,draftkings",
-      market: env.SHARP_PROP_MARKET || "props", event_id: ids.join(","), limit: "200", ...(cursor ? { cursor } : {}) })) {
+      market: [...new Set((env.SHARP_PROP_MARKET || "props").split(",").concat("anytime_touchdown_scorer"))].join(","), event_id: ids.join(","), limit: "200", ...(cursor ? { cursor } : {}) })) {
       url.searchParams.set(key, value);
     }
     try {
@@ -175,24 +175,27 @@ async function loadGame(context, key, away, home, season, week) {
   }
   const old = await edgeRead(edge, propKey(key, "last"));
   const last = old?.key === key && Date.now() - old.ts < LASTGOOD_TTL_S * 1000 ? old.props : [];
-  // Both sources work in parallel. A slow ATD request finishes in waitUntil and
-  // populates its own cache; it cannot hold up the SharpAPI menu indefinitely.
-  let atdJob = atdInFlight.get(key);
-  if (!atdJob) {
-    atdJob = sharedFeed(env, `atd-v4:${season}:${week}:${away}@${home}`, ATD_TTL_S*1000, ()=>fetchCachedAnytimeTd(env, `${season}:${week}`, away, home, edge, waitUntil)).catch(() => null)
-      .finally(() => atdInFlight.delete(key));
-    atdInFlight.set(key, atdJob);
-  }
-  waitUntil(atdJob);
-  const [result, atd] = await Promise.all([
-    fetchGameProps(env, request, away, home, week), bounded(atdJob, 3500),
-  ]);
+  // The primary request includes touchdown scorers. Spend backup credits only
+  // when that market is missing, and keep the complete menu latency bounded.
+  const deadline = Date.now() + 3500;
+  const result = await fetchGameProps(env, request, away, home, week);
   const stale = !result.complete || !result.props.length;
   const props = stale ? mergePartialProps(last || [], result.props) : result.props;
   const markets = menuForGame(props, away, home);
-  if (atd?.players?.length) {
-    const duplicate = markets.findIndex(m => m.market === "anytime_td");
-    if (duplicate < 0) markets.unshift(atd);
+  if (!result.props.some(p => p.market === "anytime_td" && (p.fanduel?.yes != null || p.draftkings?.yes != null))) {
+    let atdJob = atdInFlight.get(key);
+    if (!atdJob) {
+      atdJob = sharedFeed(env, `atd-v4:${season}:${week}:${away}@${home}`, ATD_TTL_S*1000, ()=>fetchCachedAnytimeTd(env, `${season}:${week}`, away, home, edge, waitUntil)).catch(() => null)
+        .finally(() => atdInFlight.delete(key));
+      atdInFlight.set(key, atdJob);
+    }
+    waitUntil(atdJob);
+    const atd = await bounded(atdJob, Math.max(0, deadline - Date.now()));
+    if (atd?.players?.length) {
+      const duplicate = markets.findIndex(m => m.market === "anytime_td");
+      if (duplicate < 0) markets.unshift(atd);
+      else markets[duplicate] = atd;
+    }
   }
   const source = stale && props.length ? "stale" : result.source;
   const data = { game_key: `${away}@${home}`, away, home, season, week, source, stale,
@@ -247,7 +250,7 @@ export async function onRequestGet(context) {
   const key = `${season}:${week}:${away}@${home}`;
   let job = inFlight.get(key);
   if (!job) {
-    job = sharedFeed(env, `props-v5:${key}`, TTL_MS, ()=>loadGame(context, key, away, home, season, week)).finally(() => inFlight.delete(key));
+    job = sharedFeed(env, `props-v6:${key}`, TTL_MS, ()=>loadGame(context, key, away, home, season, week)).finally(() => inFlight.delete(key));
     inFlight.set(key, job);
   }
   const data = await job.catch(()=>({game_key:gameKey,markets:[],source:"unavailable",stale:true}));
