@@ -255,11 +255,48 @@ export async function run() {
         me.picks[1].game_key='Chicago Bears@Carolina Panthers';state.wrExpanded='5:Dog';
         checks.ownFinalDrilldown=renderWarRoom().includes('wr-detail');
         state.wrMemberId=null;state.wrExpanded=null;
+        state.view='standings';state.season='2026';state.standingsMode='week';state.standingsMemberId=null;
+        state.warRoom={season:2026,week:1,members:[
+          {member_id:5,name:'Jacob',live:{W:5,L:0,fW:1,fL:1},picks:[
+            {bet_type:'Favorite',kind:'pick',pick_text:'Seattle Seahawks −3.5',status:'win',final:true},
+            {bet_type:'Dog',kind:'pick',pick_text:'Chicago Bears +4.5',status:'lose',final:true},
+            {bet_type:'Super Lock',kind:'pick',pick_text:'Jalen Hurts over 224.5 passing yards',prop:{player:'Jalen Hurts',market:'passing_yards',line:224.5,side:'over'},game_key:'Dallas Cowboys@Philadelphia Eagles',state:'in',final:false,status:'win',price:-110,score:{away:'Dallas Cowboys',home:'Philadelphia Eagles',away_score:14,home_score:17},detail:'Q3 · 8:42'},
+            {bet_type:'Over',kind:'hidden',pick_text:'DO NOT REVEAL'},
+            {bet_type:'Under',kind:'pick',pick_text:'Rams / 49ers U48.5',state:'pre',final:false,status:'pending'}]},
+          {member_id:2,name:'Jack',live:{W:2,L:0,fW:2,fL:0},picks:[{bet_type:'Super Lock',kind:'hidden',pick_text:'PRIVATE PROP'}]},
+          {member_id:3,name:'Mason',live:{W:2,L:0,fW:2,fL:0},picks:[]}]};
+        wrGameCache['Dallas Cowboys@Philadelphia Eagles']={ts:Date.now(),data:{found:true,stats_updated_at:new Date().toISOString(),players:[{name:'Jalen Hurts',markets:{passing_yards:{actual:186,unit:'pass yds'}}}]}};
+        root.innerHTML=renderStandings();attachStandingsHandlers();
+        checks.weekModeKeepsYears=!!root.querySelector('#home-year option[value="2025"]');
+        checks.weekNoPoints=!root.querySelector('#standings-week').textContent.match(/points|units/i);
+        checks.weekSettledRanks=standingsWeekRows(state.warRoom.members).map(x=>x.rank).join(',')==='1,1,3';
+        checks.weekDefaultOwn=root.querySelector('.week-desktop-card').textContent.includes('Jacob’s card');
+        checks.weekHiddenPrivate=!root.querySelector('#standings-week').textContent.includes('DO NOT REVEAL');
+        checks.weekLiveNotWin=root.querySelector('.week-desktop-card .week-slip-status.live')?.textContent==='LIVE';
+        checks.weekProgress=!!root.querySelector('.week-desktop-card .pick-progress');
+        root.querySelector('[data-week-member="2"]').click();
+        checks.weekSelect=state.standingsMemberId==='2' && root.querySelector('.week-mobile-card').textContent.includes('Jack’s card') && !root.textContent.includes('PRIVATE PROP');
+        root.querySelector('[data-close-week-card]').click();
+        checks.weekClose=!root.querySelector('.week-mobile-card') && document.activeElement.dataset.weekMember==='2';
+        root.querySelector('[data-week-member="5"]').click();
+        document.activeElement.blur();
+        checks.weekLayout=root.scrollWidth<=root.clientWidth+1;
+        const chosen=root.querySelector('[data-week-member="5"]');chosen.focus();updateStandingsWeek();
+        checks.weekFocus=document.activeElement.dataset.weekMember==='5';
+        const savedUser=state.user;state.user=null;
+        checks.weekRequiresLogin=renderStandingsWeek().includes('Sign in') && !renderStandingsWeek().includes('Jalen Hurts');state.user=savedUser;
+        state.standingsMode='season';
+        root.innerHTML=renderStandings();
+        checks.seasonTablePreserved=!!root.querySelector('.home-table') && root.textContent.includes('Weekly Heat') && root.textContent.includes('Weeks Won');
+        state.standingsMode='week';
         state.season='2025';root.innerHTML=renderStandings();
+        checks.archiveNoWeekCards=!root.querySelector('#standings-week') && !!root.querySelector('.home-table');
         checks.championRestored=!!root.querySelector('.champion-glow') && root.textContent.includes('Champion');
 
+        state.season='2026';root.innerHTML=renderStandings();attachStandingsHandlers();
         return checks;
       });
+      if (process.env.STANDINGS_SCREENSHOT) await page.screenshot({path:`${process.env.STANDINGS_SCREENSHOT}-${vw}.png`,fullPage:true});
       for (const [key,ok] of Object.entries(dashboard)) s.ok(`[${vw}px] dashboard ${key}`,ok);
       if (process.env.UNITS_SCREENSHOT && vw === 390) await page.screenshot({path:process.env.UNITS_SCREENSHOT,fullPage:true});
       await page.close();

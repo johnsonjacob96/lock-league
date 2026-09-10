@@ -1061,6 +1061,7 @@
 
 
 </style>
+<link rel="stylesheet" href="assets/standings-week.css">
 <link rel="stylesheet" href="assets/super-lock.css">
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
@@ -1253,6 +1254,7 @@
 
 <script src="assets/nfl-teams.js"></script>
 <script src="assets/super-lock.js"></script>
+<script src="assets/standings-week.js"></script>
 <script>
 // Plain URL - the host serves an ETag, so repeat visits get a 304 instead of
 // re-downloading ~270KB of history every load.
@@ -2302,6 +2304,8 @@ function renderStandings() {
       </div>
 
 
+      ${isLive ? `<div class="standings-mode" role="group" aria-label="Standings view"><button data-standings-mode="season" aria-pressed="${state.standingsMode !== 'week'}">Season</button><button data-standings-mode="week" aria-pressed="${state.standingsMode === 'week'}">This Week</button></div>` : ""}
+      ${isLive && state.standingsMode === 'week' ? `<div id="standings-week">${renderStandingsWeek()}</div>` : `
       <div class="overflow-x-auto hide-scrollbar glass-card rounded-lg home-table">
         <table class="w-full text-left border-collapse min-w-[640px]">
           <thead>
@@ -2319,9 +2323,10 @@ function renderStandings() {
           </tbody>
         </table>
       </div>
+      `}
     </section>
 
-      <p class="quiet-copy">${Number(season) >= 2026 ? "Units use saved odds with 1u risk per pick. Pushes return 0u; missed picks and bets missing odds are excluded." : "Historical units estimated at −110: +1u per win, −1.1u per loss."}</p>
+      <p class="quiet-copy" ${isLive && state.standingsMode === "week" ? "hidden" : ""}>${Number(season) >= 2026 ? "Units use saved odds with 1u risk per pick. Pushes return 0u; missed picks and bets missing odds are excluded." : "Historical units estimated at −110: +1u per win, −1.1u per loss."}</p>
     ${isLive && state.pot?.weekly?.prize != null ? `<section class="compact-panel compact-heading" style="margin-top:18px"><div><h3>Week ${currentNflWeekClient().week || 1} pot</h3><p class="quiet-copy">${winners[String(currentNflWeekClient().week || 1)] ? escapeHtml(winners[String(currentNflWeekClient().week || 1)]) + " · weekly winner" : "Winner pending final results"}</p></div><button class="text-action" data-go="payments">$${Number(state.pot.weekly.prize).toLocaleString("en-US")} →</button></section>` : ""}
     <details class="home-secondary"><summary>Season highlights &amp; weekly winners</summary>
     ${renderSeasonStatTiles(season)}
@@ -4318,7 +4323,16 @@ function startScoresPoll() {
     if (document.hidden) return;
     const before = JSON.stringify(state.liveScores || null);
     await loadScores(true);
-    if (home && state.view === "standings" && state.season === "2026") render();
+    if (home && standingsWeekActive()) {
+      await ensureLive2026();
+      if (standingsWeekActive()) {
+        const fragment = document.createElement('div');
+        fragment.innerHTML = renderHomeWeek(state.season);
+        const current = document.querySelector('.home-overview');
+        const updated = fragment.querySelector('.home-overview');
+        if (current && updated) current.replaceWith(updated);
+      }
+    } else if (home && state.view === "standings" && state.season === "2026") render();
     else if (state.view === "thisweek" && JSON.stringify(state.liveScores || null) !== before) render();
   }, 60000);
 }
@@ -4652,6 +4666,7 @@ async function loadWrGame(key, { force = false } = {}) {
     wrGameInflight[key] = false;
   }
   if (state.view === "warroom") rerenderWarRoom();
+  if (standingsWeekActive()) updateStandingsWeek();
 }
 // How the member's pick is tracking against the live score (context, not grading).
 function sourceAgeLabel(timestamp, stale = false) {
@@ -4899,6 +4914,10 @@ async function render() {
     root.innerHTML = renderStandings();
     attachStandingsHandlers();
     if (state.season === "2026") startScoresPoll();
+    if (standingsWeekActive()) {
+      startStandingsWeekPoll();
+      refreshStandingsWeek();
+    }
     const yearSelect = document.getElementById("home-year");
     if (yearSelect) yearSelect.onchange = () => { state.season = yearSelect.value; state.expanded = null; render(); };
     bindSeasonPrep();
@@ -4981,6 +5000,14 @@ async function render() {
 }
 
 function attachStandingsHandlers() {
+  document.querySelectorAll('[data-standings-mode]').forEach(button => {
+    button.onclick = async () => {
+      state.standingsMode = button.dataset.standingsMode;
+      await render();
+      document.querySelector(`[data-standings-mode="${state.standingsMode}"]`)?.focus({preventScroll:true});
+    };
+  });
+  bindStandingsWeek();
   document.querySelectorAll(".member-row").forEach(row => {
     const toggle = () => {
       const name = row.dataset.name;
