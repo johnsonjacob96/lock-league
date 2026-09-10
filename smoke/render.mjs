@@ -189,6 +189,13 @@ export async function run() {
         const chips=pickStatusChips(picks);
         checks.projectedWinStaysLive=chips.includes('Favorite: LIVE') && !chips.includes('Favorite: W');
         checks.hiddenAndMissed=chips.includes('HIDDEN') && chips.includes('MISSED');
+        const summary=document.createElement('div');summary.innerHTML=pickStatusChips([
+          {bet_type:'Favorite',pick_text:'Saved'}, {bet_type:'Dog',pick_text:'Winner',result:'W'},
+          {bet_type:'Over',pick_text:'Loser',result:'L'}, {bet_type:'Under',pick_text:'Push',result:'P'}]);
+        const pending=summary.querySelector('.card-chip');
+        checks.pendingIsNotAWin=pending.textContent.includes('PENDING') && !pending.classList.contains('W') && !pending.classList.contains('selected') && !pending.textContent.includes('✓');
+        checks.explicitSettledLabels=summary.querySelector('.W').textContent.includes('HIT') && summary.querySelector('.L').textContent.includes('MISS') && summary.querySelector('.P').textContent.includes('PUSH');
+
         currentMyPicks={Favorite:{pick_text:'Bears +3',price:-110}};state.myCardOpen=false;
         root.innerHTML=renderMyCardPanel();refreshMyCard();
         const card=root.querySelector('#my-card');

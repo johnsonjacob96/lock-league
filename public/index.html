@@ -912,7 +912,8 @@
   .card-chips { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin-top:12px; }
   .card-chip { border:1px solid #3b4541; border-radius:7px; padding:8px 2px; text-align:center; font:11px/1.5 Inter,sans-serif; color:#bec7c3; }
   .card-chip strong { display:block; font-size:12px; }
-  .card-chip.selected,.card-chip.W { color:#58e69a; border-color:#327550; background:#163326; }
+  .card-chip.W { color:#58e69a; border-color:#327550; background:#163326; }
+  .card-chip.live { color:#7dcdf2; border-color:#426777; background:rgba(88,183,224,.07); }
   .card-chip.L { color:#f59a9a; }
   .card-chip.P { color:#edce7a; }
   #my-card { padding:16px; }
@@ -1018,7 +1019,7 @@
   .pick-progress-target { position:absolute; top:-4px; height:15px; border-left:2px dashed #d4dbd7; }
   .pick-progress-label { display:flex; justify-content:space-between; gap:10px; margin-top:8px; font:11px/1.4 Inter,sans-serif; color:#aeb8b3; }
   .card-chip { background:transparent; }
-  .card-chip.selected,.card-chip.W { background:rgba(56,203,131,.07); border-color:#38614c; }
+  .card-chip.W { background:rgba(56,203,131,.07); border-color:#38614c; }
   .wr-wrap > .compact-panel { padding:14px; }
   .wr-wrap .home-record { font-size:23px; margin-top:0; }
   .wr-wrap .card-chips { margin-top:8px; }
@@ -2105,8 +2106,8 @@ function pickStatusChips(picks) {
     const p = picks.find(p => p.bet_type === bt);
     const result = p?.result || (p?.final ? ({win:"W",lose:"L",push:"P"}[p.status]) : null);
     const filled = !!(p?.pick_text || p?.text);
-    const label = p?.kind === "hidden" ? "HIDDEN" : p?.kind === "missing" ? "MISSED" : result || (p?.state === "in" && !p.final ? "LIVE" : filled ? "✓" : "—");
-    return `<span class="card-chip ${result || (filled ? "selected" : "")}" aria-label="${escapeHtml(bt)}: ${label === "✓" ? "selected" : label}">${btShort(bt)}<strong>${label}</strong></span>`;
+    const label = p?.kind === "hidden" ? "HIDDEN" : p?.kind === "missing" ? "MISSED" : ({W:"HIT",L:"MISS",P:"PUSH"}[result]) || (p?.state === "in" && !p.final ? "LIVE" : filled ? "PENDING" : "—");
+    return `<span class="card-chip ${result || (label === "LIVE" ? "live" : "")}" aria-label="${escapeHtml(bt)}: ${label}">${btShort(bt)}<strong>${label}</strong></span>`;
   }).join("")}</div>`;
 }
 function renderHomeWeek(season) {
