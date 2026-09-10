@@ -4322,6 +4322,7 @@ function startCountdownTick() {
   clearInterval(countdownTimer);
   countdownTimer = setInterval(() => {
     if (state.view !== "thisweek") { clearInterval(countdownTimer); countdownTimer = null; return; }
+    syncSlKickoffLock();
     const cd = nextKickoffCountdown(state.thisWeekData?.games || []);
     const d = document.getElementById("cd-days");
     if (!cd || !d) return;

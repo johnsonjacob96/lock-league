@@ -185,7 +185,7 @@ export async function oddsDiagnostics(env, url) {
       const eventId = url.searchParams.get("event_id");
       if (sportsbook && ["fanduel", "draftkings"].includes(sportsbook)) overrides.sportsbook = sportsbook;
       if (eventId && /^[A-Za-z0-9_-]+$/.test(eventId)) overrides.event_id = eventId;
-      const raw = await fetchSharpRaw(env, 3, overrides);
+      const raw = await fetchSharpRaw(env, overrides.event_id ? 4 : 3, overrides);
       // Summarize what came back: distinct market fields + which rows are props.
       const marketVals = {},
         typeVals = {};
