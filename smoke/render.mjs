@@ -189,6 +189,15 @@ export async function run() {
         const chips=pickStatusChips(picks);
         checks.projectedWinStaysLive=chips.includes('Favorite: LIVE') && !chips.includes('Favorite: W');
         checks.hiddenAndMissed=chips.includes('HIDDEN') && chips.includes('MISSED');
+        const oldScores=state.liveScores;
+        state.liveScores=[{away:'New England Patriots',home:'Seattle Seahawks',state:'in'}];
+        const saved={bet_type:'Super Lock',text:'Saved prop',game_key:'New England Patriots@Seattle Seahawks'};
+        checks.savedPickUsesScoreboard=pickStatusChips([saved]).includes('Super Lock: LIVE');
+        checks.settledOverridesScoreboard=pickStatusChips([{...saved,result:'W'}]).includes('Super Lock: HIT');
+        state.liveScores[0].state='post';
+        checks.finalUngradedNotLive=pickStatusChips([saved]).includes('Super Lock: PENDING');
+        state.liveScores=oldScores;
+
         const summary=document.createElement('div');summary.innerHTML=pickStatusChips([
           {bet_type:'Favorite',pick_text:'Saved'}, {bet_type:'Dog',pick_text:'Winner',result:'W'},
           {bet_type:'Over',pick_text:'Loser',result:'L'}, {bet_type:'Under',pick_text:'Push',result:'P'}]);
