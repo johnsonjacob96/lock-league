@@ -219,7 +219,15 @@ function closeSlPanel() {
   document.getElementById("sl-open")?.focus();
   document.getElementById("sl-repick")?.focus();
 }
+function slCanChangePick(p) {
+  return !p || (!p.result && removablePick("Super Lock", p));
+}
+function syncSlKickoffLock() {
+  if (superLockState.saving || slCanChangePick(currentMyPicks["Super Lock"])) return;
+  if (superLockState.open || document.getElementById("sl-repick")) closeSlPanel();
+}
 function openSlPanel() {
+  if (!slCanChangePick(currentMyPicks["Super Lock"])) { closeSlPanel(); return; }
   void loadSlPlayerPhotos();
   superLockState.open = true;
   superLockState.editing = true;
@@ -241,7 +249,7 @@ function slLockedHtml(p) {
   const lockedTs = p.locked_at
     ? `<span class="lp-ts">Locked ${fmtLockedAt(p.locked_at)}</span>`
     : "";
-  const repick = `<div class="mt-2"><button class="sl-link" id="sl-repick">Change pick</button></div>`;
+  const repick = !slCanChangePick(p) ? `<div class="sl-hint mt-2">Pick locked</div>` : `<div class="mt-2"><button class="sl-link" id="sl-repick">Change pick</button></div>`;
   if (meta) {
     // The odds are a core piece of the Super Lock (prop prices swing widely), so
     // show the locked price — the longest-odds book we locked against. Prefer the
@@ -523,6 +531,7 @@ function bindSuperLockEditor() {
     lockLine.onclick = () => submitSl(lockGameLine);
 }
 async function submitSl(action) {
+  if (!slCanChangePick(currentMyPicks["Super Lock"])) { closeSlPanel(); return; }
   if (superLockState.saving) return;
   superLockState.saving = true;
   const dialog = document.getElementById("sl-dialog");

@@ -126,6 +126,24 @@ for(const width of [375,390,844,1440]) {
  await page.locator('#sl-repick').click();await page.locator('[data-slmode="custom"]').click();await page.locator('#mycard-superlock').fill('Custom pick');await page.locator('#mycard-sl-price').fill('-130');await page.locator('#mycard-sl-save').click();assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.open),true);checks++;
  await page.locator('#mycard-sl-price').fill('150');await page.evaluate(()=>refreshSuperLockEditor());assert.equal(await page.locator('#mycard-superlock').inputValue(),'Custom pick');assert.equal(await page.locator('#mycard-sl-price').inputValue(),'150');checks+=2;await page.locator('#mycard-sl-save').click();await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(writes.at(-1).picks[0].price,150);checks++;
  await page.locator('#sl-repick').click();await page.keyboard.press('Escape');await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(await page.locator('#sl-repick').evaluate(e=>e===document.activeElement),true);checks++;
+ // A saved Super Lock becomes immutable at its original game's kickoff.
+ await page.evaluate(()=>{
+  currentMyPicks['Super Lock']={pick_text:'Saved prop',game_key:'Dallas Cowboys@Philadelphia Eagles',prop:{player:'Jalen Hurts'},price:120};
+  state.thisWeekData.games[0].kickoff=new Date(Date.now()+1000).toISOString();refreshSuperLockEditor();
+ });
+ assert.equal(await page.locator('#sl-repick').count(),1);checks++;
+ await page.locator('#sl-repick').click();
+ await page.clock.setFixedTime(new Date('2026-09-09T15:00:02Z'));
+ await page.evaluate(()=>syncSlKickoffLock());
+ assert.equal(await page.locator('#sl-dialog').count(),0);assert.equal(await page.locator('#sl-repick').count(),0);checks+=2;
+ await page.evaluate(()=>openSlPanel());assert.equal(await page.locator('#sl-dialog').count(),0);checks++;
+ assert.ok((await page.locator('#my-card-sl').textContent()).includes('Pick locked'));checks++;
+ const savedCount=writes.length;await page.evaluate(()=>submitSl(()=>fetch('/api/picks',{method:'POST'})));assert.equal(writes.length,savedCount);checks++;
+ await snapshot(page,{path:`${output}/kickoff-locked-${width}.png`});
+ await page.evaluate(()=>{state.thisWeekData.games[0].kickoff='2026-09-13T17:00Z';currentMyPicks['Super Lock'].result='W';refreshSuperLockEditor();});
+ assert.equal(await page.locator('#sl-repick').count(),0);checks++;
+ await page.evaluate(()=>{currentMyPicks['Super Lock'].result=null;state.serverConfig={...state.serverConfig,cutoff:'2026-09-09T15:00Z'};refreshSuperLockEditor();});
+ assert.equal(await page.locator('#sl-repick').count(),0);checks++;
  assert.deepEqual(errors,[]);checks++;console.log(`${width}px passed`);await page.close();
 }
 } finally { await browser.close();server.close(); }
