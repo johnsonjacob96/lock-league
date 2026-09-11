@@ -57,12 +57,3 @@
 .home-table .member-row .font-display-lg {font-weight:700}
 .week-member-name,.week-record,.week-rank {font-weight:700}
 .week-league-heading h3,.week-card-heading h3 {font-weight:600}
-
-/* A full-color slip marks a settled result, never a live projection. */
-.week-slip.settled-hit {background:#164c31;border-color:#30754e}
-.week-slip.settled-miss {background:#591f27;border-color:#91424e}
-.week-slip.settled-hit .week-slip-body strong,.week-slip.settled-miss .week-slip-body strong {color:#fff}
-.week-slip.settled-hit .week-slip-category,.week-slip.settled-hit .week-slip-body small,.week-slip.settled-hit .week-slip-clock {color:#c9ecd8}
-.week-slip.settled-miss .week-slip-category,.week-slip.settled-miss .week-slip-body small,.week-slip.settled-miss .week-slip-clock {color:#f6d6db}
-.week-slip.settled-hit .week-slip-status,.week-slip.settled-miss .week-slip-status {border:0;background:transparent;color:#fff;padding:0;font-weight:700;text-align:center}
-.week-slip.settled-hit .week-slip-status>span,.week-slip.settled-miss .week-slip-status>span {display:block;font-size:24px;line-height:1.1;margin-bottom:4px}
