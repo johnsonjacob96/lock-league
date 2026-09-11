@@ -97,5 +97,5 @@ function startStandingsWeekPoll() {
   standingsWeekTimer = setInterval(() => {
     if (!standingsWeekActive()) { clearInterval(standingsWeekTimer); standingsWeekTimer = null; return; }
     if (!document.hidden) refreshStandingsWeek();
-  },45000);
+  },15000);
 }

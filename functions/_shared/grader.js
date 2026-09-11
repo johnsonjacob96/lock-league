@@ -29,7 +29,7 @@ export function sameTeam(a, b) {
 // successfully fetched through a transient failure. Stale live scores beat a
 // blank board, and the seed / next good fetch refreshes it.
 const _sbCache = new Map();
-const SB_TTL_MS = 25 * 1000;
+const SB_TTL_MS = 10 * 1000;
 
 export async function fetchScoreboard(season, week, seasontype = 2, env = null) {
   const cacheKey = `${season}:${week}:${seasontype}`;

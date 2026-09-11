@@ -1,11 +1,5 @@
-// Shared ESPN fetch with a host fallback.
-//
-// ESPN's `site.api.espn.com` host 403s requests coming from datacenter IPs
-// (Cloudflare colos) even with a browser User-Agent — it works fine from a
-// laptop, which is why it passed local testing but broke in production. The
-// `cdn.espn.com/core/...` host serves the SAME data (same event/boxscore shapes)
-// and is not IP-blocked. So we try site.api first (canonical) and transparently
-// fall back to the CDN host on any failure.
+// ESPN web API is reachable from Cloudflare and avoids the lagging CDN page
+// cache. Keep canonical/CDN hosts and persisted runner snapshots as fallbacks.
 import { loadSummarySeed } from "./scoreseed.js";
 
 export const ESPN_HEADERS = {
@@ -13,6 +7,7 @@ export const ESPN_HEADERS = {
   "Accept": "application/json, text/plain, */*",
   "Referer": "https://www.espn.com/nfl/scoreboard",
 };
+const WEB = "https://site.web.api.espn.com/apis/site/v2/sports/football/nfl";
 const SITE = "https://site.api.espn.com/apis/site/v2/sports/football/nfl";
 const CDN = "https://cdn.espn.com/core/nfl";
 
@@ -37,11 +32,11 @@ async function getJson(url) {
 }
 
 // Scoreboard events for a season / seasontype / week. Returns the events array
-// (identical shape from both hosts). Tries site.api then cdn, a couple of rounds,
+// (compatible shapes across hosts). Tries web, canonical, then CDN, with retries,
 // because either host can transiently 403 or return an empty body.
 export async function espnScoreboardEvents(season, seasontype, week) {
   const q = `year=${season}&seasontype=${seasontype}&week=${week}`;
-  const urls = [`${SITE}/scoreboard?${q}`, `${CDN}/scoreboard?xhr=1&${q}`];
+  const urls = [`${WEB}/scoreboard?${q}`, `${SITE}/scoreboard?${q}`, `${CDN}/scoreboard?xhr=1&${q}`];
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const u of urls) {
       const d = await getJson(u);
@@ -54,11 +49,11 @@ export async function espnScoreboardEvents(season, seasontype, week) {
 }
 
 // Full game summary (leaders, boxscore, situation) for one game. Tries the site
-// summary host then the cdn game host. Returns the summary/gamepackage object or
+// web/canonical summary hosts then the CDN game host. Returns the summary/gamepackage object or
 // null. Used by /api/game for the War Room pick drill-down (player stat leaders).
 export async function espnSummary(eventId, env = null) {
   if (!eventId) return null;
-  const urls = [`${SITE}/summary?event=${eventId}`, `${CDN}/game?xhr=1&gameId=${eventId}`];
+  const urls = [`${WEB}/summary?event=${eventId}`, `${SITE}/summary?event=${eventId}`, `${CDN}/game?xhr=1&gameId=${eventId}`];
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const u of urls) {
       const d = await getJson(u);
@@ -69,11 +64,11 @@ export async function espnSummary(eventId, env = null) {
   return loadSummarySeed(env, eventId);
 }
 
-// Box score (player stat lines) for one game. Tries site summary then cdn
+// Box score (player stat lines) for one game. Tries web/canonical summary then CDN
 // boxscore, a couple of rounds. Returns the boxscore object or null.
 export async function espnBoxscore(eventId, env = null) {
   if (!eventId) return null;
-  const urls = [`${SITE}/summary?event=${eventId}`, `${CDN}/boxscore?xhr=1&gameId=${eventId}`];
+  const urls = [`${WEB}/summary?event=${eventId}`, `${SITE}/summary?event=${eventId}`, `${CDN}/boxscore?xhr=1&gameId=${eventId}`];
   for (let attempt = 0; attempt < 2; attempt++) {
     for (const u of urls) {
       const d = await getJson(u);

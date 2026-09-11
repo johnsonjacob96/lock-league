@@ -7,7 +7,7 @@ mock.module('../functions/_shared/feed-cache.js', { namedExports: {
   providerFetch: async (_env, _provider, url, init) => fetch(url, init),
 } });
 const { getUnshared: onRequestGet, onRequestPost, scopedPayload, fetchSharpRaw, normalizeSharp } = await import('../functions/api/odds.js');
-import { espnBoxscore, espnSummary } from '../functions/_shared/espn.js';
+import { espnBoxscore, espnSummary, espnScoreboardEvents } from '../functions/_shared/espn.js';
 import { fetchScoreboard, pushWeekResults } from '../functions/_shared/grader.js';
 import { seedWeeks, seedRegularSeason } from '../scripts/seed-regular-season.mjs';
 
@@ -128,7 +128,7 @@ test('hanging ESPN attempt aborts and moves to fallback', async t => {
   mockDb(t, ({ query }) => query.includes('SELECT summary') ? dbRows('summary', summary) : dbRows());
   assert.deepEqual(await espnBoxscore('1', env), summary.boxscore);
   assert.equal(signal.aborted, true);
-  assert.equal(calls, 4);
+  assert.equal(calls, 6);
 });
 
 test('runner ingests final-game boxscore and verifies persistence acknowledgment', async t => {
@@ -478,4 +478,29 @@ test('ESPN can fill a game entirely omitted by Sharp, with no fake Sharp event I
  const games=normalizeSharp(rows);
  assert.equal(games.length,1);assert.equal(games[0].books.draftkings.total.point,44.5);
  assert.deepEqual(games[0].sharp_event_ids,[]);
+});
+
+
+test('ESPN web host serves scoreboard and live player stats before CDN fallback', async t => {
+  const calls=[];
+  t.mock.method(globalThis,'fetch',async url=>{
+    calls.push(String(url));
+    assert.equal(new URL(url).hostname,'site.web.api.espn.com');
+    return Response.json(String(url).includes('/scoreboard') ? {events:[event('web-live',undefined,'in')]} : {...summary,_seedFinal:false,header:{competitions:[{status:{type:{state:'in',completed:false}}}]}});
+  });
+  assert.equal((await espnScoreboardEvents(2026,2,1))[0].id,'web-live');
+  assert.ok((await espnSummary('web-live')).boxscore);
+  assert.equal(calls.length,2);
+});
+
+test('ESPN web malformed responses retain canonical and CDN fallbacks', async t => {
+  const calls=[];
+  t.mock.method(globalThis,'fetch',async url=>{
+    calls.push(new URL(url).hostname);
+    if(new URL(url).hostname==='site.web.api.espn.com')return Response.json({events:[]});
+    if(new URL(url).hostname==='site.api.espn.com')return new Response('',{status:403});
+    return Response.json({content:{sbData:{events:[event('fallback')]}}});
+  });
+  assert.equal((await espnScoreboardEvents(2026,2,1))[0].id,'fallback');
+  assert.deepEqual(calls,['site.web.api.espn.com','site.api.espn.com','cdn.espn.com']);
 });
