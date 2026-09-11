@@ -293,6 +293,19 @@ test('other member picks remain hidden before cutoff and reveal after',async()=>
  assert.equal((await request(null,'season=2026&week=1',true,'GET')).body.picks.length,0);
  mock.timers.setTime(Date.parse('2026-09-13T17:00:00Z'));assert.equal((await request(null,'season=2026&week=1',true,'GET')).body.picks.length,1);
 });
+test('early settled W/L/P reach season standings without exposing ungraded picks',async()=>{
+ await db.query(`INSERT INTO picks(member_id,season,week,bet_type,pick_text,result) VALUES
+ (2,2026,1,'Favorite','settled win','W'),(2,2026,1,'Dog','settled loss','L'),
+ (2,2026,1,'Under','settled push','P'),(2,2026,1,'Super Lock','private future prop',NULL)`);
+ for(const signed of [true,false]) {
+  for(const query of ['season=2026','season=2026&week=1']) {
+   const response=await request(null,query,signed,'GET');
+   assert.equal(response.status,200);
+   assert.deepEqual(response.body.picks.map(p=>p.result).sort(),['L','P','W']);
+   assert.ok(!JSON.stringify(response.body.picks).includes('private future prop'));
+  }
+ }
+});
 test('winner and payout wait for cutoff and every grade',()=>{
  let ps=[{week:1,member_id:1,bet_type:'Favorite',result:'W'},{week:1,member_id:2,bet_type:'Favorite',result:null}];
  assert.equal(weeklyWinner(weeklyMemberRecords([1,2],ps,{locked:true})),null);

@@ -397,12 +397,12 @@ export async function onRequest({ request, env }) {
           FROM picks p JOIN members m ON m.id = p.member_id
           WHERE p.season = ${season}
           ORDER BY p.week, m.name, p.bet_type`;
-    // Live seasons: other members' picks stay hidden until the week locks,
-    // so nobody can scout picks before the Sunday cutoff.
+    // Settled results belong in public standings immediately (including early
+    // games). Keep opponents' ungraded picks private until the weekly cutoff.
     if (season >= 2026) {
       const viewer = await verifyCookie(env, request.headers.get("cookie"));
       const now = Date.now();
-      rows = rows.filter(p => p.member_id === viewer || now >= pickCutoff(season, p.week, env).getTime());
+      rows = rows.filter(p => p.member_id === viewer || ["W", "L", "P"].includes(p.result) || now >= pickCutoff(season, p.week, env).getTime());
     }
     // Week view also reports who has submitted (count only, never contents),
     // so the group can see who still owes picks before the cutoff.
