@@ -255,10 +255,10 @@ export async function run() {
         me.picks[1].game_key='Chicago Bears@Carolina Panthers';state.wrExpanded='5:Dog';
         checks.ownFinalDrilldown=renderWarRoom().includes('wr-detail');
         state.wrMemberId=null;state.wrExpanded=null;
-        state.view='standings';state.season='2026';state.standingsMode='week';state.standingsMemberId=null;
+        state.view='standings';state.season='2026';state.standingsMode='week';state.standingsMemberId=null;state.standingsCardOpen=true;
         state.warRoom={season:2026,week:1,members:[
           {member_id:5,name:'Jacob',live:{W:5,L:0,fW:1,fL:1},picks:[
-            {bet_type:'Favorite',kind:'pick',pick_text:'Seattle Seahawks −3.5',status:'win',final:true},
+            {bet_type:'Favorite',kind:'pick',pick_text:'Seattle Seahawks −3.5',status:'win',final:true,score:{away:'New England Patriots',home:'Seattle Seahawks',away_score:10,home_score:13}},
             {bet_type:'Dog',kind:'pick',pick_text:'Chicago Bears +4.5',status:'lose',final:true},
             {bet_type:'Super Lock',kind:'pick',pick_text:'Jalen Hurts over 224.5 passing yards',prop:{player:'Jalen Hurts',market:'passing_yards',line:224.5,side:'over'},game_key:'Dallas Cowboys@Philadelphia Eagles',state:'in',final:false,status:'win',price:-110,score:{away:'Dallas Cowboys',home:'Philadelphia Eagles',away_score:14,home_score:17},detail:'Q3 · 8:42'},
             {bet_type:'Over',kind:'hidden',pick_text:'DO NOT REVEAL'},
@@ -274,6 +274,9 @@ export async function run() {
         checks.weekHiddenPrivate=!root.querySelector('#standings-week').textContent.includes('DO NOT REVEAL');
         checks.weekLiveNotWin=root.querySelector('.week-desktop-card .week-slip-status.live')?.textContent==='LIVE';
         checks.weekProgress=!!root.querySelector('.week-desktop-card .pick-progress');
+        const visibleCard=root.querySelector(innerWidth>1100 ? '.week-desktop-card' : '.week-mobile-card');
+        const logoSizes=[...visibleCard.querySelectorAll('.week-team-logos img')].map(img=>img.getBoundingClientRect());
+        checks.weekLogosBounded=logoSizes.length===2 && logoSizes.every(r=>r.width>0 && r.width<=28 && r.height>0 && r.height<=28);
         root.querySelector('[data-week-member="2"]').click();
         checks.weekSelect=state.standingsMemberId==='2' && root.querySelector('.week-mobile-card').textContent.includes('Jack’s card') && !root.textContent.includes('PRIVATE PROP');
         root.querySelector('[data-close-week-card]').click();
