@@ -19,7 +19,7 @@ function standingsWeekRows(members) {
 }
 function standingsSlip(p) {
   const category = `<span class="week-slip-category">${btShort(p.bet_type)}</span>`;
-  if (p.kind !== 'pick') return `<article class="week-slip">${category}<div class="week-slip-body"><strong>${p.kind === 'missing' ? 'No pick submitted' : 'Reveals at lock'}</strong></div><span class="week-slip-status ${p.kind === 'missing' ? 'miss' : ''}">${p.kind === 'missing' ? 'MISS' : 'HIDDEN'}</span></article>`;
+  if (p.kind !== 'pick') return `<article class="week-slip ${p.kind === 'missing' ? 'settled-miss' : ''}">${category}<div class="week-slip-body"><strong>${p.kind === 'missing' ? 'No pick submitted' : 'Reveals at lock'}</strong></div><span class="week-slip-status ${p.kind === 'missing' ? 'miss' : ''}">${p.kind === 'missing' ? '<span aria-hidden="true">✕</span> MISS' : 'HIDDEN'}</span></article>`;
   const result = p.final ? {win:'HIT',lose:'MISS',push:'PUSH'}[p.status] : null;
   const label = result || (p.state === 'in' && !p.final ? 'LIVE' : 'PENDING');
   const cached = wrGameCache[p.game_key]?.data;
@@ -30,7 +30,7 @@ function standingsSlip(p) {
   const logos = !p.prop && score ? `<span class="week-team-logos">${teamLogoMark(score.away,'w-7 h-7','quiet-copy')}${teamLogoMark(score.home,'w-7 h-7','quiet-copy')}</span>` : '';
   const clock = score ? `${teamShort(score.away)} ${score.away_score ?? '–'} · ${teamShort(score.home)} ${score.home_score ?? '–'} · ${p.detail || (p.final ? 'Final' : 'Awaiting grade')}` : p.kickoff ? `${fmtKickoffDay(p.kickoff)} · ${fmtKickoffTime(p.kickoff)}` : p.detail || '';
   const stats = p.prop?.market && !result ? (cached?.found ? wrPropTrack(p,cached) : cached ? 'Player stats unavailable' : 'Player stats loading…') : '';
-  return `<article class="week-slip">${category}<div class="week-slip-body"><div class="week-slip-pick">${portrait}${logos}<strong>${escapeHtml(p.pick_text)}</strong></div><small>${escapeHtml(bookLabel(p.book))}${p.price != null ? ' · '+americanOdds(p.price) : ''}</small>${stats ? `<p class="quiet-copy">${escapeHtml(stats)}</p>` : ''}${!result ? liveProgressBar(p,cached?.found ? cached : game) : ''}${clock ? `<p class="week-slip-clock">${escapeHtml(clock)}</p>` : ''}${p.prop?.market && cached?.found && !result ? `<small>${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</small>` : ''}</div><span class="week-slip-status ${label.toLowerCase()}">${label}</span></article>`;
+  return `<article class="week-slip ${result === 'HIT' ? 'settled-hit' : result === 'MISS' ? 'settled-miss' : ''}">${category}<div class="week-slip-body"><div class="week-slip-pick">${portrait}${logos}<strong>${escapeHtml(p.pick_text)}</strong></div><small>${escapeHtml(bookLabel(p.book))}${p.price != null ? ' · '+americanOdds(p.price) : ''}</small>${stats ? `<p class="quiet-copy">${escapeHtml(stats)}</p>` : ''}${!result ? liveProgressBar(p,cached?.found ? cached : game) : ''}${clock ? `<p class="week-slip-clock">${escapeHtml(clock)}</p>` : ''}${p.prop?.market && cached?.found && !result ? `<small>${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</small>` : ''}</div><span class="week-slip-status ${label.toLowerCase()}">${result === 'HIT' ? '<span aria-hidden="true">✓</span> ' : result === 'MISS' ? '<span aria-hidden="true">✕</span> ' : ''}${label}</span></article>`;
 }
 function standingsWeekCard(member, mobile = false) {
   if (!member) return '';
