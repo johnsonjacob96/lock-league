@@ -4355,7 +4355,10 @@ function startOddsPoll() {
 }
 
 document.addEventListener("visibilitychange", async()=>{
-  if(document.hidden || state.view!=="thisweek")return;
+  if(document.hidden)return;
+  if(standingsWeekActive()) { await refreshStandingsWeek(); return; }
+  if(state.view==='warroom') { await loadWarRoom(); if(state.view==='warroom') { rerenderWarRoom(); refreshPersonalLiveStats(); } return; }
+  if(state.view!=="thisweek")return;
   try { const r=await fetch("/api/odds",{credentials:"include"});if(r.ok && state.view==="thisweek")applyLiveOdds(state.thisWeekData,await r.json()); }catch{}
 });
 
@@ -4504,9 +4507,9 @@ function startWarRoomPoll() {
     if (document.hidden) return;
     await loadWarRoom();
     if (state.view === "warroom") { rerenderWarRoom(); refreshPersonalLiveStats(); }
-    // Keep an open game drill-down fresh (refetch past its 20s cache).
+    // Keep an open game drill-down fresh (refetch past its 10s cache).
     if (state.view === "warroom" && state.wrExpandedKey) loadWrGame(state.wrExpandedKey, { force: true });
-  }, 45000);
+  }, 15000);
 }
 function attachWarRoomHandlers() {
   document.querySelectorAll("[data-track-member]").forEach(button => {
@@ -4630,7 +4633,7 @@ const wrGameInflight = {}; // game_key -> bool
 async function loadWrGame(key, { force = false } = {}) {
   if (!key) return;
   const c = wrGameCache[key];
-  if (!force && c && Date.now() - c.ts < 20000) return; // fresh; current render already shows it
+  if (!force && c && Date.now() - c.ts < 10000) return; // fresh; current render already shows it
   if (wrGameInflight[key]) return;
   wrGameInflight[key] = true;
   try {

@@ -9,7 +9,7 @@ import { fetchScoreboard, sameTeam } from "../_shared/grader.js";
 import { PROP_DEFS, playerStatMap } from "../_shared/props.js";
 import { espnSummary } from "../_shared/espn.js";
 
-const TTL_MS = 25 * 1000;
+const TTL_MS = 10 * 1000;
 const cache = new Map(); // `${season}:${week}:${key}` -> { ts, data }
 
 // ESPN summary leaders -> [{ team, rows: [{ cat, name, line }] }] grouped per

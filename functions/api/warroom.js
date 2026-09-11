@@ -7,7 +7,7 @@ import { currentNflWeek, pickCutoff, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, resolveSpreadResult, gradeTotal, sameTeam, maybeGrade } from "../_shared/grader.js";
 import { sql } from "../_shared/db.js";
 
-const TTL_MS = 40 * 1000;
+const TTL_MS = 10 * 1000;
 let cache = { ts: 0, key: "", data: null };
 
 // A full card is one pick of each type. Cards always render all five slots in
