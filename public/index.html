@@ -1060,6 +1060,12 @@
   #live-card-summary .home-record { font:600 18px Inter,sans-serif; }
 
 
+/* Settled-result colors are scoped to the five My Card summary boxes. */
+  #mycard-chips .card-chip.W { background:#164c31; border-color:#39815a; color:#e0f7e9; }
+  #mycard-chips .card-chip.L { background:#591f27; border-color:#98515d; color:#ffe1e5; }
+  #mycard-chips .card-chip.W strong,#mycard-chips .card-chip.L strong { font-size:0; }
+  #mycard-chips .card-chip.W strong::after { content:"✓"; font-size:22px; line-height:1.2; }
+  #mycard-chips .card-chip.L strong::after { content:"✕"; font-size:22px; line-height:1.2; }
 </style>
 <link rel="stylesheet" href="assets/standings-week.css">
 <link rel="stylesheet" href="assets/super-lock.css">
