@@ -767,6 +767,7 @@ async function lockStructuredProp() {
     game_key: superLockState.gameKey,
   };
   const msg = document.getElementById("mycard-sl-msg");
+  if (!await confirmPickReplacement("Super Lock", {pick_text:propTextClient(prop,m),book:sel.book,price:best.price})) return;
   try {
     const r = await fetch("/api/picks", {
       method: "POST",
@@ -839,6 +840,7 @@ async function lockGameLine() {
     pick_text: info.text,
   };
   const msg = document.getElementById("mycard-sl-msg");
+  if (!await confirmPickReplacement("Super Lock", line_pick)) return;
   try {
     const r = await fetch("/api/picks", {
       method: "POST",
@@ -914,6 +916,7 @@ async function saveSuperLockText(raw) {
     if (msg) msg.textContent = "ENTER ODDS: -120 TO -100, OR +100 AND UP";
     return;
   }
+  if (!await confirmPickReplacement("Super Lock", {pick_text:text,price})) return;
   try {
     const r = await fetch("/api/picks", {
       method: "POST",
