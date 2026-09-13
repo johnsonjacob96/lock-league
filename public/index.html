@@ -1066,6 +1066,20 @@
   #mycard-chips .card-chip.W strong,#mycard-chips .card-chip.L strong { font-size:0; }
   #mycard-chips .card-chip.W strong::after { content:"✓"; font-size:22px; line-height:1.2; }
   #mycard-chips .card-chip.L strong::after { content:"✕"; font-size:22px; line-height:1.2; }
+  .pick-change-dialog {margin:auto;width:min(560px,calc(100% - 32px));max-height:90dvh;overflow:auto;padding:24px;background:#151b18;color:#e6e8e8;border:1px solid #46504f;border-radius:14px;}
+  .pick-change-dialog::backdrop {background:rgb(0 0 0 / .75);}
+  .pick-change-dialog h2 {font:600 25px/1.3 Oswald,sans-serif;}
+  .pick-change-dialog > p {margin-top:8px;color:#b8c1bc;font-size:14px;}
+  .pick-change-quotes {display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0;}
+  .pick-change-quotes section {min-width:0;border:1px solid #46504f;border-radius:8px;padding:14px;overflow-wrap:anywhere;}
+  .pick-change-quotes p {font-size:11px;letter-spacing:.06em;color:#b8c1bc;margin-bottom:8px;}
+  .pick-change-quotes strong {display:block;font-size:16px;}
+  .pick-change-quotes small {display:block;margin-top:8px;color:#b8c1bc;}
+  .pick-change-actions {display:flex;gap:12px;justify-content:flex-end;}
+  .pick-change-actions button {min-height:44px;padding:10px 14px;border:1px solid #66766c;border-radius:8px;font-weight:600;}
+  .pick-change-actions [data-change] {background:#46e08a;color:#04220f;border-color:#46e08a;}
+  .pick-change-actions button:focus-visible {outline:2px solid #7dcdf2;outline-offset:3px;}
+  @media(max-width:480px) {.pick-change-quotes {grid-template-columns:1fr;}.pick-change-actions {flex-direction:column;}}
 </style>
 <link rel="stylesheet" href="assets/standings-week.css">
 <link rel="stylesheet" href="assets/super-lock.css">
@@ -4088,15 +4102,50 @@ function showToast(msg, kind = "ok") {
   showToast._t = setTimeout(() => el.classList.remove("show"), 2800);
 }
 
+// Compare the saved quote, not just its game: a moved line is a replacement.
+function sameBoardPick(pick, data) {
+  const number = v => v == null || v === '' ? null : Number(v);
+  return !!pick && pick.game_key === data.game && pick.side === data.side && pick.book === data.book
+    && number(pick.line) === number(data.line) && number(pick.price) === number(data.price);
+}
+
+let pickConfirmationOpen = false;
+function confirmPickReplacement(betType, proposed) {
+  const current = currentMyPicks[betType];
+  if (pickConfirmationOpen) return Promise.resolve(false);
+  if (!current) return Promise.resolve(true);
+  pickConfirmationOpen = true;
+  const previousFocus = document.activeElement;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'pick-change-dialog';
+  dialog.setAttribute('aria-labelledby', 'pick-change-title');
+  const quote = (label, pick) => `<section><p>${label}</p><strong>${escapeHtml(pick.pick_text || pick.text || 'Saved pick')}</strong><small>${escapeHtml([pick.book || pick.prop?.book ? bookLabel(pick.book || pick.prop.book) : '', pick.price != null ? americanOdds(pick.price) : ''].filter(Boolean).join(' · '))}</small></section>`;
+  dialog.innerHTML = `<h2 id="pick-change-title">Change your ${escapeHtml(BET_META[betType]?.short || betType)} pick?</h2><p>Your current pick will be replaced only if you confirm.</p><div class="pick-change-quotes">${quote('CURRENT PICK',current)}${quote('NEW PICK',proposed)}</div><div class="pick-change-actions"><button type="button" data-keep autofocus>Keep current pick</button><button type="button" data-change>Confirm change</button></div>`;
+  document.body.append(dialog);
+  return new Promise(resolve => {
+    let done = false;
+    const finish = confirmed => {
+      if (done) return;
+      done = true;
+      dialog.close(); dialog.remove(); pickConfirmationOpen = false;
+      if (previousFocus?.isConnected) previousFocus.focus();
+      resolve(confirmed);
+    };
+    dialog.querySelector('[data-keep]').onclick = () => finish(false);
+    dialog.querySelector('[data-change]').onclick = () => finish(true);
+    dialog.addEventListener('cancel', e => { e.preventDefault(); finish(false); });
+    dialog.addEventListener('close', () => finish(false));
+    dialog.showModal();
+  });
+}
+
 function markPickedButtons(picksByBetType) {
   const buttons = document.querySelectorAll(".pick-btn[data-bet]");
   buttons.forEach(b => b.classList.remove("picked"));
   if (!picksByBetType) return;
   for (const [bt, pick] of Object.entries(picksByBetType)) {
     if (!pick.game_key) continue;
-    const match = document.querySelector(
-      `.pick-btn[data-bet="${bt}"][data-game="${pick.game_key}"][data-side="${pick.side}"][data-book="${pick.book}"]`
-    );
+    const match = [...buttons].find(btn => btn.dataset.bet === bt && sameBoardPick(pick, btn.dataset));
     if (match) match.classList.add("picked");
   }
 }
@@ -4118,8 +4167,14 @@ async function clickPickButton(btn) {
   const season = 2026;
   const week = state.myPicksWeek || cur.week || 1;
 
-  // Clicking the pick you already have selected removes it from your card.
-  if (btn.classList.contains("picked")) return unpick(btn, bet_type, season, week);
+  if (clickPickButton.saving || pickConfirmationOpen) return;
+  // Only the exact saved quote is a toggle; a moved line must be confirmed.
+  if (sameBoardPick(currentMyPicks[bet_type], btn.dataset)) return unpick(btn, bet_type, season, week);
+  clickPickButton.saving = true;
+  if (!await confirmPickReplacement(bet_type, {pick_text, book, price})) {
+    clickPickButton.saving = false;
+    return;
+  }
 
   btn.classList.add("saving");
   try {
@@ -4149,6 +4204,7 @@ async function clickPickButton(btn) {
     showToast("NETWORK ERROR", "err");
   } finally {
     btn.classList.remove("saving");
+    clickPickButton.saving = false;
   }
 }
 
