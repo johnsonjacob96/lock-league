@@ -350,7 +350,7 @@ if (process.env.RUN_BROWSER === '1') test('browser: real login, board save/reloa
  const browser=await chromium.launch();
  try {
   const page=await browser.newPage({viewport:{width:1280,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.clock.install({time:new Date('2026-09-11T12:00:00Z')});
+  await page.clock.setFixedTime(new Date('2026-09-11T12:00:00Z'));
   await page.goto(base);await page.waitForSelector('#login-btn');
   await page.locator('#login-btn').click();assert.equal(await page.locator('#login-name option').count(),8);
   await page.selectOption('#login-name','Jacob');await page.fill('#login-pass','test-password');await page.click('#login-submit');

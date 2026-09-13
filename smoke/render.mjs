@@ -227,17 +227,17 @@ export async function run() {
         checks.standingsFit=table.scrollWidth<=table.clientWidth+1;
         checks.homeSeasonSelect=!!root.querySelector('#home-year');
         const leaderboardFixture={week:1,anyLive:true,members:[
-          {member_id:5,name:'Jacob',live:{W:1,L:1,P:1},picks:[{kind:'hidden'}]},
-          {member_id:2,name:'Jack',live:{W:2,L:0,P:0},picks:[]},
-          {member_id:7,name:'Mason',live:{W:2,L:0,P:0},picks:[]},
-          {member_id:1,name:'Brayden',live:{W:1,L:0,P:0},picks:[]},
-          {member_id:6,name:'Jared',live:{W:0,L:1,P:0},picks:[]}]};
+          {member_id:5,name:'Jacob',live:{W:5,L:0,P:0,fW:1,fL:1,fP:1},picks:[{kind:'hidden'}]},
+          {member_id:2,name:'Jack',live:{W:2,L:0,P:0,fW:2,fL:0,fP:0},picks:[]},
+          {member_id:7,name:'Mason',live:{W:2,L:0,P:0,fW:2,fL:0,fP:0},picks:[]},
+          {member_id:1,name:'Brayden',live:{W:1,L:0,P:0,fW:1,fL:0,fP:0},picks:[]},
+          {member_id:6,name:'Jared',live:{W:0,L:1,P:0,fW:0,fL:1,fP:0},picks:[]}]};
         const ranked=liveLeaderboardRows(leaderboardFixture);
         checks.leaderRanks=ranked.map(r=>r.rank).join(',')==='1,1,3,4,5' && ranked[0].tied && ranked[1].tied;
         state.wrLeaderboardAll=false;root.innerHTML=renderLiveLeaderboard(leaderboardFixture);
         checks.leadersAndYou=root.querySelectorAll('[data-track-member]').length===4 && !!root.querySelector('[data-track-member="5"]') && !root.querySelector('[data-track-member="6"]');
         state.wrLeaderboardAll=true;root.innerHTML=renderLiveLeaderboard(leaderboardFixture);
-        checks.fullLeaderboard=root.querySelectorAll('[data-track-member]').length===5 && root.textContent.includes('projections');
+        checks.fullLeaderboard=root.querySelectorAll('[data-track-member]').length===5 && root.textContent.includes('Settled results only') && !root.textContent.includes('projections');
         state.wrLeaderboardAll=false;
         const game={away:{name:'Chicago Bears',score:17},home:{name:'Carolina Panthers',score:14},state:'in'};
         const bar=liveProgressBar({bet_type:'Under',pick_text:'Bears / Panthers U47.5'},game);
