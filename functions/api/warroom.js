@@ -1,6 +1,5 @@
 // /api/warroom — live Sunday leaderboard. Joins the current week's locked picks
-// with the live ESPN scoreboard and computes each member's live record using the
-// same grading math as the auto-grader. Login required; picks stay hidden until
+// with the live ESPN scoreboard. Records include settled results only. Login required; picks stay hidden until
 // the weekly lock (noon CT Sunday), same as everywhere else.
 import { verifyCookie, json } from "../_shared/auth.js";
 import { currentNflWeek, pickCutoff, seasonTypeFor } from "../_shared/nfl.js";
@@ -17,10 +16,10 @@ const BET_TYPES_ORDER = ["Favorite", "Dog", "Over", "Under", "Super Lock"];
 const safeJson = (s) => { try { return typeof s === "string" ? JSON.parse(s) : s; } catch { return null; } };
 
 // Live standing of one pick against the (possibly in-progress) game.
-function livePickStatus(p, ev) {
+export function livePickStatus(p, ev) {
   if (!ev) return { status: "pending", state: "pre" };
   const st = ev.state; // 'pre' | 'in' | 'post'
-  if (st === "pre" || ev.home_score == null || ev.away_score == null) {
+  if (st !== "post" || ev.home_score == null || ev.away_score == null) {
     return { status: "pending", state: st, detail: ev.detail };
   }
   const map = { W: "win", L: "lose", P: "push" };
@@ -30,7 +29,7 @@ function livePickStatus(p, ev) {
   } else if (p.bet_type === "Over" || p.bet_type === "Under") {
     result = gradeTotal(p.side, Number(p.line), ev.home_score + ev.away_score);
   } else if (p.bet_type === "Super Lock") {
-    // A game-line Super Lock (spread/total) grades live off the score, same as
+    // A final game-line Super Lock (spread/total) grades off the score, same as
     // the gradable bets. Player-prop and free-text Super Locks need the box
     // score / a manual mark, so they stay "manual" here.
     const meta = safeJson(p.prop_meta);
@@ -117,9 +116,7 @@ export async function onRequest({ request, env, waitUntil }) {
 
   const byMember = new Map();
   for (const mem of roster) {
-    // W/L/P = projected record (final + still-live results). fW/fL/fP = the
-    // portion that's actually final, so the UI can flag a record as PROJ while
-    // any counted game is still in progress.
+    // Both record fields count settled results only; preserve fW/fL/fP for clients.
     const m = { member_id: mem.id, name: mem.name, picks: [],
       live: { W: 0, L: 0, P: 0, fW: 0, fL: 0, fP: 0, pending: 0 } };
     const byType = submitted.get(mem.id) || {};
@@ -149,9 +146,9 @@ export async function onRequest({ request, env, waitUntil }) {
             ? { away: ev.away, home: ev.home, away_score: ev.away_score, home_score: ev.home_score }
             : null,
         });
-        if (s.status === "win") { m.live.W++; if (s.final) m.live.fW++; }
-        else if (s.status === "lose") { m.live.L++; if (s.final) m.live.fL++; }
-        else if (s.status === "push") { m.live.P++; if (s.final) m.live.fP++; }
+        if (s.final && s.status === "win") { m.live.W++; m.live.fW++; }
+        else if (s.final && s.status === "lose") { m.live.L++; m.live.fL++; }
+        else if (s.final && s.status === "push") { m.live.P++; m.live.fP++; }
         else m.live.pending++;
       } else if (globalRevealed) {
         // Picks are locked and this slot was never filled -> an automatic loss.
