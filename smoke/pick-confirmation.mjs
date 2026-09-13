@@ -1,5 +1,7 @@
 // Exercise replacement confirmation with intercepted writes; never submit real picks.
 import assert from 'node:assert/strict';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {normalizeSharpProps} from '../functions/_shared/props.js';
 import {menuForGame} from '../functions/api/props.js';
 import {sharpPropRows} from './fixtures.mjs';
@@ -30,7 +32,7 @@ try {
   assert.equal(await page.evaluate(()=>writes.length),0);
   assert.equal(await page.evaluate(()=>document.activeElement.hasAttribute('data-keep')),true);
   assert.equal(await page.locator('dialog').evaluate(d=>d.scrollWidth<=d.clientWidth),true);
-  await page.screenshot({path:`/private/tmp/pick-confirmation-${width}.png`});
+  await page.screenshot({path:join(tmpdir(),`pick-confirmation-${width}.png`)});
   await page.locator('[data-keep]').click();
   assert.equal(await page.evaluate(()=>currentMyPicks.Dog.line),2.5);
   assert.equal(await page.evaluate(()=>writes.length),0);
