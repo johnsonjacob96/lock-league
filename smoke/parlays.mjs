@@ -161,3 +161,17 @@ test('OCR uses repeated names and word geometry to discard logo text without str
  const real=title('Harvey','RJ');real.words[0]=word('RJ',80,115);real.words[1]=word('Harvey',120,220);
  assert.equal(client.parlayFilterLogoText([real,subtitle('Harvey')])[0].text,'RJ Harvey Over +3.5');
 });
+
+
+test('Hall of Shame requires exactly one settled miss and uses the $5 American-odds profit',()=>{
+ const slip={id:'a',season:2026,week:1,night:'Monday',odds:14819,legs:[{result:'W',member_id:1},{result:'L',member_id:2}]};
+ const entries=(s=slip,season=2026,night='All')=>client.parlayHallEntries([s],season,night);
+ assert.equal(entries()[0].profit,740.95);assert.equal(entries()[0].miss.member_id,2);
+ assert.equal(entries({...slip,odds:-120})[0].profit,4.17);
+ for(const odds of [null,0,99,'14819',Infinity,NaN])assert.equal(entries({...slip,odds})[0].profit,null);
+ for(const results of [['L',null],['L','L'],['W','W'],['L','P'],['L','V'],['L']])assert.equal(entries({...slip,legs:results.map(result=>({result}))}).length,0);
+ assert.equal(entries(slip,2025).length,0);assert.equal(entries(slip,2026,'Thursday').length,0);
+ assert.equal(entries({...slip,legs:[{result:'W'},{result:'L',member_id:null}]})[0].miss.member_id,null);
+ const sorted=client.parlayHallEntries([slip,{...slip,id:'b',odds:20000},{...slip,id:'c',odds:null}],2026);
+ assert.equal(sorted[0].slip.id,'b');assert.equal(sorted[2].slip.id,'c');
+});
