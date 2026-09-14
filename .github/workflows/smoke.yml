@@ -24,7 +24,7 @@ jobs:
         with: { node-version: 24 }
       - run: npm install
       - run: node scripts/build-tiebreaks.mjs
-      - run: git diff --exit-code -- public/assets/tiebreaks.js
+      - run: git diff --exit-code -- public/assets/tiebreaks.js functions/_shared/historical-records.js
       - run: npm run build:data
       - run: git diff --exit-code -- public/assets/nfl-teams.js
       - run: npm run smoke

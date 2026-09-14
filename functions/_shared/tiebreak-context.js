@@ -1,4 +1,4 @@
-import history from '../../public/data/seasons.json' with {type:'json'};
+import { historicalRecords } from './historical-records.js';
 import { pickCutoff } from './nfl.js';
 import { weeklyEntries, weeklyDecision } from './tiebreaks.js';
 
@@ -16,10 +16,9 @@ export function weeklyContext(picks, members, season, week, env) {
   const historical={};
   for (const m of members) {
     const r={W:0,L:0};
-    for (const [year,data] of Object.entries(history.members[m.name] || {})) {
+    for (const [year,data] of Object.entries(historicalRecords[m.name] || {})) {
       if (Number(year)>=Number(season)) continue;
-      const [w,l]=String(data.seasonRecord || '0-0').split('-').map(Number);
-      r.W+=w || 0; r.L+=l || 0;
+      r.W+=data.W; r.L+=data.L;
     }
     historical[m.id]=r;
   }
