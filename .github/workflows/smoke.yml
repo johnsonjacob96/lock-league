@@ -46,5 +46,6 @@ jobs:
       - run: npm run smoke:render
       - run: node smoke/pick-confirmation.mjs
       - run: node smoke/tiebreaks-ui.mjs
+      - run: node smoke/parlays-ui.mjs
       - run: npm run smoke:browser
       - run: npm run smoke:super-lock

@@ -1,0 +1,17 @@
+# Monday / Thursday group parlay tracker
+
+Separate Parlays navigation on desktop and More → Parlays on mobile. Signed-in members can upload a slip, review extracted player-prop legs, choose the game/week/night, and assign each leg to a member. The uploader and commissioners can correct assignments, bets or results. Unassigned legs remain visible and do not affect any member's record. No league picks, standings, payouts or notifications are modified.
+
+The uploader's screenshot is resized/compressed to JPEG in the browser and stored privately with the slip (maximum approximately 1 MB). The original remains available through an authenticated image endpoint. List responses omit image bytes. Browser-only Tesseract.js 6.0.1 loads on demand from jsDelivr; no paid OCR service or image submission to a model provider. Downloaded OCR engine/language assets are a one-time browser load, not part of live polling. Review is mandatory: OCR can misread text, and unknown markets must be entered as Custom. Unsupported image formats or OCR failures leave manual entry available.
+
+All 13 existing player-prop markets are supported, including anytime TD. Alternate thresholds preserve inclusive semantics: 15+ rushing yards hits at exactly 15, and 6+ receptions hits at exactly 6. Only an ordinary Over/Under at an integer can push on that integer. Custom markets require manual result entry. Missing players/stat categories remain unresolved, never an assumed zero or automatic loss. Manual corrections support Hit, Miss, Push and Void, with confirmation.
+
+Existing ESPN scoreboard/summary caches supply scores, clock and per-leg progress. Polling runs every 15 seconds only while viewing Parlays, pauses for hidden tabs and during draft editing, and refreshes on return. Final grading also runs with the existing gradeWeek path for current/previous weeks. Both final scoreboard and final summary are required. Settled grades are retained if the feed fails later. No additional odds-vendor calls.
+
+Season leg leaderboard shows hit–miss, hit rate, settled sample size, open picks, pushes and voids, with Monday/Thursday filtering. Hit rate excludes pushes and voids. Entire-parlay losses do not erase an individual hit. All historical slips for the selected season remain browsable by week.
+
+Storage: independent `parlay_slips` table; UUID creation IDs prevent duplicate inserts, versioned updates reject stale edits, server-side member/market/image validation, uploader/admin-only changes. Assignment-only edits retain grades; correcting a bet clears that leg for regrading. Failed writes retain the draft. A later commissioner correction can change the group parlay record but never league results.
+
+Validation: isolated PostgreSQL-semantic API tests for authentication, authorization, duplicate saves, concurrent version guards, assignment preservation, invalid images/markets/members, live/final feed handling and alternate-threshold grading; screenshot-text parser covers the supplied seven-leg example. Mobile/desktop browser tests exercise image upload, review, member assignment and save without real writes. A real Tesseract browser check read all seven legs from an equivalent rendered slip; original screenshots still require human review. Existing backend/render suites and Cloudflare Functions build also pass.
+
+OCR documentation: https://github.com/naptha/tesseract.js/blob/master/docs/local-installation.md
