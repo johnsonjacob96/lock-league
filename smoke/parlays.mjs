@@ -114,3 +114,31 @@ test('broken decimal text is not silently converted to a different numeric bet',
   const row=client.parseParlayText(text)[0];assert.equal(row.line,null);assert.ok(row.review.length);
  }
 });
+
+test('a repeated player market subtitle completes one selection, including OCR suffix/logo variations',()=>{
+ for(const subtitle of ['Kenneth Walker III - Total Receptions','KENNETH WALKER II - TOTAL RECEPTIONS','KENNETH WALKER I1I - TOTAL RECEPTIONS','KENNETH WALKER - TOTAL RECEPTIONS','KENNETH WALKER III-TOTAL RECEPTIONS','KENNETH WALKER III : TOTAL RECEPTIONS','O KENNETH WALKER III - TOTAL RECEPTIONS','KENNETH WALKER III TOTAL RECEPTIONS','KENNETH WALKER III | TOTAL RECEPTIONS']){
+  const rows=client.parseParlayText('Kenneth Walker III Over +3.5\n'+subtitle);
+  assert.equal(rows.length,1,subtitle);assert.equal(rows[0].market,'receptions',subtitle);assert.equal(rows[0].side,'over');assert.equal(rows[0].line,3.5);assert.equal(rows[0].player,'Kenneth Walker III');
+ }
+ const typo=client.parseParlayText('Patrick Mahomes Over +13.5\nPATRICK MAHOMESs - RUSHING YDS');assert.equal(typo.length,1);assert.equal(typo[0].market,'rush_yds');assert.ok(typo[0].review.length);
+});
+test('subtitle matching never collapses different players or separate same-player selections',()=>{
+ const rows=client.parseParlayText('Kenneth Walker III Over +3.5\nKENNETH WALKER II - TOTAL RECEPTIONS\nPatrick Mahomes Over +13.5\nPATRICK MAHOMES - RUSHING YDS\nKenneth Walker III Over +45.5\nKENNETH WALKER III - RUSHING YDS');
+ assert.equal(rows.length,3);assert.deepEqual(Array.from(rows,l=>l.market),['receptions','rush_yds','rush_yds']);
+ const other=client.parseParlayText('Kenneth Walker III Over +3.5\nPATRICK MAHOMES - RUSHING YDS');assert.equal(other.length,2);assert.equal(other[0].market,'');
+ assert.equal(client.parlaySubtitleMatch('Josh Allen','Kyle Allen').match,false);
+});
+
+test('split repeated subtitles remain one leg, but adjacent same-player props stay separate',()=>{
+ const split=client.parseParlayText('Kenneth Walker III Over +3.5\nKENNETH WALKER II\nTOTAL RECEPTIONS');assert.equal(split.length,1);assert.equal(split[0].market,'receptions');
+ const typo=client.parseParlayText('Kenneth Walker III Over +3.5\nKENNCTH WALKER III - TOTAL RECEPTIONS');assert.equal(typo.length,1);assert.ok(typo[0].review.length);
+ const separate=client.parseParlayText('Kenneth Walker III Over +3.5\nKENNETH WALKER III - TOTAL RECEPTIONS\nKenneth Walker III\nANY TIME TOUCHDOWN SCORER');
+ assert.equal(separate.length,2);assert.equal(separate[0].market,'receptions');assert.equal(separate[1].market,'anytime_td');
+});
+
+test('leading y-comma OCR noise is removed from titles, subtitles and standalone names',()=>{
+ for(const text of ['y, Kenneth Walker III Over +3.5\nKENNETH WALKER III - TOTAL RECEPTIONS','Kenneth Walker III Over +3.5\ny, KENNETH WALKER III - TOTAL RECEPTIONS','y,Kenneth Walker III\nANY TIME TOUCHDOWN SCORER']) {
+  const rows=client.parseParlayText(text);assert.equal(rows.length,1);assert.equal(rows[0].player,'Kenneth Walker III');
+ }
+ assert.equal(client.parlayCleanName('J.K. Dobbins'),'J.K. Dobbins');assert.equal(client.parlayCleanName('A.J. Brown'),'A.J. Brown');
+});
