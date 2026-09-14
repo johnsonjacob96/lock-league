@@ -8,6 +8,8 @@ function standingsWeekMember() {
   return members.find(m => String(m.member_id) === String(state.standingsMemberId)) || members.find(m => isMe(m.name)) || members[0];
 }
 function standingsWeekRows(members) {
+  if (members.length && members.every(m=>Number.isInteger(m.week_rank)))
+    return members.slice().sort((a,b)=>a.week_rank-b.week_rank || a.name.localeCompare(b.name)).map(m=>({m,rank:m.week_rank}));
   // Settled W/L only, including the existing missed-pick losses. No projections.
   const rows = members.slice().sort((a,b) => (b.live.fW || 0)-(a.live.fW || 0) || (a.live.fL || 0)-(b.live.fL || 0) || a.name.localeCompare(b.name));
   let rank = 1;
@@ -43,13 +45,13 @@ function renderStandingsWeek() {
   if (wr.error) return '<p class="quiet-copy" role="status">This week’s cards are temporarily unavailable. Retrying automatically.</p>';
   if (!wr.members?.length) return '<p class="quiet-copy">Cards reveal as games start. Check back at kickoff.</p>';
   const selected = standingsWeekMember();
-  return `${wr.stale ? '<p class="quiet-copy" role="status">Updates delayed · Showing the last available cards.</p>' : ''}<div class="standings-week-layout"><div class="week-league"><div class="week-league-heading"><h3>This week <span>Week ${wr.week}</span></h3><p>Settled W–L · Ties share rank</p></div><div class="week-league-labels" aria-hidden="true"><span>#</span><span>Member</span><span>W–L–P</span></div>${standingsWeekRows(wr.members).map(({m,rank}) => {
+  return `${wr.stale ? '<p class="quiet-copy" role="status">Updates delayed · Showing the last available cards.</p>' : ''}<div class="standings-week-layout"><div class="week-league"><div class="week-league-heading"><h3>This week <span>Week ${wr.week}</span></h3><p>Settled W–L · League tiebreakers</p></div><div class="week-league-labels" aria-hidden="true"><span>#</span><span>Member</span><span>W–L–P</span></div>${standingsWeekRows(wr.members).map(({m,rank}) => {
     const chosen = m === selected;
     const live = m.picks.filter(p => p.kind === 'pick' && p.state === 'in' && !p.final).length;
     const hidden = m.picks.filter(p => p.kind === 'hidden').length;
     const pending = m.picks.filter(p => p.kind === 'pick' && !p.final && p.state !== 'in').length;
     const summary = [`${m.live.fW || 0} hit`, `${m.live.fL || 0} missed`, live ? `${live} live` : '', pending ? `${pending} pending` : '', hidden ? `${hidden} hidden` : ''].filter(Boolean).join(' · ');
-    return `<button class="week-member-row ${chosen ? 'selected' : ''} ${isMe(m.name) ? 'is-you' : ''}" data-week-member="${m.member_id}" aria-label="View ${escapeHtml(m.name)}’s weekly picks" aria-pressed="${chosen}"><span class="week-rank">${rank}</span><span class="week-member-name">${escapeHtml(m.name)} ${isMe(m.name) ? '<span class="week-you">YOU</span>' : ''}<small>${summary}</small></span><span class="week-record">${m.live.fW || 0}–${m.live.fL || 0}${m.live.fP ? '–'+m.live.fP : ''}</span></button>${chosen && state.standingsCardOpen ? `<div class="week-mobile-card">${standingsWeekCard(m,true)}</div>` : ''}`;
+    return `<button class="week-member-row ${chosen ? 'selected' : ''} ${isMe(m.name) ? 'is-you' : ''}" data-week-member="${m.member_id}" aria-label="View ${escapeHtml(m.name)}’s weekly picks" aria-pressed="${chosen}"><span class="week-rank" title="${escapeHtml(m.tiebreak || 'Settled record')}">${rank}</span><span class="week-member-name">${escapeHtml(m.name)} ${isMe(m.name) ? '<span class="week-you">YOU</span>' : ''}<small>${summary}</small></span><span class="week-record">${m.live.fW || 0}–${m.live.fL || 0}${m.live.fP ? '–'+m.live.fP : ''}</span></button>${chosen && state.standingsCardOpen ? `<div class="week-mobile-card">${standingsWeekCard(m,true)}</div>` : ''}`;
   }).join('')}<p class="week-hint">Select a member to view their revealed picks.</p></div><aside class="week-desktop-card">${standingsWeekCard(selected)}</aside></div>`;
 }
 function bindStandingsWeek() {

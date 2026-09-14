@@ -4,6 +4,7 @@
 import { verifyCookie, json } from "../_shared/auth.js";
 import { currentNflWeek, pickCutoff, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, resolveSpreadResult, gradeTotal, sameTeam, maybeGrade } from "../_shared/grader.js";
+import { weeklyContext } from '../_shared/tiebreak-context.js';
 import { sql } from "../_shared/db.js";
 
 const TTL_MS = 10 * 1000;
@@ -168,8 +169,20 @@ export async function onRequest({ request, env, waitUntil }) {
     byMember.set(mem.id, m);
   }
 
-  const members = [...byMember.values()].sort(
-    (a, b) => b.live.W - a.live.W || a.live.L - b.live.L || a.name.localeCompare(b.name));
+  // Use the same completed-week decision as payouts and result notifications.
+  // Unfinished weeks retain settled-record ties; hidden picks never affect rank.
+  const ready = globalRevealed && picks.every(p=>['W','L','P'].includes(p.result));
+  const seasonPicks = ready ? await sql(env)`SELECT member_id, week, bet_type, result, price, prop_meta FROM picks WHERE season = ${cur.season} AND week <= ${cur.week}` : [];
+  const decision = ready ? weeklyContext(seasonPicks,roster,cur.season,cur.week,env) : {complete:false,winner:null,ranked:[]};
+  const complete = decision.complete && globalRevealed;
+  const members = [...byMember.values()];
+  if (complete) {
+    for (const m of members) {
+      const r=decision.ranked.find(r=>r.id===m.member_id);
+      m.week_rank=r?.rank; m.week_tied=r?.tied; m.tiebreak=r?.tiebreak;
+    }
+    members.sort((a,b)=>a.week_rank-b.week_rank || a.name.localeCompare(b.name));
+  } else members.sort((a,b)=>b.live.W-a.live.W || a.live.L-b.live.L || a.name.localeCompare(b.name));
   const anyLive = events.some((e) => e.state === "in");
 
   // Recap: once every game this week is final AND every pick has an actual
@@ -180,10 +193,10 @@ export async function onRequest({ request, env, waitUntil }) {
   let recap = null;
   const allFinal = events.length > 0 && events.every((e) => e.state === "post");
   const totalPending = members.reduce((n, m) => n + m.live.pending, 0);
-  if (allFinal && totalPending === 0 && members.length) {
-    const top = members[0];
-    const tie = members.filter((m) => m.live.W === top.live.W && m.live.L === top.live.L).length > 1;
-    const winner = !tie && top.live.W > 0 ? { name: top.name, W: top.live.W, L: top.live.L } : null;
+  if (allFinal && complete && totalPending === 0 && members.length) {
+    const tie = !decision.winner;
+    const win = decision.winner;
+    const winner = win ? { name: win.name, W: win.W, L: win.L, tiebreak: win.tiebreak } : null;
     const perfect = members
       .filter((m) => m.live.W > 0 && m.live.L === 0 && m.live.pending === 0)
       .map((m) => m.name);

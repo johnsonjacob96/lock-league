@@ -162,7 +162,7 @@ export async function run() {
         checks.soleLeader = seasonLeader(buildStandings('2026'))?.name === 'Jared';
         rows.push({member_name:'Jared',season:2026,week:1,bet_type:'Dog',result:'L',price:110});
         mergeLiveSeason(rows);normalizeRecords(DATA);
-        checks.tied = seasonLeader(buildStandings('2026')) === null && !renderStandings().includes('champion-glow');
+        checks.superLockBreaksSeasonTie = seasonLeader(buildStandings('2026'))?.name === 'Jacob' && !renderStandings().includes('champion-glow');
         checks.unitsLeader = computeSeasonStats('2026').unitsLeader.name === 'Jacob';
         DATA.members.Jacob['2026'].byType.Over={picks:{1:{result:'W'}}};normalizeRecords(DATA);
         checks.unpriced = memberUnits(DATA.members.Jacob['2026'],2026).unpriced === 1 && unitsSummary(DATA.members.Jacob['2026'],2026).includes('missing odds') && computeSeasonStats('2026').unitsLeader === null;

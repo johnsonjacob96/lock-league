@@ -3,6 +3,7 @@
 // injection in index.html: once a week has locked, any bet type a member
 // never filled counts as an automatic loss, so every server-side winner
 // computation agrees with the standings the site actually shows.
+import { pickProfit, weeklyDecision } from './tiebreaks.js';
 import { BET_TYPES } from "./nfl.js";
 
 // memberIds: every member who should be scored (the full roster, not just
@@ -19,6 +20,7 @@ export function weeklyMemberRecords(memberIds, picks, { locked }) {
     const rec = byId.get(p.member_id);
     if (!rec) continue;
     rec.filled.add(p.bet_type);
+    if (p.bet_type === 'Super Lock') { rec.superHit = p.result === 'W' ? 1 : 0; rec.superOdds = pickProfit(p); }
     if (p.result === "W" || p.result === "L" || p.result === "P") rec[p.result]++;
     else rec.pending++;
   }
@@ -32,15 +34,9 @@ export function weeklyMemberRecords(memberIds, picks, { locked }) {
   return byId;
 }
 
-// Unique best W (fewest L breaks ties); ties leave the week with no winner.
+// Shared fallback for consumers already holding records. Missing required
+// tiebreak information leaves a tie unresolved instead of guessing a winner.
 export function weeklyWinner(records) {
-  if ([...records.values()].some(r => r.pending > 0)) return null;
-  let best = null, tied = false;
-  for (const [member_id, r] of records) {
-    if (!(r.W || r.L || r.P || r.pending)) continue; // no activity this week
-    if (!best || r.W > best.r.W || (r.W === best.r.W && r.L < best.r.L)) { best = { member_id, r }; tied = false; }
-    else if (r.W === best.r.W && r.L === best.r.L) tied = true;
-  }
-  if (!best || tied || best.r.W <= 0) return null;
-  return { member_id: best.member_id, w: best.r.W, l: best.r.L };
+  const {winner} = weeklyDecision([...records].map(([id,r])=>({id,...r})));
+  return winner ? {member_id:winner.id,w:winner.W,l:winner.L} : null;
 }

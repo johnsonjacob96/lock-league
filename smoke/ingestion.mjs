@@ -247,7 +247,7 @@ test('pending weekly results never reserve notification delivery', async t => {
   mockDb(t, ({ query }) => {
     statements.push(query);
     if (query.includes('FROM members')) return rows([{ id: 1, name: 'Jacob' }]);
-    if (query.includes('FROM picks')) return rows([{ member_id: 1, bet_type: 'Super Lock', result: null }]);
+    if (query.includes('FROM picks')) return rows([{ member_id: 1, week: 1, bet_type: 'Super Lock', result: null }]);
     return dbRows();
   });
   t.mock.method(globalThis, 'fetch', () => { throw new Error('must not send notifications'); });

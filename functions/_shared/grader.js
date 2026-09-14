@@ -6,6 +6,7 @@ import { pushPersonalized, claimSend } from "./push-notify.js";
 import { gradeProp } from "./props.js";
 import { espnScoreboardEvents, espnBoxscore } from "./espn.js";
 import { loadScoreboardSeed } from "./scoreseed.js";
+import { weeklyContext } from './tiebreak-context.js';
 import { weeklyMemberRecords, weeklyWinner } from "./standings.js";
 
 function normTeam(s) { return String(s || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase(); }
@@ -234,18 +235,20 @@ function isWeekComplete(season, week, now) {
 export async function pushWeekResults(env, season, week) {
   const [members, picks] = await Promise.all([
     sql(env)`SELECT id, name FROM members`,
-    sql(env)`SELECT member_id, bet_type, result FROM picks WHERE season = ${season} AND week = ${week}`,
+    sql(env)`SELECT member_id, week, bet_type, result, price, prop_meta FROM picks WHERE season = ${season}`,
   ]);
-  if (!picks.length) return { skipped: "no-picks" };
+  const weekPicks=picks.filter(p=>Number(p.week)===Number(week));
+  if (!weekPicks.length) return { skipped: "no-picks" };
   const locked = Date.now() >= pickCutoff(season, week, env).getTime();
-  const records = weeklyMemberRecords(members.map((m) => m.id), picks, { locked });
+  const records = weeklyMemberRecords(members.map((m) => m.id), weekPicks, { locked });
   if (!locked || [...records.values()].some(r => r.pending)) return { skipped: "pending-results" };
   // Claim the send slot right before computing/sending (not at the top of the
   // function) so an early "no-picks" bail never permanently locks out a week
   // that later gets picks.
   if (!(await claimSend(env, season, week, "winner"))) return { skipped: "already-sent" };
 
-  const win = weeklyWinner(records);
+  const resolved = weeklyContext(picks,members,season,week,env).winner;
+  const win = resolved ? {member_id:resolved.id} : null;
   const winnerName = win ? members.find((m) => m.id === win.member_id)?.name : null;
   const fmt = (c) => `${c.W}-${c.L}${c.P ? "-" + c.P : ""}`;
 
@@ -282,16 +285,16 @@ export async function notifyGradeResults(results, env) {
   const blocks = [];
   for (const r of newly) {
     const picks = await sql(env)`
-      SELECT member_id, bet_type, result FROM picks WHERE season = ${r.season} AND week = ${r.week}`;
+      SELECT member_id, week, bet_type, result, price, prop_meta FROM picks WHERE season = ${r.season}`;
     const locked = Date.now() >= pickCutoff(r.season, r.week, env).getTime();
-    const records = weeklyMemberRecords(members.map((m) => m.id), picks, { locked });
-    blocks.push(weekSummaryText(r.week, members, records, r.graded));
+    const records = weeklyMemberRecords(members.map((m) => m.id), picks.filter(p=>Number(p.week)===Number(r.week)), { locked });
+    blocks.push(weekSummaryText(r.week, members, records, r.graded, weeklyContext(picks,members,r.season,r.week,env)));
   }
   await sendGroupMessage(blocks.join("\n\n"), { discord, groupme });
   return true;
 }
 
-export function weekSummaryText(week, members, records, newlyGraded) {
+export function weekSummaryText(week, members, records, newlyGraded, decision=null) {
   const active = members
     .map((m) => ({ name: m.name, r: records.get(m.id) }))
     .filter(({ r }) => r && (r.W || r.L || r.P || r.pending));
@@ -301,10 +304,12 @@ export function weekSummaryText(week, members, records, newlyGraded) {
     .map(({ name, r }) => `${name} ${r.W}-${r.L}${r.P ? "-" + r.P : ""}`)
     .join(" · ");
   let crown = "";
-  if (sorted.length) {
-    const top = sorted[0];
-    const tied = sorted.filter(({ r }) => r.W === top.r.W && r.L === top.r.L).length > 1;
-    if (!tied && top.r.W > 0) crown = `\n${ungraded ? "📈 Leader" : "🏆 Winner"}: ${top.name} (${top.r.W}-${top.r.L})`;
+  const win = decision ? decision.winner : weeklyWinner(records);
+  if (win && !ungraded) {
+    const id=win.id ?? win.member_id;
+    const name=members.find(m=>m.id===id)?.name;
+    const rec=records.get(id);
+    if(name && rec)crown=`\n🏆 Winner: ${name} (${rec.W}-${rec.L})`;
   }
   return `🏈 Lock League — Week ${week} update (${newlyGraded} new grade${newlyGraded === 1 ? "" : "s"})\n${lines}${crown}`;
 }

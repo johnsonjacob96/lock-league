@@ -562,3 +562,18 @@ test('Super Lock exclusivity is weekly and does not restrict ordinary picks or o
  assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,200);
  cookie=await cookieFor(2);assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,200);
 });
+
+test('weekly payouts resolve tied records by Super Lock hit then saved odds',async()=>{
+ mock.timers.setTime(Date.parse('2026-09-16T00:00:00Z'));
+ const bets=['Favorite','Dog','Over','Under','Super Lock'];
+ const card=(id,results,price)=>bets.map((bet_type,i)=>({member_id:id,week:1,bet_type,result:results[i],price:bet_type==='Super Lock'?price:-110}));
+ const a=card(1,['W','W','L','L','W'],150);
+ const b=card(2,['W','W','W','L','L'],500);
+ assert.equal(computeWeeklyWinners([...a,...b],[1,2],2026,env)[1].member_id,1);
+ b[2].result='L';b[4].result='W';
+ assert.equal(computeWeeklyWinners([...a,...b],[1,2],2026,env)[1].member_id,2);
+ b[4].price=null;
+ assert.equal(computeWeeklyWinners([...a,...b],[1,2],2026,env)[1],null);
+ b[4].price=500;b[3].result=null;
+ assert.equal(computeWeeklyWinners([...a,...b],[1,2],2026,env)[1],null);
+});
