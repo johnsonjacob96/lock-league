@@ -1,3 +1,4 @@
+import { refreshParlays } from './parlays.js';
 // Shared grading logic for /api/grade (manual + GitHub Actions cron).
 // Mirrors lib/grader.js (kept in sync for Cloudflare Pages Functions runtime).
 import { sql } from "./db.js";
@@ -172,6 +173,7 @@ export async function gradeWeek(env, season, week) {
       graded++;
     }
   }
+  await refreshParlays(env,season,week,events).catch(()=>{});
   const allFinal = events.length > 0 && events.every((e) => e.state === "post");
   return { season, week, events: updated, graded, allFinal };
 }
