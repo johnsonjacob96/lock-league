@@ -24,3 +24,7 @@ node .github/monitoring/check.mjs --browser
 Output goes to `monitor-output/`. Data/probe failures retry once, then return a nonzero exit code. We Dem Boys snapshots may be up to 72 hours old during its configured NFL refresh season. Completed golf seasons remain valid; update the explicit season data path when the app changes seasons. The Lock League probe validates API structure, not full odds freshness or settlement correctness.
 
 Daily improvement missions are staggered 30 minutes apart across the three apps (this app: 7:17 a.m. Central). The action uses its supported default retry policy; separate schedules reduce competition for the shared API request limit.
+
+## Publishing verified improvements
+
+Successful daily missions trigger `publish-improvement.yml`. It downloads the proposal, applies a bounded ordinary-file patch to current main, and reruns application checks in a job with read-only permissions. A separate clean job has contents/pull-request write permission and creates an `agent/improvement-RUN_ID` branch and PR. It does not run proposed code, merge, or deploy. Empty patches are skipped; stale patches, failing checks, and protected paths fail visibly. Re-running an already published proposal does not create another PR. `workflow_dispatch` can publish an earlier successful daily run by ID. GitHub Actions must be allowed to create pull requests in repository settings. The token-created PR may not trigger other Actions; fresh validation is linked from its body.

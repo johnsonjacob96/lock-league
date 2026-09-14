@@ -1,0 +1,120 @@
+name: Publish agent improvement
+on:
+  workflow_run:
+    workflows: [Daily improvement agent]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful daily improvement run ID to publish
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: publish-agent-improvement
+  cancel-in-progress: false
+env:
+  TZ: America/Chicago
+jobs:
+  validate:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      ready: ${{ steps.patch.outputs.ready }}
+      base: ${{ steps.source.outputs.base }}
+      source: ${{ steps.source.outputs.source }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Verify source and retrieve proposal
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run || github.event.workflow_run.id }}
+        run: |
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source.json"
+          jq -e --arg repo "$GITHUB_REPOSITORY" '.conclusion == "success" and .head_branch == "main" and .head_repository.full_name == $repo and .path == ".github/workflows/daily-improvement.yml" and (.event == "schedule" or .event == "workflow_dispatch")' "$RUNNER_TEMP/source.json"
+          gh run download "$SOURCE_RUN" --name improvement-proposal --dir "$RUNNER_TEMP/proposal"
+          echo "source=$SOURCE_RUN" >> "$GITHUB_OUTPUT"
+          echo "base=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Apply bounded patch on current main
+        id: patch
+        run: |
+          if [ ! -s "$RUNNER_TEMP/proposal/proposal.patch" ]; then
+            echo 'No proposed change to publish.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 .github/monitoring/apply-proposal.py "$RUNNER_TEMP/proposal/proposal.patch"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        if: steps.patch.outputs.ready == 'true'
+        with:
+          node-version: 24
+      - name: Validate proposed application changes
+        if: steps.patch.outputs.ready == 'true'
+        run: |
+          npm ci
+          npm run smoke
+          npm test
+      - uses: actions/upload-artifact@v4
+        if: steps.patch.outputs.ready == 'true'
+        with:
+          name: validated-proposal
+          path: ${{ runner.temp }}/proposal/proposal.patch
+          if-no-files-found: error
+          retention-days: 14
+  publish:
+    needs: validate
+    if: needs.validate.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.base }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-proposal
+          path: ${{ runner.temp }}/validated
+      - name: Push verified branch and open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ needs.validate.outputs.source }}
+          BASE_SHA: ${{ needs.validate.outputs.base }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          BRANCH="agent/improvement-$SOURCE_RUN"
+          EXISTING=$(gh pr list --head "$BRANCH" --state all --json url --jq '.[0].url // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Already published: $EXISTING" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 .github/monitoring/apply-proposal.py "$RUNNER_TEMP/validated/proposal.patch"
+          git switch -c "$BRANCH"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -c core.hooksPath=/dev/null commit -m 'fix: apply verified daily agent improvement'
+          gh auth setup-git
+          git -c core.hooksPath=/dev/null push origin "HEAD:refs/heads/$BRANCH"
+          cat > "$RUNNER_TEMP/pr-body.md" <<EOF
+          This change applies the daily agent's proposed fix after fresh validation against main. The source run contains the finding, reproduction, regression evidence, and coverage limitations.
+
+          - Agent report: https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN
+          - Fresh validation: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Validated base: $BASE_SHA
+
+          Review the diff and source report before merging. This workflow does not merge or deploy. GitHub-token-created pull requests may not trigger other Actions workflows; the linked validation ran before this branch was published.
+          EOF
+          PR_URL=$(gh pr create --base main --head "$BRANCH" --title 'fix: verified daily agent improvement' --body-file "$RUNNER_TEMP/pr-body.md")
+          echo "Published: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
