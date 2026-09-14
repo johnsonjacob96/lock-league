@@ -66,6 +66,7 @@ jobs:
           prompt-file: .github/monitoring/improve.md
           output-file: agent-output/final-message.md
           sandbox: workspace-write
+          codex-args: '["-c", "model_providers.codex-action-responses-proxy.request_max_retries=12", "-c", "model_providers.codex-action-responses-proxy.stream_max_retries=12"]'
       - uses: actions/upload-artifact@v4
         if: always() && steps.setup.outputs.enabled == 'true'
         with:
