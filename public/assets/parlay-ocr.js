@@ -9,6 +9,37 @@ function parlayMergeOcrLines(lines) {
  }
  return kept.sort((a,b)=>Math.abs(a.y-b.y)<Math.min(a.height,b.height)*.35?a.x-b.x:a.y-b.y).map(l=>l.text).join('\n');
 }
+// Only discard a leading graphic token when a repeated subtitle corroborates
+// the full player name AND OCR word geometry separates it from that name.
+function parlayFilterLogoText(lines) {
+ const anchors=lines.flatMap(l=>{
+  const m=l.text.match(/^(.+?)\s*[-:|]\s*((?:total|alt|passing|rushing|receiving|receptions|completions|interceptions).*?)$/i);
+  return m&&parlayCleanName(m[1]).split(/\s+/).length>=2&&parlayMarket(m[2])!=='manual'?[parlayCleanName(m[1])]:[];
+ });
+ const cleaned=lines.map(l=>{
+  if(!l.words?.length)return l;
+  for(const name of anchors) {
+   const start=l.words.findIndex((w,i)=>{
+    if(i<1||i>3||l.words.slice(0,i).map(x=>x.text).join(' ').length>12)return false;
+    const rest=l.words.slice(i).map(x=>x.text).join(' ');
+    const player=rest.split(/\s+(?:over|under|at least|\d)/i)[0];
+    return parlayNameKey(player)===parlayNameKey(name);
+   });
+   if(start<1)continue;
+   const prefix=l.words.slice(0,start),first=l.words[start],previous=prefix.at(-1);
+   if(!first.bbox||!previous.bbox)continue;
+   const h=Math.max(1,first.bbox.y1-first.bbox.y0),gap=first.bbox.x0-previous.bbox.x1;
+   const graphic=gap>h*.7||prefix.some(w=>w.confidence<45||w.bbox&&w.bbox.y1-w.bbox.y0>h*1.5);
+   if(!graphic)continue;
+   const words=l.words.slice(start);
+   return {...l,text:words.map(w=>w.text).join(' '),x:first.bbox.x0,words,confidence:words.reduce((sum,w)=>sum+(w.confidence||0),0)/words.length};
+  }
+  return l;
+ });
+ // A logo can also be its own OCR line to the left of the selection title.
+ // Never remove a numeric threshold or a line without a corroborated name.
+ return cleaned.filter(l=>!(!/\d/.test(l.text)&&l.text.length<=12&&cleaned.some(other=>other!==l&&anchors.some(name=>other.text.toLowerCase().startsWith(name.toLowerCase()))&&Math.abs(other.y-l.y)<other.height*.6&&l.right!=null&&l.right<other.x-other.height*.5)));
+}
 function parlayImproveContrast(canvas) {
  const ctx=canvas.getContext('2d',{willReadFrequently:true}),data=ctx.getImageData(0,0,canvas.width,canvas.height),p=data.data,samples=[];
  for(let i=0;i<p.length;i+=4*131)samples.push((p[i]+p[i+1]+p[i+2])/3);
@@ -45,7 +76,7 @@ async function readParlayImage(file,draft) {
   const starts=[];for(let y=0;y<height;y+=step){starts.push(y);if(y+tileHeight>=height)break;}
   if(starts.length>12)throw Error('This screenshot is too tall to read reliably. Crop to a single slip.');
   worker=await parlayOcrWorker();
-  const lines=[],fallback=[];
+  let lines=[];const fallback=[];
   const read=async()=>{
    for(const [index,y] of starts.entries()) {
     const status=document.getElementById('parlay-ocr-status');if(status)status.textContent=`Reading slip section ${index+1} of ${starts.length}…`;
@@ -54,12 +85,13 @@ async function readParlayImage(file,draft) {
     parlayImproveContrast(canvas);
     const {data}=await worker.recognize(canvas,{}, {text:true,blocks:true});
     const found=(data.blocks||[]).flatMap(b=>(b.paragraphs||[]).flatMap(p=>p.lines||[]));
-    if(found.length)for(const l of found){const box=l.bbox;if(box&&l.text?.trim())lines.push({text:l.text.trim(),x:box.x0,y:y+(box.y0+box.y1)/2,height:Math.max(1,box.y1-box.y0),confidence:l.confidence||0});}
+    if(found.length)for(const l of found){const box=l.bbox;if(box&&l.text?.trim())lines.push({text:l.text.trim(),words:(l.words||[]).map(w=>({text:w.text,bbox:w.bbox,confidence:w.confidence})),right:box.x1,x:box.x0,y:y+(box.y0+box.y1)/2,height:Math.max(1,box.y1-box.y0),confidence:l.confidence||0});}
     else if(!data.text?.trim()){canvas.width=canvas.height=1;continue;}
     else if(starts.length===1)fallback.push(data.text||'');
     else throw Error('The reader could not locate all slip sections. Crop the screenshot or enter the legs manually.');
     canvas.width=canvas.height=1;
    }
+   lines=parlayFilterLogoText(lines);
    const doc=parseParlayDocument(lines.length?parlayMergeOcrLines(lines):fallback.join('\n'));
    const normalize=s=>s.replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
    for(const leg of doc.legs) {
