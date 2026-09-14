@@ -82,7 +82,7 @@ function weeklyDecision(entries, locked=true) {
   const complete = locked && entries.every(e=>e.pending===0);
   const ranked = rankEntries(entries,complete ? WEEKLY_CRITERIA : WEEKLY_CRITERIA.slice(0,2));
   const top = ranked[0];
-  return {ranked,complete,winner:complete && top && !top.tied && top.W>0 ? top : null};
+  return {ranked,complete,winner:complete && top && !top.tied && top.W+top.L+top.P>0 ? top : null};
 }
 
 return { WEEKLY_CRITERIA, SEASON_CRITERIA, oddsProfit, pickProfit, record, percentage, seasonMetrics, rankEntries, weeklyEntries, weeklyDecision };

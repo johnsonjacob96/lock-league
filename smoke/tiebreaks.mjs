@@ -14,6 +14,7 @@ test('weekly rule precedence: record, SL hit, odds, season %, all-time %',()=>{
  assert.equal(win({seasonPct:.7,allTimePct:.4},{seasonPct:.6,allTimePct:.9}),'A');
  assert.equal(win({allTimePct:.7},{allTimePct:.6}),'A');
  assert.equal(win({},{}),undefined);
+ assert.equal(win({W:0,L:5,superHit:0,superOdds:2},{W:0,L:5,superHit:0,superOdds:1}),'A');
 });
 test('odds compare equivalent $1 risks, including minus odds and even money',()=>{
  assert.equal(oddsProfit(150),1.5);assert.equal(oddsProfit(-120),100/120);

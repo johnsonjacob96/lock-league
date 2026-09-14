@@ -24,5 +24,6 @@ export function weeklyContext(picks, members, season, week, env) {
   }
   const locked=Date.now()>=pickCutoff(season,week,env).getTime();
   const entries=weeklyEntries(members.map(m=>m.id),eligible.filter(p=>Number(p.week)===Number(week)),{locked,seasonPicks,historical});
-  return weeklyDecision(entries.map(e=>({...e,name:members.find(m=>m.id===e.id)?.name})),locked);
+  const weekContested=eligible.some(p=>Number(p.week)===Number(week));
+  return weeklyDecision(entries.map(e=>({...e,name:members.find(m=>m.id===e.id)?.name})),locked && weekContested);
 }
