@@ -1,0 +1,75 @@
+name: Daily improvement agent
+on:
+  schedule:
+    - cron: '17 12 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: daily-improvement-agent
+  cancel-in-progress: false
+jobs:
+  improve:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check agent configuration
+        id: setup
+        env:
+          API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -n "$API_KEY" ]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo '### Agent inactive: add the OPENAI_API_KEY repository secret.' >> "$GITHUB_STEP_SUMMARY"
+            echo '::warning::Agent inactive: OPENAI_API_KEY is missing.'
+          fi
+      - uses: actions/checkout@v4
+        if: steps.setup.outputs.enabled == 'true'
+        with:
+          fetch-depth: 10
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: steps.setup.outputs.enabled == 'true'
+        with:
+          node-version: 24
+      - name: Retrieve previous report
+        if: steps.setup.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p agent-output
+          RUN_ID=$(gh run list --workflow daily-improvement.yml --branch main --status completed --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$RUN_ID" ]; then
+            gh run download "$RUN_ID" --name improvement-proposal --dir /tmp/prior-improvement || true
+            if [ -f /tmp/prior-improvement/report.md ]; then cp /tmp/prior-improvement/report.md prior-agent-report.md; fi
+          fi
+      - name: Baseline checks
+        if: steps.setup.outputs.enabled == 'true'
+        continue-on-error: true
+        run: |
+          npm ci
+          npm run smoke
+          npm test
+      - name: Production baseline
+        if: steps.setup.outputs.enabled == 'true'
+        continue-on-error: true
+        run: node .github/monitoring/check.mjs
+      - name: Investigate and prepare one verified improvement
+        if: steps.setup.outputs.enabled == 'true'
+        timeout-minutes: 15
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/monitoring/improve.md
+          output-file: agent-output/final-message.md
+          sandbox: workspace-write
+          codex-args: '["-c", "sandbox_workspace_write.network_access=true"]'
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.setup.outputs.enabled == 'true'
+        with:
+          name: improvement-proposal
+          path: agent-output/
+          retention-days: 14
