@@ -90,6 +90,11 @@ export function gradeSpread(pickSide, favLine, awayScore, homeScore, favIsHome) 
 }
 
 export function gradeTotal(side, line, total) {
+  // Keep incomplete stored quotes unresolved instead of coercing null to zero.
+  if (side !== "over" && side !== "under") return null;
+  if (line == null || String(line).trim() === '') return null;
+  line = Number(line);
+  if (!Number.isFinite(line) || !Number.isFinite(total)) return null;
   if (total === line) return "P";
   const wentOver = total > line;
   return side === "over" ? (wentOver ? "W" : "L") : (wentOver ? "L" : "W");
@@ -123,12 +128,12 @@ export async function resolvePickResult(p, ev, getBox) {
   const haveScore = ev && ev.home_score != null && ev.away_score != null;
   const total = () => ev.home_score + ev.away_score;
   if (p.bet_type === "Favorite" || p.bet_type === "Dog") return haveScore ? resolveSpreadResult(p, ev) : null;
-  if (p.bet_type === "Over" || p.bet_type === "Under") return haveScore ? gradeTotal(p.side, Number(p.line), total()) : null;
+  if (p.bet_type === "Over" || p.bet_type === "Under") return haveScore ? gradeTotal(p.side, p.line, total()) : null;
   if (p.bet_type === "Super Lock") {
     const meta = typeof p.prop_meta === "string" ? safeJson(p.prop_meta) : p.prop_meta;
     if (!meta) return null;                                                    // free-text -> manual
     if (meta.kind === "spread") return haveScore ? resolveSpreadResult(p, ev) : null; // game-line SL (spread)
-    if (meta.kind === "total") return haveScore ? gradeTotal(p.side, Number(p.line), total()) : null; // game-line SL (total)
+    if (meta.kind === "total") return haveScore ? gradeTotal(p.side, p.line, total()) : null; // game-line SL (total)
     if (meta.market) { const box = getBox ? await getBox(ev.id) : null; return box ? gradeProp(meta, box) : null; } // player prop
     return null;
   }

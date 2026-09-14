@@ -28,14 +28,14 @@ export function livePickStatus(p, ev) {
   if (p.bet_type === "Favorite" || p.bet_type === "Dog") {
     result = resolveSpreadResult(p, ev);
   } else if (p.bet_type === "Over" || p.bet_type === "Under") {
-    result = gradeTotal(p.side, Number(p.line), ev.home_score + ev.away_score);
+    result = gradeTotal(p.side, p.line, ev.home_score + ev.away_score);
   } else if (p.bet_type === "Super Lock") {
     // A final game-line Super Lock (spread/total) grades off the score, same as
     // the gradable bets. Player-prop and free-text Super Locks need the box
     // score / a manual mark, so they stay "manual" here.
     const meta = safeJson(p.prop_meta);
     if (meta && meta.kind === "spread") result = resolveSpreadResult(p, ev);
-    else if (meta && meta.kind === "total") result = gradeTotal(p.side, Number(p.line), ev.home_score + ev.away_score);
+    else if (meta && meta.kind === "total") result = gradeTotal(p.side, p.line, ev.home_score + ev.away_score);
     else return { status: "manual", state: st, detail: ev.detail, final: st === "post" };
   }
   return { status: result ? map[result] : "pending", state: st, final: st === "post", detail: ev.detail };
