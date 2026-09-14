@@ -30,6 +30,8 @@ try {
   });
   assert.match(await page.locator('.parlay-shame-card').first().innerText(),/Chris/);
   assert.equal(await page.locator('.parlay-shame-amount').first().innerText(),'$740.95');
+  assert.match(await page.locator('.parlay-shame-card').first().innerText(),/PARLAY KILLER/);
+  assert.match(await page.locator('.parlay-shame-card').first().innerText(),/THE DAMAGE/);
   assert.equal(await page.locator('.parlay-shame-card').first().locator('.hit').count(),6);
   assert.equal(await page.locator('.parlay-shame-card').first().locator('.miss').count(),1);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
