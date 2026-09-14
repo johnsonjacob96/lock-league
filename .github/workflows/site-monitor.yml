@@ -1,0 +1,56 @@
+name: Site monitor
+on:
+  schedule:
+    - cron: '7 * * * *'
+    - cron: '33 11 * * *'
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: Include mobile and desktop browser checks
+        type: boolean
+        default: true
+  pull_request:
+    paths: ['.github/monitoring/**', '.github/workflows/site-monitor.yml']
+  deployment_status:
+permissions:
+  contents: read
+concurrency:
+  group: site-monitor-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  monitor:
+    if: github.event_name != 'deployment_status' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify monitor failure detection
+        run: node --test .github/monitoring/check.test.mjs
+      - name: Decide browser coverage
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          BROWSER: ${{ inputs.browser }}
+        run: |
+          if [ "$EVENT" = pull_request ] || [ "$SCHEDULE" = '33 11 * * *' ] || [ "$BROWSER" = true ]; then
+            echo 'args=--browser' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install browser tooling
+        if: steps.mode.outputs.args == '--browser'
+        run: |
+          npm install --prefix .monitor-runtime --no-package-lock playwright@1.60.0
+          .monitor-runtime/node_modules/.bin/playwright install --with-deps chromium
+      - name: Check production
+        run: node .github/monitoring/check.mjs ${{ steps.mode.outputs.args }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: site-monitor-${{ github.run_id }}
+          path: monitor-output/
+          retention-days: 7

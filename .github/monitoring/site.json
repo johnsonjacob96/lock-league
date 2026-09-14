@@ -1,0 +1,21 @@
+{
+  "name": "Lock League",
+  "url": "https://lock-league.pages.dev",
+  "title": "Lock League",
+  "routes": [
+    {
+      "path": "/",
+      "selector": "#login-btn:visible, #login-btn-mobile:visible"
+    }
+  ],
+  "probes": [
+    {
+      "path": "/api/config",
+      "kind": "config"
+    },
+    {
+      "path": "/api/odds",
+      "kind": "odds"
+    }
+  ]
+}

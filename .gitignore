@@ -8,3 +8,9 @@ node_modules/
 # Local Cloudflare wrangler / pages dev
 .wrangler
 .dev.vars
+
+# Continuous monitoring output
+.monitor-runtime
+monitor-output/
+agent-output/
+prior-agent-report.md
