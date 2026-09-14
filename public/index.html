@@ -1078,6 +1078,7 @@
   .pick-change-actions [data-change] {background:#46e08a;color:#04220f;border-color:#46e08a;}
   .pick-change-actions button:focus-visible {outline:2px solid #7dcdf2;outline-offset:3px;}
   @media(max-width:480px) {.pick-change-quotes {grid-template-columns:1fr;}.pick-change-actions {flex-direction:column;}}
+  @media(max-width:480px) {.home-table .member-row td:nth-child(2) > .flex:first-child {flex-wrap:wrap;row-gap:2px;}}
 </style>
 <link rel="stylesheet" href="assets/standings-week.css">
 <link rel="stylesheet" href="assets/super-lock.css">
@@ -1272,6 +1273,8 @@
 
 <script src="assets/nfl-teams.js"></script>
 <script src="assets/super-lock.js"></script>
+<script src="assets/tiebreaks.js"></script>
+<script src="assets/standings-rules.js"></script>
 <script src="assets/standings-week.js"></script>
 <script>
 // Plain URL - the host serves an ETag, so repeat visits get a 304 instead of
@@ -1359,7 +1362,7 @@ function seasonLeader(rows) {
   const top = rows[0];
   if (!top || !rows.some(r => r.seasonRec.w + r.seasonRec.l > 0)) return null;
   const second = rows[1];
-  return second && top.seasonRec.w === second.seasonRec.w && top.seasonRec.l === second.seasonRec.l && top.weeksWon === second.weeksWon ? null : top;
+  return top.tied || (second && top.rank != null && top.rank === second.rank) ? null : top;
 }
 
 // Loose team matching, mirrors the server ("Chiefs" ↔ "Kansas City Chiefs").
@@ -1423,30 +1426,6 @@ function mergeLiveSeason(rows, season = 2026) {
     }
   }
 
-  // Crown only locked, fully graded weeks; pending props can change the winner.
-  const weeklyWinners = {};
-  for (let wk = 1; wk <= WEEK_COUNT; wk++) {
-    if (!isLocked(wk)) continue;
-    if (names.some(name => BET_TYPES_ORDER.some(bt => {
-      const slot = byMember[name]?.[bt]?.[wk];
-      return slot && !["W", "L", "P"].includes(slot.result);
-    }))) continue;
-    let best = null, tied = false;
-    for (const name of names) {
-      let w = 0, l = 0, any = false;
-      for (const bt of BET_TYPES_ORDER) {
-        const r = byMember[name]?.[bt]?.[wk]?.result;
-        if (r === "W") { w++; any = true; }
-        else if (r === "L") { l++; any = true; }
-        else if (r === "P") { any = true; }
-      }
-      if (!any) continue;
-      if (!best || w > best.w || (w === best.w && l < best.l)) { best = { name, w, l }; tied = false; }
-      else if (w === best.w && l === best.l) tied = true;
-    }
-    if (best && !tied && best.w > 0) weeklyWinners[String(wk)] = best.name;
-  }
-
   for (const name of names) {
     const byType = {};
     let W = 0, L = 0, P = 0;
@@ -1465,6 +1444,12 @@ function mergeLiveSeason(rows, season = 2026) {
     }
     if (!DATA.members[name]) DATA.members[name] = {};
     DATA.members[name][String(season)] = { seasonRecord: `${W}-${L}${P ? "-" + P : ""}`, byType };
+  }
+  const weeklyWinners = {};
+  for (let wk=1;wk<=WEEK_COUNT;wk++) {
+    if (!isLocked(wk) || !contested.has(wk)) continue;
+    const decision=rulesWeeklyDecision(String(season),wk,true,names);
+    if (decision.winner) weeklyWinners[String(wk)]=decision.winner.name;
   }
   DATA.seasons[String(season)] = { members: names, weeklyWinners, live: true };
 }
@@ -1539,12 +1524,8 @@ function buildStandings(season) {
     const superRec = parseRecord(md.byType?.["Super Lock"]?.record);
     rows.push({ name, md, seasonRec, weeksWon, superRec });
   }
-  rows.sort((a, b) => {
-    if (b.seasonRec.w !== a.seasonRec.w) return b.seasonRec.w - a.seasonRec.w;
-    if (a.seasonRec.l !== b.seasonRec.l) return a.seasonRec.l - b.seasonRec.l;
-    return b.weeksWon - a.weeksWon;
-  });
-  return rows;
+  return rulesRankSeason(rows,season);
+
 }
 
 // --- Week-over-week movement (rank change vs the prior graded week) ---
@@ -1561,8 +1542,8 @@ function recordThroughWeek(md, W) {
   }
   return { w, l };
 }
-// Rank everyone using cumulative results through week W. Same sort key as
-// buildStandings (more wins, then fewer losses, then more weeks won) so the
+// Rank everyone through week W using the same Article 12 criteria as
+// buildStandings so the
 // ranks line up with the visible standings.
 function standingsThroughWeek(season, W) {
   const seasonInfo = DATA.seasons[season];
@@ -1574,8 +1555,7 @@ function standingsThroughWeek(season, W) {
     for (let wk = 1; wk <= W; wk++) if (seasonInfo.weeklyWinners?.[String(wk)] === name) weeksWon++;
     return { name, w: rec.w, l: rec.l, played: rec.w + rec.l, weeksWon };
   });
-  rows.sort((a, b) => (b.w - a.w) || (a.l - b.l) || (b.weeksWon - a.weeksWon));
-  return rows;
+  return rulesRankSeason(rows,season,W);
 }
 function latestGradedWeek(season) {
   const seasonInfo = DATA.seasons[season];
@@ -1602,11 +1582,11 @@ function computeMovement(season) {
   const prev = standingsThroughWeek(season, W - 1);
   const curr = standingsThroughWeek(season, W);
   const prevRank = {};
-  prev.forEach((r, i) => { prevRank[r.name] = { rank: i, played: r.played }; });
+  prev.forEach((r, i) => { prevRank[r.name] = { rank: r.rank, played: r.played }; });
   const move = {};
   curr.forEach((r, i) => {
     const p = prevRank[r.name];
-    move[r.name] = (p && p.played > 0) ? (p.rank - i) : 0; // no arrow for members with no prior-week record
+    move[r.name] = (p && p.played > 0) ? (p.rank - r.rank) : 0; // no arrow for members with no prior-week record
   });
   return move;
 }
@@ -2035,7 +2015,7 @@ function ledgerHtml(s) {
   return `<div class="stl-ledger-inner">` + s.weeks.slice().reverse().map(w => {
     const me = w.winner_id === s.me.id;
     return `<div class="stl-wk">
-      <div class="stl-wk-head"><span>Week ${w.week}</span><span class="stl-wk-winner">🏆 ${escapeHtml(w.winner_name)}${me ? " (you)" : ""} · $${w.amount} · <span class="${w.paid ? "text-primary-fixed" : ""}">${w.paid ? "paid" : "unpaid"}</span></span></div>
+      <div class="stl-wk-head"><span>Week ${w.week}</span><span class="stl-wk-winner" title="${escapeHtml(w.winner_tiebreak || 'Weekly record')}">🏆 ${escapeHtml(w.winner_name)}${me ? " (you)" : ""} · $${w.amount} · <span class="${w.paid ? "text-primary-fixed" : ""}">${w.paid ? "paid" : "unpaid"}</span></span></div>
     </div>`;
   }).join("") + `</div>`;
 }
@@ -2183,6 +2163,9 @@ function liveProgressBar(p, d) {
 // Rank by the same W/L ordering as the weekly API; alphabetical order only
 // stabilizes tied rows and never breaks a tie for the displayed rank.
 function liveLeaderboardRows(wr) {
+  if (wr.members?.length && wr.members.every(m=>Number.isInteger(m.week_rank)))
+    return wr.members.slice().sort((a,b)=>a.week_rank-b.week_rank || a.name.localeCompare(b.name)).map(member=>({member,rank:member.week_rank,tied:member.week_tied,open:0}));
+
   const sorted = (wr.members || []).slice().sort((a,b) => (b.live.fW || 0)-(a.live.fW || 0) || (a.live.fL || 0)-(b.live.fL || 0) || a.name.localeCompare(b.name));
   let rank = 1;
   return sorted.map((member,index) => {
@@ -2196,9 +2179,9 @@ function renderLiveLeaderboard(wr) {
   const ranked = liveLeaderboardRows(wr);
   const visible = state.wrLeaderboardAll ? ranked : ranked.filter((r,i) => i < 3 || isMe(r.member.name));
   return `<section class="live-leaderboard" aria-label="Weekly live leaderboard"><div class="compact-heading"><h3>Week ${wr.week} leaderboard</h3><span class="quiet-copy">${wr.anyLive ? "In progress" : wr.recap?.complete ? "Final" : "This week"}</span></div>
-    <p class="quiet-copy">Settled results only. Ties share rank.</p>
+    <p class="quiet-copy">Settled results only. Completed-week ties use league rules.</p>
     <div class="live-leader-labels" aria-hidden="true"><span>#</span><span>Member</span><span>W–L–P</span><span>Open</span></div>
-    ${visible.map(({member:m,rank,tied,open}) => `<button class="live-leader-row ${isMe(m.name) ? "is-you" : ""}" data-track-member="${m.member_id}" aria-label="Track ${escapeHtml(m.name)}, ${tied ? "tied " : ""}rank ${rank}, ${(m.live.fW || 0)} wins, ${(m.live.fL || 0)} losses, ${m.live.fP || 0} pushes, ${open} picks open"><span class="leader-rank">${tied ? "T" : ""}${rank}</span><span class="leader-name">${escapeHtml(m.name)}${isMe(m.name) ? '<small>You</small>' : ""}</span><span class="leader-record">${(m.live.fW || 0)}–${(m.live.fL || 0)}${(m.live.fP || 0) ? "–"+(m.live.fP || 0) : ""}</span><span class="leader-open">${open}</span></button>`).join("")}
+    ${visible.map(({member:m,rank,tied,open}) => `<button class="live-leader-row ${isMe(m.name) ? "is-you" : ""}" data-track-member="${m.member_id}" aria-label="Track ${escapeHtml(m.name)}, ${tied ? "tied " : ""}rank ${rank}, ${(m.live.fW || 0)} wins, ${(m.live.fL || 0)} losses, ${m.live.fP || 0} pushes, ${open} picks open"><span class="leader-rank" title="${escapeHtml(m.tiebreak || 'Settled record')}">${tied ? "T" : ""}${rank}</span><span class="leader-name">${escapeHtml(m.name)}${isMe(m.name) ? '<small>You</small>' : ""}</span><span class="leader-record">${(m.live.fW || 0)}–${(m.live.fL || 0)}${(m.live.fP || 0) ? "–"+(m.live.fP || 0) : ""}</span><span class="leader-open">${open}</span></button>`).join("")}
     ${ranked.length > 3 ? `<button id="live-leader-toggle" class="text-action" aria-expanded="${!!state.wrLeaderboardAll}">${state.wrLeaderboardAll ? "Show leaders + you" : `View all ${ranked.length} members`} <span aria-hidden="true">${state.wrLeaderboardAll ? "↑" : "↓"}</span></button>` : ""}
     <p class="leader-hint">Tap a member to track their picks · Open includes unrevealed slots.</p>
   </section>`;
@@ -2248,7 +2231,7 @@ function renderStandings() {
   const seasonInfo = DATA.seasons[season];
   const winners = seasonInfo?.weeklyWinners || {};
   const isLive = !!seasonInfo?.live;
-  const champ = isLive ? seasonLeader(rows) : rows[0];
+  const champ = seasonLeader(rows);
   const hasResults = rows.some(r => r.seasonRec.w + r.seasonRec.l > 0);
   const champPct = champ && (champ.seasonRec.w + champ.seasonRec.l) ? pct(champ.seasonRec) + "%" : "-";
 
@@ -2374,7 +2357,7 @@ function renderStandings() {
 
 function renderMemberRow(r, i, season, movement) {
   const isExp = state.expanded === r.name;
-  const isTop = DATA.seasons[season]?.live ? seasonLeader(buildStandings(season))?.name === r.name : i === 0;
+  const isTop = seasonLeader(buildStandings(season))?.name === r.name;
   const mine = isMe(r.name);
   const move = movement ? moveIndicator(movement[r.name]) : "";
   // Per-week outcome class: green if member won the week, W/L/P majority
@@ -2407,8 +2390,8 @@ function renderMemberRow(r, i, season, movement) {
     : `<div class="heat-dot" aria-hidden="true"></div>`).join("");
 
   return `
-    <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : mine ? "row-you" : ""}" data-name="${escapeHtml(r.name)}" tabindex="0" role="button" aria-expanded="${isExp}" aria-label="${escapeHtml(r.name)}, rank ${i + 1}, record ${r.seasonRec.w} and ${r.seasonRec.l}. Show weekly breakdown.">
-      <td class="px-4 md:px-6 py-5 font-bold ${isTop ? "text-primary-fixed" : mine ? "rank-you" : "text-on-surface-variant"}"><span class="inline-flex items-center gap-1.5">${i + 1}${move}</span></td>
+    <tr class="member-row border-b border-outline-variant hover:bg-primary-fixed/5 transition-colors cursor-pointer group ${isExp ? "bg-primary-fixed/[0.04]" : mine ? "row-you" : ""}" data-name="${escapeHtml(r.name)}" tabindex="0" role="button" aria-expanded="${isExp}" aria-label="${escapeHtml(r.name)}, rank ${r.rank || i + 1}, record ${r.seasonRec.w} and ${r.seasonRec.l}. Show weekly breakdown.">
+      <td class="px-4 md:px-6 py-5 font-bold ${isTop ? "text-primary-fixed" : mine ? "rank-you" : "text-on-surface-variant"}"><span class="inline-flex items-center gap-1.5" title="${escapeHtml(r.tiebreak || 'Season record')}">${r.rank || i + 1}${move}</span></td>
       <td class="px-4 md:px-6 py-5">
         <div class="flex items-center gap-2">
           <span class="font-display-lg text-base md:text-lg tracking-wide uppercase ${isTop ? "text-primary-fixed" : mine ? "name-you" : "text-on-surface"}">${escapeHtml(r.name)}</span>
@@ -3724,21 +3707,17 @@ function renderPicksHistory(sel, curWeek) {
     m.picks[p.bet_type] = p;
     if (p.result === "W") m.W++; else if (p.result === "L") m.L++; else if (p.result === "P") m.P++;
   }
-  const members = [...byMember.values()].sort((a, b) => b.W - a.W || a.L - b.L || a.name.localeCompare(b.name));
-  const graded = members.some(m => m.W + m.L + m.P > 0);
-  let winner = null;
-  if (graded && members.length) {
-    const top = members[0];
-    const tie = members.filter(m => m.W === top.W && m.L === top.L).length > 1;
-    if (!tie && top.W > 0) winner = top;
-  }
+  const names=[...new Set([...(DATA.seasons['2026']?.members || []),...picks.map(p=>p.member_name)])];
+  const decision=rulesWeeklyDecision('2026',sel,true,names,picks);
+  const members=decision.ranked.map(r=>({...([...byMember.values()].find(m=>m.name===r.name) || {name:r.name,picks:{}}),W:r.W,L:r.L,P:r.P,rank:r.rank}));
+  const winner=decision.winner ? members.find(m=>m.name===decision.winner.name) : null;
   const winLine = winner
     ? `<span class="pk-hist-win"><span class="pk-crown">🏆</span><b>${escapeHtml(winner.name)}</b> · ${winner.W}-${winner.L}${winner.P ? "-" + winner.P : ""}</span>`
-    : (graded ? `<span class="pk-hist-win">Tie at the top</span>` : `<span class="pk-hist-win">Not graded yet</span>`);
+    : (decision.complete ? `<span class="pk-hist-win">Tiebreak unresolved</span>` : `<span class="pk-hist-win">Awaiting final results</span>`);
   const cards = members.map((m, i) => `
     <div class="wr-card ${isMe(m.name) ? "row-you" : ""}">
       <div class="wr-head">
-        <span class="wr-rank">${String(i + 1).padStart(2, "0")}</span>
+        <span class="wr-rank">${String(m.rank || i + 1).padStart(2, "0")}</span>
         <span class="wr-name" style="color:${memberColor(m.name)}">${escapeHtml(m.name)}</span>
         <span class="wr-rec">${m.W}-${m.L}${m.P ? "-" + m.P : ""}</span>
       </div>

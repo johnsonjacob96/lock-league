@@ -14,29 +14,28 @@ import { sql } from "../_shared/db.js";
 import { verifyCookie, json } from "../_shared/auth.js";
 import { currentNflWeek, pickCutoff } from "../_shared/nfl.js";
 import { ensureExtras } from "../_shared/migrations.js";
-import { weeklyMemberRecords, weeklyWinner } from "../_shared/standings.js";
+import { weeklyContext } from "../_shared/tiebreak-context.js";
 
 const DEFAULT_PRIZE = 40;
 
-// Weekly winner: unique best W (fewest L breaks ties), with every member's
+// Weekly winner: Article 7 after W/L, with every member's
 // unfilled bet-type slot counted as an automatic loss once that week has
 // locked. Mirrors the client's mergeLiveSeason injection and grader.js's
 // pushWeekResults exactly, so the payout ledger, the site standings, and the
 // winner push always agree. `picks` must be ALL of a season's picks
 // (graded + pending), not filtered to result IS NOT NULL, so a genuinely
 // unfilled slot can be told apart from one still awaiting a manual grade.
-export function computeWeeklyWinners(picks, memberIds, season, env) {
+export function computeWeeklyWinners(picks, memberIds, season, env, members = memberIds.map(id=>({id}))) {
   const byWeek = new Map();
   for (const p of picks) {
     if (!byWeek.has(p.week)) byWeek.set(p.week, []);
     byWeek.get(p.week).push(p);
   }
   const winners = {};
-  for (const [week, rows] of byWeek) {
+  for (const week of byWeek.keys()) {
     const locked = Date.now() >= pickCutoff(season, week, env).getTime();
-    const records = weeklyMemberRecords(memberIds, rows, { locked });
-    const win = locked ? weeklyWinner(records) : null;
-    winners[week] = win ? { member_id: win.member_id, w: win.w, l: win.l } : null;
+    const win = locked ? weeklyContext(picks,members,season,week,env).winner : null;
+    winners[week] = win ? { member_id: win.id, w: win.W, l: win.L, tiebreak: win.tiebreak } : null;
   }
   return winners;
 }
@@ -68,9 +67,9 @@ export async function onRequest({ request, env }) {
     const cfg = (await sql(env)`SELECT collector_id FROM pot_config WHERE season = ${season} LIMIT 1`)[0];
     const [memberRows, picks] = await Promise.all([
       sql(env)`SELECT id, name FROM members`,
-      sql(env)`SELECT member_id, week, bet_type, result FROM picks WHERE season = ${season} AND week = ${week}`,
+      sql(env)`SELECT member_id, week, bet_type, result, price, prop_meta FROM picks WHERE season = ${season}`,
     ]);
-    const winner = computeWeeklyWinners(picks, memberRows.map((m) => m.id), season, env)[week];
+    const winner = computeWeeklyWinners(picks, memberRows.map((m) => m.id), season, env, memberRows)[week];
     if (!winner) return json({ error: "no-winner-yet" }, { status: 409 });
     if (memberId !== cfg?.collector_id && memberId !== winner.member_id) {
       return json({ error: "forbidden", detail: "only the collector or the winner can flip this" }, { status: 403 });
@@ -91,11 +90,11 @@ export async function onRequest({ request, env }) {
 
     const [members, picks, payoutRows] = await Promise.all([
       sql(env)`SELECT id, name, venmo_handle FROM members ORDER BY name`,
-      sql(env)`SELECT member_id, week, bet_type, result FROM picks WHERE season = ${season}`,
+      sql(env)`SELECT member_id, week, bet_type, result, price, prop_meta FROM picks WHERE season = ${season}`,
       sql(env)`SELECT week, paid, paid_at FROM weekly_payouts WHERE season = ${season}`,
     ]);
     const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
-    const winners = computeWeeklyWinners(picks, members.map((m) => m.id), season, env);
+    const winners = computeWeeklyWinners(picks, members.map((m) => m.id), season, env, members);
     const paidByWeek = Object.fromEntries(payoutRows.map((r) => [r.week, r]));
     const collector = collectorId ? memberById[collectorId] : null;
 
@@ -111,6 +110,7 @@ export async function onRequest({ request, env }) {
           winner_id: winner.member_id,
           winner_name: memberById[winner.member_id]?.name || null,
           winner_record: `${winner.w}-${winner.l}`,
+          winner_tiebreak: winner.tiebreak,
           winner_venmo: memberById[winner.member_id]?.venmo_handle || null,
           amount: prize,
           paid: !!pr?.paid,

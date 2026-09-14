@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
       - run: npm install
+      - run: node scripts/build-tiebreaks.mjs
+      - run: git diff --exit-code -- public/assets/tiebreaks.js
       - run: npm run build:data
       - run: git diff --exit-code -- public/assets/nfl-teams.js
       - run: npm run smoke
@@ -43,5 +45,6 @@ jobs:
         run: npm install --no-save playwright@1 && npx playwright install --with-deps chromium
       - run: npm run smoke:render
       - run: node smoke/pick-confirmation.mjs
+      - run: node smoke/tiebreaks-ui.mjs
       - run: npm run smoke:browser
       - run: npm run smoke:super-lock
