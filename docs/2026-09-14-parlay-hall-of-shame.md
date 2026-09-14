@@ -9,3 +9,6 @@ Validation: 16 parlay logic tests; 390/1440 browser tests cover hidden pending s
 Visual fixtures use illustrative results and assignments, not a real member outcome:
 - [Mobile preview](previews/2026-09-14/parlay-shame-mobile.png)
 - [Desktop preview](previews/2026-09-14/parlay-shame-desktop.png)
+
+## Compact mobile follow-up
+The owner requested a card that can be read without scrolling through it. Mobile spacing is tighter and the damage amount/details share a row, preserving all copy and bets. No fixed height, clipping, hidden text or internal scrolling: long names and accessibility text sizes can still grow naturally. The seven-leg fixture fits at 375×667 and 390×844 above bottom navigation once scrolled into view; desktop styling unchanged. Browser coverage also retains upload/edit/filter/correction checks. Updated mobile preview shows the compact card.
