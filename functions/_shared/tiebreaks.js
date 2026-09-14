@@ -70,15 +70,44 @@ export function weeklyEntries(ids, weekPicks, {locked=false, seasonPicks=weekPic
     const sl = picks.find(p => p.bet_type==='Super Lock');
     const season = record(seasonPicks.filter(p => String(p.member_id)===String(id)));
     const old = historical[id] || {W:0,L:0};
-    return {id,...r,superHit:sl?.result==='W' ? 1 : 0,
+    const superPending = !!sl && !['W','L','P'].includes(sl.result);
+    const pctBounds = oldRecord => ({
+      worst: percentage({W:oldRecord.W+season.W,L:oldRecord.L+season.L+season.pending}),
+      best: percentage({W:oldRecord.W+season.W+season.pending,L:oldRecord.L+season.L}),
+    });
+    return {id,...r,superPending,seasonPctBounds:pctBounds({W:0,L:0}),allTimePctBounds:pctBounds(old),superHit:sl?.result==='W' ? 1 : 0,
       superOdds:sl?.missing ? 0 : sl ? pickProfit(sl) : locked ? 0 : null,
       seasonPct:season.pending ? null : percentage(season),
       allTimePct:season.pending ? null : percentage({W:old.W+season.W,L:old.L+season.L})};
   });
 }
+// All losses is a member's worst completion; all wins is their best.
+// W/L precede every tiebreak, so pushes lie between these extremes. Treating
+// picks independently is conservative even when members share the same bet.
+function completion(entry, best) {
+  const pending=entry.pending || 0;
+  const side=best ? 'best' : 'worst';
+  return {...entry,W:entry.W+(best ? pending : 0),L:entry.L+(best ? 0 : pending),pending:0,
+    superHit:best && (entry.superPending ?? pending>0) ? 1 : entry.superHit,
+    seasonPct:entry.seasonPctBounds?.[side] ?? entry.seasonPct,
+    allTimePct:entry.allTimePctBounds?.[side] ?? entry.allTimePct};
+}
 export function weeklyDecision(entries, locked=true) {
   const complete = locked && entries.every(e=>e.pending===0);
-  const ranked = rankEntries(entries,complete ? WEEKLY_CRITERIA : WEEKLY_CRITERIA.slice(0,2));
+  let ranked = rankEntries(entries,complete ? WEEKLY_CRITERIA : WEEKLY_CRITERIA.slice(0,2));
   const top = ranked[0];
-  return {ranked,complete,winner:complete && top && !top.tied && top.W+top.L+top.P>0 ? top : null};
+  let winner=complete && top && !top.tied && top.W+top.L+top.P>0 ? top : null;
+  if (locked && !complete) {
+    for (const candidate of entries) {
+      if (!(candidate.W+candidate.L+candidate.P>0)) continue;
+      // Whole-group refinement preserves the unknown-odds guard for multiway
+      // ties. Never settle by name, current score, or an assumed pending loss.
+      const worstCase=rankEntries(entries.map(e=>completion(e,e.id!==candidate.id)));
+      if (worstCase[0]?.id!==candidate.id || worstCase[0].tied) continue;
+      winner={...candidate,rank:1,tied:false,tiebreak:worstCase[0].tiebreak};
+      ranked=[winner,...rankEntries(entries.filter(e=>e.id!==candidate.id),WEEKLY_CRITERIA.slice(0,2)).map(e=>({...e,rank:e.rank+1}))];
+      break;
+    }
+  }
+  return {ranked,complete,clinched:!!winner && !complete,winner};
 }

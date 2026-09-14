@@ -28,7 +28,7 @@ test('unknown odds stop resolution; later stats cannot override the missing crit
  const ranked=rankEntries([entry('C',{superOdds:3}),entry('B',{superOdds:null}),entry('A',{superOdds:1})]);
  assert.deepEqual(ranked.map(r=>r.rank),[1,1,1]);
 });
-test('pending or unlocked weeks never crown; partial rankings ignore SL tiebreaks',()=>{
+test('catchable or unlocked weeks never crown; partial rankings ignore SL tiebreaks',()=>{
  const entries=[entry('A',{superOdds:5}),entry('B',{pending:1})];
  assert.equal(weeklyDecision(entries).winner,null);
  assert.deepEqual(weeklyDecision(entries).ranked.map(r=>r.rank),[1,1]);
@@ -73,4 +73,66 @@ test('browser generated rules match server exactly',()=>{
  const context={};vm.createContext(context);vm.runInContext(readFileSync(new URL('../public/assets/tiebreaks.js',import.meta.url),'utf8')+'\nthis.rules=LeagueTiebreaks;',context);
  for(const rows of [[entry('A'),entry('B',{superOdds:3})],[entry('A',{superOdds:null}),entry('B')]])
   assert.equal(JSON.stringify(context.rules.weeklyDecision(rows)),JSON.stringify(weeklyDecision(rows)));
+});
+
+test('Week 1 clinch: Mason beats Chris on SL hit and Brayden even if his -120 SL wins',()=>{
+ const types=['Favorite','Dog','Over','Under','Super Lock'];
+ const card=(id,results,price)=>types.map((bet_type,i)=>({member_id:id,bet_type,result:results[i],price}));
+ const picks=[...card('Mason',['W','W','W','L','W'],-113),...card('Chris',['W','W','W','W','L'],190),...card('Brayden',['W','W','W','L',null],-120)];
+ const decide=rows=>weeklyDecision(weeklyEntries(['Mason','Chris','Brayden'],rows,{locked:true}));
+ const d=decide(picks);
+ assert.equal(d.winner.id,'Mason');assert.equal(d.clinched,true);assert.equal(d.complete,false);
+ assert.equal(d.winner.W,4);assert.equal(d.ranked.find(e=>e.id==='Brayden').pending,1);
+ assert.equal(d.winner.tiebreak,'Longer Super Lock odds');
+ for (const result of ['W','L','P']) {
+   const final=decide(picks.map(p=>p.result ? p : {...p,result}));
+   assert.equal(final.winner.id,'Mason');assert.equal(final.complete,true);assert.equal(final.clinched,false);
+ }
+ for (const price of [150,null]) {
+   const stillOpen=decide(picks.map(p=>p.member_id==='Brayden'?{...p,price}:p));
+   assert.equal(stillOpen.winner,null);
+ }
+});
+test('clinch bounds handle open leader picks, pushes, ties, unknown odds and unlocked cards',()=>{
+ const leader=entry('A',{W:4,L:0,pending:1,superHit:1,superPending:false});
+ const rival=entry('B',{W:2,L:2,pending:1,superHit:0,superPending:true});
+ assert.equal(weeklyDecision([leader,rival]).winner.id,'A');
+ assert.equal(weeklyDecision([leader,rival],false).winner,null);
+ assert.equal(weeklyDecision([leader,{...rival,W:3,L:1,superOdds:3}]).winner,null);
+ assert.equal(weeklyDecision([leader,{...rival,W:3,L:1,superOdds:1.5}]).winner,null);
+ assert.equal(weeklyDecision([leader,{...rival,W:3,L:1,superOdds:null}]).winner,null);
+ assert.equal(weeklyDecision([]).winner,null);
+});
+test('every announced clinch survives exhaustive independent W/L/push completions',()=>{
+ const types=['Favorite','Dog','Over','Under','Super Lock'];
+ const ids=['A','B','C'];
+ let clinches=0;
+ for(let fixture=0;fixture<125;fixture++) {
+   const rows=ids.flatMap((member_id,m)=>types.map((bet_type,i)=>({member_id,bet_type,
+     result:(i===4 && m>0) || (m===0 && i===3) ? null : i===4 ? 'W' : i < Math.floor(fixture/5**m)%5 ? 'W':'L',price:[150,-120,-113][m]})));
+   const entries=weeklyEntries(ids,rows,{locked:true});
+   const d=weeklyDecision(entries);
+   if(!d.winner)continue;
+   clinches++;
+   const unfinished=rows.flatMap((p,i)=>p.result?[]:[i]);
+   for(let mask=0;mask<3**unfinished.length;mask++) {
+     let n=mask;const completed=rows.map(p=>({...p}));
+     for(const i of unfinished){completed[i].result=['W','L','P'][n%3];n=Math.floor(n/3);}
+     assert.equal(weeklyDecision(weeklyEntries(ids,completed,{locked:true})).winner?.id,d.winner.id);
+   }
+ }
+ assert.ok(clinches>0,'exercise actual early winners');
+});
+
+test('clinch uses future percentage bounds and stops at an unresolved percentage tie',()=>{
+ const types=['Favorite','Dog','Over','Under','Super Lock'];
+ const week=types.flatMap((bet_type,i)=>[
+   {member_id:'A',bet_type,result:['W','W','W','L','W'][i],price:150},
+   {member_id:'B',bet_type,result:[null,'W','W','L','W'][i],price:150},
+ ]);
+ const entries=prior=>weeklyEntries(['A','B'],week,{locked:true,seasonPicks:[...week,...prior],historical:{A:{W:0,L:0},B:{W:0,L:0}}});
+ assert.equal(weeklyDecision(entries([])).winner,null);
+ assert.equal(weeklyDecision(entries([{member_id:'A',result:'W'}])).winner.id,'A');
+ // A pending prior result could erase that advantage; don't use the current %.
+ assert.equal(weeklyDecision(entries([{member_id:'A',result:'W'},{member_id:'A',result:null}])).winner,null);
 });

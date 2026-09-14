@@ -34,8 +34,9 @@ export function computeWeeklyWinners(picks, memberIds, season, env, members = me
   const winners = {};
   for (const week of byWeek.keys()) {
     const locked = Date.now() >= pickCutoff(season, week, env).getTime();
-    const win = locked ? weeklyContext(picks,members,season,week,env).winner : null;
-    winners[week] = win ? { member_id: win.id, w: win.W, l: win.L, tiebreak: win.tiebreak } : null;
+    const decision = locked ? weeklyContext(picks,members,season,week,env) : null;
+    const win = decision?.winner;
+    winners[week] = win ? { member_id: win.id, w: win.W, l: win.L, tiebreak: win.tiebreak, clinched:decision.clinched } : null;
   }
   return winners;
 }
@@ -111,6 +112,7 @@ export async function onRequest({ request, env }) {
           winner_name: memberById[winner.member_id]?.name || null,
           winner_record: `${winner.w}-${winner.l}`,
           winner_tiebreak: winner.tiebreak,
+          clinched: winner.clinched,
           winner_venmo: memberById[winner.member_id]?.venmo_handle || null,
           amount: prize,
           paid: !!pr?.paid,
