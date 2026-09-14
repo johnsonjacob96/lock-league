@@ -1,33 +1,6 @@
 // Group parlays are independent of league picks, standings and payouts.
 const PARLAY_MARKETS={pass_yds:'Passing yards',pass_tds:'Passing TDs',pass_cmp:'Completions',pass_att:'Pass attempts',pass_int:'Interceptions',rush_yds:'Rushing yards',rush_att:'Rush attempts',rush_tds:'Rushing TDs',rec_yds:'Receiving yards',receptions:'Receptions',rec_tds:'Receiving TDs',rush_rec_yds:'Rush + rec yards',anytime_td:'Anytime touchdown',manual:'Custom / manual result'};
 const parlayState={data:null,draft:null,busy:false,error:'',week:null,season:null,night:'All',timer:null};
-function parlayMarket(text) {
- const t=text.toLowerCase();
- if(/first|last|longest|quarter|half/.test(t))return 'manual';
- if(/any\s*time.*touchdown|any\s*time.*td/.test(t))return 'anytime_td';
- if(/rush.*rec.*(?:yds|yards)/.test(t))return 'rush_rec_yds';
- if(/rush/.test(t))return /yds|yards/.test(t)?'rush_yds':/attempt|carr/.test(t)?'rush_att':/td|touchdown/.test(t)?'rush_tds':'manual';
- if(/receiv/.test(t))return /yds|yards/.test(t)?'rec_yds':/td|touchdown/.test(t)?'rec_tds':'receptions';
- if(/reception/.test(t))return 'receptions';
- if(/complet/.test(t))return 'pass_cmp';
- if(/intercept/.test(t))return 'pass_int';
- if(/pass/.test(t))return /yds|yards/.test(t)?'pass_yds':/attempt/.test(t)?'pass_att':/td|touchdown/.test(t)?'pass_tds':'manual';
- return 'manual';
-}
-function parseParlayText(text) {
- const lines=String(text).split(/\n/).map(s=>s.trim()).filter(Boolean),legs=[];
- for(let i=0;i<lines.length;i++) {
-  const s=lines[i],ou=s.match(/^(.+?)\s+(Over|Under)\s*\+?(\d+(?:\.\d+)?)/i),alt=s.match(/^(.+?)\s+(\d+(?:\.\d+)?)\+\s+(.+)$/i);
-  if(ou||alt) {
-   const next=lines[i+1]||'',market=parlayMarket(s+' '+next);
-   legs.push({player:(market==='manual'?s+' '+next:(ou||alt)[1]).replace(/^[^a-z]+/i,'').trim().replace(/\s+[il]{3}$/i,' III').slice(0,150),market,side:ou?ou[2].toLowerCase():'atleast',line:Number(ou?ou[3]:alt[2]),member_id:null,result:null});
-  } else if(/any\s*time\s+(?:touchdown|td)/i.test(s)) {
-   const player=s.replace(/any\s*time\s+(?:touchdown|td).*$/i,'').trim()||lines[i-1]||'';
-   if(player)legs.push({player:player.replace(/^[^a-z]+/i,'').trim().replace(/\s+[il]{3}$/i,' III'),market:'anytime_td',side:'yes',line:null,member_id:null,result:null});
-  }
- }
- return legs.slice(0,25);
-}
 function parlayRecord(slips,members,night='All') {
  return members.map(m=>{
   const legs=slips.filter(s=>night==='All'||s.night===night).flatMap(s=>s.legs).filter(l=>l.member_id===m.id);
@@ -80,9 +53,9 @@ function renderParlaySlip(s) {
 function renderParlayEditor() {
  const s=parlayState.draft,d=parlayState.data;
  return `<section class="parlays"><div class="parlay-heading"><h1>${s.version?'EDIT SLIP':'ADD A PARLAY'}</h1><button id="parlay-cancel" class="text-action">Cancel</button></div><p class="quiet-copy">Upload a screenshot, check every leg, and choose who picked it. Nothing is saved until you confirm.</p>
- <form id="parlay-form"><div class="compact-panel"><label>Slip screenshot<input id="parlay-image" type="file" accept="image/*"></label><p id="parlay-ocr-status" role="status">${s.image?'Screenshot ready. Review the legs below.':'Choose a screenshot to read its legs, or add legs manually.'}</p>${s.image?`<details><summary>Preview slip</summary><img class="parlay-preview" src="${s.image}" alt="Uploaded parlay slip"></details>`:''}
+ <form id="parlay-form"><div class="compact-panel"><label>Slip screenshot<input id="parlay-image" type="file" accept="image/*"></label><p id="parlay-ocr-status" role="status">${s.image?`${s.legs.length} leg candidates found. Compare the count and every bet with your screenshot.`:'Choose a screenshot to read its legs, or add legs manually.'}</p>${s.ocr_warnings?.length?`<p class="parlay-error" role="alert">${s.ocr_warnings.map(escapeHtml).join(' ')}</p>`:''}${s.image?`<details><summary>Preview slip</summary><img class="parlay-preview" src="${s.image}" alt="Uploaded parlay slip"></details>`:''}
  <div class="parlay-fields"><label>Title<input name="title" maxlength="100" required value="${escapeHtml(s.title)}"></label><label>Night<select name="night">${parlayOptions({Monday:'Monday',Thursday:'Thursday'},s.night)}</select></label><label>Week<input name="week" type="number" min="1" max="18" required value="${s.week}"></label><label>Season<input name="season" type="number" min="2026" max="2100" required value="${s.season}"></label><label>Game<select name="game_key" required><option value="">Choose game</option>${parlayOptions(Object.fromEntries([...new Set([...(d.schedule||[]).map(g=>g.key),...(s.game_key?[s.game_key]:[])])].map(k=>[k,k.replace('@',' @ ')])),s.game_key)}</select></label><label>Combined odds (optional)<input name="odds" type="number" placeholder="+10087" value="${s.odds??''}"></label></div><p class="quiet-copy">Choose a different week on the tracker before adding a slip for another slate.</p></div>
- <div id="parlay-edit-legs">${s.legs.map((l,i)=>`<fieldset class="compact-panel parlay-edit-leg" data-leg-index="${i}"><legend>Leg ${i+1}</legend><div class="parlay-fields"><label>Player / custom pick<input data-field="player" maxlength="150" required value="${escapeHtml(l.player)}"></label><label>Market<select data-field="market">${parlayOptions(PARLAY_MARKETS,l.market)}</select></label><label>Direction<select data-field="side">${parlayOptions({over:'Over',under:'Under',atleast:'At least (N+)',yes:'Yes — anytime TD'},l.side)}</select></label><label>Threshold<input data-field="line" type="number" step="0.5" min="0" max="2000" ${['anytime_td','manual'].includes(l.market)?'disabled':''} value="${l.line??''}"></label><label>Picked by<select data-field="member_id">${parlayOptions({'':'Unassigned',...Object.fromEntries(d.members.map(m=>[m.id,m.name]))},l.member_id??'')}</select></label></div><button type="button" class="text-action" data-parlay-remove="${i}">Remove leg</button></fieldset>`).join('')}</div>
+ <div id="parlay-edit-legs">${s.legs.map((l,i)=>`<fieldset class="compact-panel parlay-edit-leg" data-leg-index="${i}"><legend>Leg ${i+1}${l.review?.length?' · Check this leg':''}</legend>${l.source_crop?`<img class="parlay-source-crop" src="${l.source_crop}" alt="Original screenshot for leg ${i+1}">`:l.source_text?`<details><summary>Text read from screenshot</summary><pre class="parlay-source-text">${escapeHtml(l.source_text)}</pre></details>`:''}${l.review?.length?`<p class="parlay-error">${l.review.map(escapeHtml).join(' ')}</p>`:''}<div class="parlay-fields"><label>Player / custom pick<input data-field="player" maxlength="150" required value="${escapeHtml(l.player)}"></label><label>Market<select data-field="market" required>${parlayOptions({'':'Choose market',...PARLAY_MARKETS},l.market)}</select></label><label>Direction<select data-field="side" required>${parlayOptions({'':'Choose direction',over:'Over',under:'Under',atleast:'At least (N+)',yes:'Yes — anytime TD'},l.side)}</select></label><label>Threshold<input data-field="line" type="number" step="0.5" min="0" max="2000" ${['anytime_td','manual'].includes(l.market)?'disabled':'required'} value="${l.line??''}"></label><label>Picked by<select data-field="member_id">${parlayOptions({'':'Unassigned',...Object.fromEntries(d.members.map(m=>[m.id,m.name]))},l.member_id??'')}</select></label></div>${l.review?.length?`<label class="parlay-review"><input type="checkbox" data-field="reviewed" required ${l.reviewed?'checked':''}> I corrected this leg against the screenshot</label>`:''}<button type="button" class="text-action" data-parlay-remove="${i}">Remove leg</button></fieldset>`).join('')}</div>
  <div class="parlay-actions"><button type="button" id="parlay-add" class="text-action">+ Add leg</button><button type="submit" class="parlay-primary">${s.version?'Save changes':'Save parlay'}</button></div></form></section>`;
 }
 function readParlayDraft() {
@@ -93,7 +66,8 @@ function readParlayDraft() {
  s.odds=form.elements.odds.value===''?null:Number(form.elements.odds.value);
  s.legs=[...form.querySelectorAll('[data-leg-index]')].map(el=>{
  const v=k=>el.querySelector(`[data-field="${k}"]`).value;
- return {player:v('player'),market:v('market'),side:v('side'),line:v('line')===''?null:Number(v('line')),member_id:v('member_id')===''?null:Number(v('member_id'))};
+ const original=s.legs[Number(el.dataset.legIndex)]||{};
+ return {source_text:original.source_text,source_crop:original.source_crop,review:original.review,reviewed:!!el.querySelector('[data-field="reviewed"]')?.checked,player:v('player'),market:v('market'),side:v('side'),line:v('line')===''?null:Number(v('line')),member_id:v('member_id')===''?null:Number(v('member_id'))};
  });
 }
 function paintParlays() {if(state.view!=='parlays')return;document.getElementById('root').innerHTML=renderParlays();bindParlays();}
@@ -102,19 +76,6 @@ async function enterParlays() {
  paintParlays();if(!state.user)return;await loadParlays();if(state.view!=='parlays')return;paintParlays();
  loadSlPlayerPhotos().then(()=>{if(!parlayState.draft)paintParlays();});
  clearInterval(parlayState.timer);parlayState.timer=setInterval(()=>{if(state.view!=='parlays'){clearInterval(parlayState.timer);return;}if(!document.hidden&&!parlayState.draft)refreshParlayView();},15000);
-}
-async function readParlayImage(file,draft) {
- if(file.size>15000000)throw Error('Choose a screenshot smaller than 15 MB.');
- const bitmap=await createImageBitmap(file),canvas=document.createElement('canvas');
- const scale=Math.min(1,1800/Math.max(bitmap.width,bitmap.height));canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
- const image=canvas.toDataURL('image/jpeg',.85);if(image.length>1500000)throw Error('This screenshot is too large. Crop to the slip and try again.');
- draft.image=image;
- if(!window.Tesseract)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';const timeout=setTimeout(()=>reject(Error('Image reading timed out. Enter legs manually or retry.')),20000);script.onload=()=>{clearTimeout(timeout);resolve();};script.onerror=()=>{clearTimeout(timeout);reject(Error('Image reading is unavailable. You can still enter the legs below.'));};document.head.appendChild(script);});
- let initTimer,expired=false;
- const creation=Tesseract.createWorker('eng',1,{logger:m=>{const el=document.getElementById('parlay-ocr-status');if(el)el.textContent=`Reading screenshot… ${Math.round((m.progress||0)*100)}%`;}});
- creation.then(w=>{if(expired)w.terminate();},()=>{});
- let worker;try{worker=await Promise.race([creation,new Promise((_,reject)=>{initTimer=setTimeout(()=>{expired=true;reject(Error('Image reader could not load. Retry or enter the legs manually.'));},45000);})]);}finally{clearTimeout(initTimer);}
- let timeout;try {const {data}=await Promise.race([worker.recognize(image),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('Reading took too long. Enter the legs manually or retry.')),90000);})]);return {legs:parseParlayText(data.text),text:data.text};}finally{clearTimeout(timeout);await worker.terminate();}
 }
 function bindParlays() {
  const byId=id=>document.getElementById(id);
@@ -132,14 +93,14 @@ function bindParlays() {
   if(parlayState.draft.legs.length&&!confirm('Read this screenshot and replace the draft legs?'))return;
   const draft=parlayState.draft;
   const form=byId('parlay-form');for(const el of form.elements)el.disabled=true;
-  try {const parsed=await readParlayImage(file,draft);if(parlayState.draft!==draft)return;if(parsed.legs.length)draft.legs=parsed.legs;parlayState.error=parsed.legs.length?'':'No legs were read confidently. Add them manually using the screenshot preview.';}catch(err){parlayState.error=err.message;}finally{paintParlays();}
+  try {const parsed=await readParlayImage(file,draft);if(parlayState.draft!==draft)return;if(parsed.legs.length)draft.legs=parsed.legs;draft.ocr_warnings=parsed.warnings||[];parlayState.error=parsed.legs.length?'':'No legs were read confidently. Add them manually using the screenshot preview.';}catch(err){parlayState.error=err.message;}finally{paintParlays();}
  };
  if(byId('parlay-form'))byId('parlay-form').onsubmit=async e=>{
   e.preventDefault();readParlayDraft();const draft=parlayState.draft;
   if(!draft.legs.length){parlayState.error='Add at least one leg.';paintParlays();return;}
   if(!confirm(`Save ${draft.legs.length} reviewed legs for ${draft.title}?`))return;
   const button=e.submitter;if(button)button.disabled=true;
-  try{await parlayFetch('/api/parlays?action=save',draft);parlayState.draft=null;parlayState.error='';await refreshParlayView();}catch(err){parlayState.error=err.message;paintParlays();}
+  try{await parlayFetch('/api/parlays?action=save',{...draft,ocr_warnings:undefined,legs:draft.legs.map(({source_crop,source_text,review,reviewed,...leg})=>leg)});parlayState.draft=null;parlayState.error='';await refreshParlayView();}catch(err){parlayState.error=err.message;paintParlays();}
  };
  document.querySelectorAll('[data-parlay-grade]').forEach(el=>el.onchange=async()=>{
   if(!confirm('Confirm this result correction? It changes the member’s parlay record.')){paintParlays();return;}
