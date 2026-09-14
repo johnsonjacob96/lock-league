@@ -50,7 +50,7 @@ function renderStandingsWeek() {
     const live = m.picks.filter(p => p.kind === 'pick' && p.state === 'in' && !p.final).length;
     const hidden = m.picks.filter(p => p.kind === 'hidden').length;
     const pending = m.picks.filter(p => p.kind === 'pick' && !p.final && p.state !== 'in').length;
-    const summary = [`${m.live.fW || 0} hit`, `${m.live.fL || 0} missed`, live ? `${live} live` : '', pending ? `${pending} pending` : '', hidden ? `${hidden} hidden` : ''].filter(Boolean).join(' · ');
+    const summary = [wr.recap?.winner?.name === m.name ? (wr.recap.clinched ? "Clinched" : "Week winner") : "", `${m.live.fW || 0} hit`, `${m.live.fL || 0} missed`, live ? `${live} live` : '', pending ? `${pending} pending` : '', hidden ? `${hidden} hidden` : ''].filter(Boolean).join(' · ');
     return `<button class="week-member-row ${chosen ? 'selected' : ''} ${isMe(m.name) ? 'is-you' : ''}" data-week-member="${m.member_id}" aria-label="View ${escapeHtml(m.name)}’s weekly picks" aria-pressed="${chosen}"><span class="week-rank" title="${escapeHtml(m.tiebreak || 'Settled record')}">${rank}</span><span class="week-member-name">${escapeHtml(m.name)} ${isMe(m.name) ? '<span class="week-you">YOU</span>' : ''}<small>${summary}</small></span><span class="week-record">${m.live.fW || 0}–${m.live.fL || 0}${m.live.fP ? '–'+m.live.fP : ''}</span></button>${chosen && state.standingsCardOpen ? `<div class="week-mobile-card">${standingsWeekCard(m,true)}</div>` : ''}`;
   }).join('')}<p class="week-hint">Select a member to view their revealed picks.</p></div><aside class="week-desktop-card">${standingsWeekCard(selected)}</aside></div>`;
 }

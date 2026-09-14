@@ -169,14 +169,14 @@ export async function onRequest({ request, env, waitUntil }) {
     byMember.set(mem.id, m);
   }
 
-  // Use the same completed-week decision as payouts and result notifications.
-  // Unfinished weeks retain settled-record ties; hidden picks never affect rank.
-  const ready = globalRevealed && picks.every(p=>['W','L','P'].includes(p.result));
+  // After lock, use the same final/clinched decision as payouts.
+  // Before lock, hidden or still-editable picks must never crown a winner.
+  const ready = globalRevealed;
   const seasonPicks = ready ? await sql(env)`SELECT member_id, week, bet_type, result, price, prop_meta FROM picks WHERE season = ${cur.season} AND week <= ${cur.week}` : [];
   const decision = ready ? weeklyContext(seasonPicks,roster,cur.season,cur.week,env) : {complete:false,winner:null,ranked:[]};
   const complete = decision.complete && globalRevealed;
   const members = [...byMember.values()];
-  if (complete) {
+  if (complete || decision.clinched) {
     for (const m of members) {
       const r=decision.ranked.find(r=>r.id===m.member_id);
       m.week_rank=r?.rank; m.week_tied=r?.tied; m.tiebreak=r?.tiebreak;
@@ -185,22 +185,15 @@ export async function onRequest({ request, env, waitUntil }) {
   } else members.sort((a,b)=>b.live.W-a.live.W || a.live.L-b.live.L || a.name.localeCompare(b.name));
   const anyLive = events.some((e) => e.state === "in");
 
-  // Recap: once every game this week is final AND every pick has an actual
-  // result (no manual grade — a free-text or unmatched-prop Super Lock —
-  // still outstanding), summarize the week. A pending manual pick can still
-  // flip the standings, so don't crown a winner/tie until it clears; the
-  // recap simply doesn't appear yet and reappears once the last one is marked.
+  // A clinch is final for the weekly prize, but remaining picks stay open.
   let recap = null;
-  const allFinal = events.length > 0 && events.every((e) => e.state === "post");
-  const totalPending = members.reduce((n, m) => n + m.live.pending, 0);
-  if (allFinal && complete && totalPending === 0 && members.length) {
-    const tie = !decision.winner;
+  if ((complete || decision.clinched) && members.length) {
     const win = decision.winner;
     const winner = win ? { name: win.name, W: win.W, L: win.L, tiebreak: win.tiebreak } : null;
     const perfect = members
       .filter((m) => m.live.W > 0 && m.live.L === 0 && m.live.pending === 0)
       .map((m) => m.name);
-    recap = { complete: true, winner, tie, perfect };
+    recap = { complete, clinched:!!decision.clinched, winner, tie:!win, perfect };
   }
 
   const data = { season: cur.season, week: cur.week, revealed: true, source_updated_at: events[0]?.source_updated_at || null, fetched_at: new Date().toISOString(), anyLive, members, recap };

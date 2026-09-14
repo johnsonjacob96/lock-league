@@ -2015,7 +2015,7 @@ function ledgerHtml(s) {
   return `<div class="stl-ledger-inner">` + s.weeks.slice().reverse().map(w => {
     const me = w.winner_id === s.me.id;
     return `<div class="stl-wk">
-      <div class="stl-wk-head"><span>Week ${w.week}</span><span class="stl-wk-winner" title="${escapeHtml(w.winner_tiebreak || 'Weekly record')}">🏆 ${escapeHtml(w.winner_name)}${me ? " (you)" : ""} · $${w.amount} · <span class="${w.paid ? "text-primary-fixed" : ""}">${w.paid ? "paid" : "unpaid"}</span></span></div>
+      <div class="stl-wk-head"><span>Week ${w.week}</span><span class="stl-wk-winner" title="${escapeHtml(w.winner_tiebreak || 'Weekly record')}">🏆 ${escapeHtml(w.winner_name)}${me ? " (you)" : ""}${w.clinched ? " · Clinched" : ""} · $${w.amount} · <span class="${w.paid ? "text-primary-fixed" : ""}">${w.paid ? "paid" : "unpaid"}</span></span></div>
     </div>`;
   }).join("") + `</div>`;
 }
@@ -4778,24 +4778,25 @@ function wrGamePanel(p) {
 }
 function renderRecapCard(wr) {
   const r = wr.recap;
-  if (!r || !r.complete) return "";
+  if (!r || (!r.complete && !r.clinched)) return "";
   const winLine = r.winner
-    ? `<span class="rc-crown">🏆</span>${escapeHtml(r.winner.name)} won Week ${wr.week} at ${r.winner.W}-${r.winner.L}`
+    ? `<span class="rc-crown">🏆</span>${escapeHtml(r.winner.name)} ${r.clinched ? "clinched" : "won"} Week ${wr.week}${r.clinched ? "" : ` at ${r.winner.W}-${r.winner.L}`}`
     : `Week ${wr.week} ended in a tie at the top`;
   const perfect = r.perfect && r.perfect.length
     ? `<div class="rc-note">Perfect card: ${r.perfect.map(escapeHtml).join(", ")}</div>`
     : "";
   return `
     <div class="rc-card">
-      <div class="rc-eyebrow">Week ${wr.week} Recap</div>
-      <div class="rc-headline">${winLine}</div>
+      <div class="rc-eyebrow">Week ${wr.week} ${r.clinched ? "Clinched" : "Recap"}</div>
+      <div class="rc-headline" role="status" aria-atomic="true">${winLine}</div>
+      ${r.clinched ? '<div class="rc-note">No remaining result can change the winner. Open picks still count toward season records.</div>' : ""}
       ${perfect}
       <button class="rc-share" id="wr-share"><span class="material-symbols-outlined text-sm" style="vertical-align:-3px">ios_share</span> Share to the group</button>
     </div>`;
 }
 function buildRecapText(wr) {
   const lines = [`Lock League — Week ${wr.week}`];
-  if (wr.recap && wr.recap.winner) lines.push(`Winner: ${wr.recap.winner.name} (${wr.recap.winner.W}-${wr.recap.winner.L})`);
+  if (wr.recap && wr.recap.winner) lines.push(`${wr.recap.clinched ? "Clinched" : "Winner"}: ${wr.recap.winner.name} (${wr.recap.winner.W}-${wr.recap.winner.L})`);
   else if (wr.recap) lines.push(`Tie at the top`);
   lines.push("");
   (wr.members || []).forEach((m, i) => {

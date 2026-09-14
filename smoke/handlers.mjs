@@ -575,5 +575,8 @@ test('weekly payouts resolve tied records by Super Lock hit then saved odds',asy
  b[4].price=null;
  assert.equal(computeWeeklyWinners([...a,...b],[1,2],2026,env)[1],null);
  b[4].price=500;b[3].result=null;
+ const clinch=computeWeeklyWinners([...a,...b],[1,2],2026,env)[1];
+ assert.equal(clinch.member_id,2);assert.equal(clinch.clinched,true);
+ b[4].result=null;
  assert.equal(computeWeeklyWinners([...a,...b],[1,2],2026,env)[1],null);
 });

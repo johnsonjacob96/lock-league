@@ -31,6 +31,23 @@ try {
   assert.match(await page.locator('.leader-rank').first().getAttribute('title'),/Longer Super Lock odds/);
   await page.screenshot({path:join(tmpdir(),`tiebreaks-week-${width}.png`),fullPage:true});
   console.log(`PASS ${width}px: weekly winner, season rank, Live rank, This Week rank and odds explanation agree`);
+  const clinch=await page.evaluate(()=>{
+   DATA={members:{},seasons:{}};
+   const results={Mason:['W','W','W','L','W'],Chris:['W','W','W','W','L'],Brayden:['W','W','W','L',null]};
+   const prices={Mason:-113,Chris:190,Brayden:-120};
+   const rows=Object.keys(results).flatMap(member_name=>BET_TYPES_ORDER.map((bet_type,i)=>({member_name,season:2026,week:1,bet_type,result:results[member_name][i],price:prices[member_name],pick_text:bet_type+' fixture'})));
+   mergeLiveSeason(rows);
+   const d=rulesWeeklyDecision('2026',1,true);
+   state.warRoom={season:2026,week:1,anyLive:true,recap:{complete:d.complete,clinched:d.clinched,winner:d.winner},members:d.ranked.map(e=>({member_id:e.id,name:e.name,week_rank:e.rank,week_tied:e.tied,tiebreak:e.tiebreak,live:{W:e.W,L:e.L,fW:e.W,fL:e.L,pending:e.pending},picks:[]}))};
+   document.getElementById('root').innerHTML=renderRecapCard(state.warRoom)+renderStandingsWeek();
+   return {winner:DATA.seasons['2026'].weeklyWinners['1'],complete:d.complete,clinched:d.clinched};
+  });
+  assert.deepEqual(clinch,{winner:'Mason',complete:false,clinched:true});
+  assert.match(await page.locator('.rc-headline').innerText(),/Mason clinched Week 1/);
+  assert.match(await page.locator('.week-member-row').first().innerText(),/Mason.*Clinched/s);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:join(tmpdir(),`weekly-clinch-${width}.png`),fullPage:true});
+  console.log(`PASS ${width}px: early clinch appears in season winners, Live recap and This Week`);
   await page.close();
  }
 } finally {await browser.close();}
