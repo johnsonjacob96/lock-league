@@ -2,7 +2,9 @@ name: Site monitor
 on:
   schedule:
     - cron: '7 * * * *'
-    - cron: '33 11 * * *'
+      timezone: America/Chicago
+    - cron: '33 6 * * *'
+      timezone: America/Chicago
   workflow_dispatch:
     inputs:
       browser:
@@ -12,6 +14,8 @@ on:
   pull_request:
     paths: ['.github/monitoring/**', '.github/workflows/site-monitor.yml']
   deployment_status:
+env:
+  TZ: America/Chicago
 permissions:
   contents: read
 concurrency:
@@ -38,7 +42,7 @@ jobs:
           SCHEDULE: ${{ github.event.schedule }}
           BROWSER: ${{ inputs.browser }}
         run: |
-          if [ "$EVENT" = pull_request ] || [ "$SCHEDULE" = '33 11 * * *' ] || [ "$BROWSER" = true ]; then
+          if [ "$EVENT" = pull_request ] || [ "$SCHEDULE" = '33 6 * * *' ] || [ "$BROWSER" = true ]; then
             echo 'args=--browser' >> "$GITHUB_OUTPUT"
           fi
       - name: Install browser tooling

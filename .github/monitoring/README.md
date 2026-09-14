@@ -1,6 +1,6 @@
 # Lock League continuous monitoring
 
-Hourly public HTTP/JSON probes and daily mobile/desktop Chromium checks run on GitHub-hosted runners. Successful GitHub deployment-status events also trigger HTTP checks when the deployment provider emits them. Daily schedules use UTC and may be delayed by GitHub; this is periodic monitoring, not an uptime SLA. Review failures and screenshots under Actions → Site monitor. GitHub notification delivery depends on your personal Actions notification settings. No custom email/Slack messages or automatic production changes are configured.
+Hourly public HTTP/JSON probes and daily mobile/desktop Chromium checks run on GitHub-hosted runners. Successful GitHub deployment-status events also trigger HTTP checks when the deployment provider emits them. Daily schedules use America/Chicago (Central time, with daylight saving) and may be delayed by GitHub; this is periodic monitoring, not an uptime SLA. Review failures and screenshots under Actions → Site monitor. GitHub notification delivery depends on your personal Actions notification settings. No custom email/Slack messages or automatic production changes are configured.
 
 The daily improvement agent requires the `OPENAI_API_KEY` repository secret. Without it, the run explicitly reports that the agent is inactive. API usage is billed separately; each run is limited to 25 minutes and at most one proposed change. It downloads the prior report to avoid repeating unchanged findings and uploads `improvement-proposal` containing a report and any proposed patch. Changes need human review and normal CI before merging. No automatic PR, merge, or deploy is performed. To pause, disable either workflow in GitHub Actions.
 
@@ -23,4 +23,4 @@ node .github/monitoring/check.mjs --browser
 
 Output goes to `monitor-output/`. Data/probe failures retry once, then return a nonzero exit code. We Dem Boys snapshots may be up to 72 hours old during its configured NFL refresh season. Completed golf seasons remain valid; update the explicit season data path when the app changes seasons. The Lock League probe validates API structure, not full odds freshness or settlement correctness.
 
-Daily improvement missions are staggered 30 minutes apart across the three apps (this app: 12:17 UTC). The action uses its supported default retry policy; separate schedules reduce competition for the shared API request limit.
+Daily improvement missions are staggered 30 minutes apart across the three apps (this app: 7:17 a.m. Central). The action uses its supported default retry policy; separate schedules reduce competition for the shared API request limit.

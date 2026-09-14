@@ -1,8 +1,11 @@
 name: Daily improvement agent
 on:
   schedule:
-    - cron: '17 12 * * *'
+    - cron: '17 7 * * *'
+      timezone: America/Chicago
   workflow_dispatch:
+env:
+  TZ: America/Chicago
 permissions:
   contents: read
   actions: read
