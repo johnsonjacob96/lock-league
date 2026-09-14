@@ -23,4 +23,4 @@ node .github/monitoring/check.mjs --browser
 
 Output goes to `monitor-output/`. Data/probe failures retry once, then return a nonzero exit code. We Dem Boys snapshots may be up to 72 hours old during its configured NFL refresh season. Completed golf seasons remain valid; update the explicit season data path when the app changes seasons. The Lock League probe validates API structure, not full odds freshness or settlement correctness.
 
-Daily improvement missions are staggered 30 minutes apart across the three apps (this app: 12:17 UTC). Provider retries are extended to tolerate temporary request-rate limits without weakening the sandbox.
+Daily improvement missions are staggered 30 minutes apart across the three apps (this app: 12:17 UTC). The action uses its supported default retry policy; separate schedules reduce competition for the shared API request limit.
