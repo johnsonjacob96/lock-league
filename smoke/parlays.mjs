@@ -12,7 +12,7 @@ mock.module('../functions/_shared/grader.js',{namedExports:{fetchScoreboard:asyn
 mock.module('../functions/_shared/espn.js',{namedExports:{espnSummary:async()=>gameSummary}});
 const {validateSlip,legProgress}=await import('../functions/_shared/parlays.js');
 const {onRequest}=await import('../functions/api/parlays.js');
-const client={document:{addEventListener(){}},state:{}};vm.createContext(client);vm.runInContext(readFileSync(new URL('../public/assets/parlays.js',import.meta.url),'utf8'),client);
+const client={document:{addEventListener(){}},state:{}};vm.createContext(client);vm.runInContext(readFileSync(new URL('../public/assets/parlay-parser.js',import.meta.url),'utf8'),client);vm.runInContext(readFileSync(new URL('../public/assets/parlays.js',import.meta.url),'utf8'),client);
 const sample=`Same Game Parlay +10087
 Denver Broncos @ Kansas City Chiefs 7:15PM CT
 Kenneth Walker III Over +3.5
@@ -88,4 +88,29 @@ test('live API updates progress, waits for a final summary, then persists exact-
  gameSummary._seedFinal=true;data=await get();assert.equal(data.slips.find(s=>s.id===id).legs[0].result,'W');
  assert.equal(data.slips.find(s=>s.id===id).image,undefined);
  gameSummary=null;data=await get();assert.equal(data.slips.find(s=>s.id===id).legs[0].result,'W');
+});
+
+test('wrapped names, directions, markets and alternate lines stay in their own leg',()=>{
+ const rows=client.parseParlayText('Kenneth Walker III\nTOTAL RECEPTIONS\nOver\n3.5\nPatrick Mahomes Rushing Yards\nOver13.5\nEmmett Johnson\n15+\nALT RUSHING YDS\nRashee Rice\n6+ Receptions\nKenneth Walker III\nANY TIME TOUCHDOWN SCORER');
+ assert.equal(rows.length,5);assert.deepEqual(Array.from(rows,l=>l.market),['receptions','rush_yds','rush_yds','receptions','anytime_td']);
+ assert.deepEqual(Array.from(rows,l=>l.line),[3.5,13.5,15,6,null]);
+ assert.equal(rows[2].side,'atleast');assert.ok(rows.every(l=>!l.review.length));
+ const split=client.parseParlayText('Patrick Mahomes\nPassing\nYards\nUnder 250.5');assert.equal(split[0].market,'pass_yds');
+});
+test('missing text is retained without borrowing a different player’s market or inventing a threshold',()=>{
+ const parsed=client.parseParlayDocument('3 Leg Parlay\nKenneth Walker III Over 3.5\nPatrick Mahomes Rushing Yards\nOver13.5\nRashee Rice\nTOTAL RECEPTIONS');
+ assert.equal(parsed.legs.length,3);assert.equal(parsed.legs[0].market,'');assert.equal(parsed.legs[1].market,'rush_yds');assert.equal(parsed.legs[2].line,null);
+ assert.ok(parsed.legs[0].review.length);assert.ok(parsed.legs[2].review.length);
+ assert.equal(client.parseParlayDocument('8 Leg Parlay\nRashee Rice 6+ Receptions').warnings.length,1);
+ const conflict=client.parseParlayText('RJ Harvey Over 16.5 Rushing Yards\nRJ HARVEY - RECEIVING YARDS')[0];assert.equal(conflict.market,'');assert.ok(conflict.review.length);
+});
+test('unsupported markets and a lost player heading remain unresolved instead of becoming another bet',()=>{
+ const rows=client.parseParlayText('Patrick Mahomes Over 25.5\nLONGEST PASSING COMPLETION\nOver 3.5 Receptions');
+ assert.equal(rows.length,2);assert.equal(rows[0].market,'');assert.equal(rows[1].player,'');assert.equal(rows[1].line,3.5);
+});
+
+test('broken decimal text is not silently converted to a different numeric bet',()=>{
+ for(const text of ['Rashee Rice Over 3 5 Receptions','Rashee Rice Over 3. 5 Receptions']){
+  const row=client.parseParlayText(text)[0];assert.equal(row.line,null);assert.ok(row.review.length);
+ }
 });

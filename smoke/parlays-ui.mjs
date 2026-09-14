@@ -43,6 +43,21 @@ try {
   await page.waitForSelector('#parlay-new');
   const posted=await page.evaluate(()=>parlayWrites.at(-1));
   assert.equal(posted.legs.length,2);assert.equal(posted.legs[0].side,'atleast');assert.match(posted.image,/^data:image\/jpeg;base64,/);
+  await page.locator('#parlay-new').click();
+  await page.evaluate(()=>{
+   parlayState.draft.game_key='Denver Broncos@Kansas City Chiefs';
+   parlayState.draft.legs=parseParlayText('Kenneth Walker III Over 3.5\nPatrick Mahomes Rushing Yards\nOver13.5');
+   paintParlays();
+  });
+  assert.equal(await page.locator('[data-leg-index="0"] [data-field="market"]').inputValue(),'');
+  const before=await page.evaluate(()=>parlayWrites.length);
+  await page.locator('#parlay-form button[type=submit]').click();
+  assert.equal(await page.evaluate(()=>parlayWrites.length),before,'unresolved OCR must not save');
+  await page.locator('[data-leg-index="0"] [data-field="market"]').selectOption('receptions');
+  await page.locator('[data-field="reviewed"]').check();
+  await page.locator('#parlay-form button[type=submit]').click();
+  await page.waitForSelector('#parlay-new');
+  assert.equal(await page.evaluate(()=>parlayWrites.length),before+1);
   assert.deepEqual(errors,[]);console.log(`PASS ${width}px: live cards, leaderboard, edit assignments, upload review and save`);await page.close();
  }
 }finally{await browser.close();}
