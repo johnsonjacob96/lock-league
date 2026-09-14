@@ -1,12 +1,29 @@
 // Group parlays are independent of league picks, standings and payouts.
 const PARLAY_MARKETS={pass_yds:'Passing yards',pass_tds:'Passing TDs',pass_cmp:'Completions',pass_att:'Pass attempts',pass_int:'Interceptions',rush_yds:'Rushing yards',rush_att:'Rush attempts',rush_tds:'Rushing TDs',rec_yds:'Receiving yards',receptions:'Receptions',rec_tds:'Receiving TDs',rush_rec_yds:'Rush + rec yards',anytime_td:'Anytime touchdown',manual:'Custom / manual result'};
-const parlayState={data:null,draft:null,busy:false,error:'',week:null,season:null,night:'All',timer:null};
+const parlayState={data:null,draft:null,busy:false,error:'',week:null,season:null,night:'All',hallExpanded:false,timer:null};
 function parlayRecord(slips,members,night='All') {
  return members.map(m=>{
   const legs=slips.filter(s=>night==='All'||s.night===night).flatMap(s=>s.legs).filter(l=>l.member_id===m.id);
   const W=legs.filter(l=>l.result==='W').length,L=legs.filter(l=>l.result==='L').length,P=legs.filter(l=>l.result==='P').length,V=legs.filter(l=>l.result==='V').length;
   return {...m,W,L,P,V,open:legs.filter(l=>!l.result).length,pct:W+L?W/(W+L):null};
  }).sort((a,b)=>(b.pct??-1)-(a.pct??-1)||b.W-a.W||a.name.localeCompare(b.name));
+}
+// One settled miss, every other leg a hit. Pushes/voids change combined odds,
+// so the original slip price cannot support a would-have-won amount for them.
+function parlayHallEntries(slips,season,night='All') {
+ return slips.filter(s=>s.season===season&&(night==='All'||s.night===night)&&s.legs.length>1&&s.legs.filter(l=>l.result==='L').length===1&&s.legs.every(l=>l.result==='W'||l.result==='L')).map(s=>{
+  const odds=s.odds,profit=typeof odds==='number'&&Number.isFinite(odds)&&Math.abs(odds)>=100?Math.round(5*(odds>0?odds/100:100/-odds)*100)/100:null;
+  return {slip:s,miss:s.legs.find(l=>l.result==='L'),profit};
+ }).sort((a,b)=>(b.profit??-1)-(a.profit??-1)||b.slip.week-a.slip.week||String(a.slip.id).localeCompare(String(b.slip.id)));
+}
+function renderParlayHall() {
+ const d=parlayState.data,entries=parlayHallEntries(d.slips,parlayState.season,parlayState.night);
+ if(!entries.length)return '';
+ const card=({slip:s,miss,profit})=>{
+  const member=d.members.find(m=>m.id===miss.member_id),money=profit==null?'Odds needed':profit.toLocaleString('en-US',{style:'currency',currency:'USD'});
+  return `<article class="parlay-shame-card"><div class="parlay-shame-story"><p class="parlay-shame-kicker">${escapeHtml(s.night)} · Week ${s.week} · ${s.legs.length-1} of ${s.legs.length} hit</p><h3>${escapeHtml(member?.name||'Mystery picker')}</h3><p class="parlay-shame-verdict">Everybody did their part. Almost.</p><div class="parlay-shame-marks" aria-label="${s.legs.length-1} legs hit, one leg missed">${s.legs.map(l=>`<span class="${l.result==='L'?'miss':'hit'}" aria-hidden="true">${l.result==='L'?'✕':'✓'}</span>`).join('')}</div><p class="parlay-shame-bet"><span>The missing leg</span>${escapeHtml(parlayLegLabel(miss))}</p><p class="parlay-shame-context">${escapeHtml(s.title)} · ${escapeHtml(s.game_key.replace('@',' @ '))}${member?'':' · Assign this leg to name the culprit.'}</p></div><div class="parlay-shame-receipt"><span class="parlay-shame-stamp">ONE LEG SHORT</span><p class="parlay-shame-kicker">THE ALMOST PAYDAY</p><strong class="parlay-shame-amount">${money}</strong><p>${profit==null?'Add the combined odds to calculate the winnings that got away.':`in winnings that got away<br><span>$5 × ${americanOdds(s.odds)} odds · profit only</span>`}</p><span class="parlay-shame-fine">Bragging rights revoked. Friendship pending.</span></div></article>`;
+ };
+ return `<section class="parlay-shame" aria-labelledby="parlay-shame-title"><div class="parlay-shame-heading"><h2 id="parlay-shame-title">HALL OF SHAME</h2><p>Season ${parlayState.season} · ${parlayState.night==='All'?'Both nights':escapeHtml(parlayState.night)} · Biggest almost first</p></div>${card(entries[0])}${entries.length>1?`<details class="parlay-shame-more" ${parlayState.hallExpanded?'open':''}><summary>More almosts (${entries.length-1})</summary>${entries.slice(1).map(card).join('')}</details>`:''}<p class="parlay-shame-note">One settled miss. Every other leg hit. Based on a $5 stake, excluding its return.</p></section>`;
 }
 function parlayLegLabel(l) {return l.market==='manual'?l.player:`${l.player} · ${l.market==='anytime_td'?'Anytime TD':`${l.side==='atleast'?`${l.line}+`:l.side+' '+l.line} ${PARLAY_MARKETS[l.market]||l.market}`}`;}
 function parlayOptions(options,value) {return Object.entries(options).map(([k,v])=>`<option value="${escapeHtml(k)}" ${String(value)===k?'selected':''}>${escapeHtml(v)}</option>`).join('');}
@@ -33,6 +50,7 @@ function renderParlays() {
  const leaderboard=parlayRecord(d.slips,d.members,parlayState.night);
  return `<section class="parlays"><div class="parlay-heading"><div><h1>GROUP PARLAYS</h1><p class="quiet-copy">Monday & Thursday · Every leg counts</p></div><button id="parlay-new" class="parlay-primary">Upload slip</button></div>${err}
  <div class="parlay-filters"><label>Season<input id="parlay-season" type="number" min="2026" max="2100" value="${parlayState.season}"></label><label>Week<select id="parlay-week">${parlayOptions(Object.fromEntries(Array.from({length:18},(_,i)=>[i+1,`Week ${i+1}`])),parlayState.week)}</select></label><label>Night<select id="parlay-night">${parlayOptions({All:'Both nights',Monday:'Monday',Thursday:'Thursday'},parlayState.night)}</select></label><button id="parlay-refresh" class="text-action">Refresh</button></div>
+ ${renderParlayHall()}
  <div class="parlay-layout"><div>${visible.length?visible.map(renderParlaySlip).join(''):'<div class="compact-panel"><h2>No slip yet</h2><p class="quiet-copy">Upload the screenshot, review the legs, then assign each pick to its member.</p></div>'}</div>
  <aside class="compact-panel parlay-leaders"><h2>LEG LEADERBOARD</h2><p class="quiet-copy">Season ${parlayState.season} · ${parlayState.night==='All'?'Both nights':parlayState.night}</p><div class="parlay-rank-head"><span>Member</span><span>Hit–Miss</span><span>Hit rate</span></div>${leaderboard.map(m=>`<div class="parlay-rank"><span>${escapeHtml(m.name)}<small>${m.W+m.L} settled${m.open?` · ${m.open} open`:''}${m.P?` · ${m.P} push`:''}${m.V?` · ${m.V} void`:''}</small></span><b>${m.W}–${m.L}</b><b>${m.pct==null?'—':(m.pct*100).toFixed(0)+'%'}</b></div>`).join('')}<p class="quiet-copy">Hit rate excludes pushes and voids. Separate from league standings.</p></aside></div></section>`;
 }
@@ -79,6 +97,7 @@ async function enterParlays() {
 }
 function bindParlays() {
  const byId=id=>document.getElementById(id);
+ const hallMore=document.querySelector('.parlay-shame-more');if(hallMore)hallMore.ontoggle=()=>{parlayState.hallExpanded=hallMore.open;};
  if(byId('parlay-refresh'))byId('parlay-refresh').onclick=refreshParlayView;
  for(const [id,key] of [['parlay-week','week'],['parlay-season','season']])if(byId(id))byId(id).onchange=e=>{parlayState[key]=Number(e.target.value);refreshParlayView();};
  if(byId('parlay-night'))byId('parlay-night').onchange=e=>{parlayState.night=e.target.value;paintParlays();};
