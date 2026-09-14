@@ -4,8 +4,8 @@ import {join} from 'node:path';
 import {loadChromium} from './playwright.mjs';
 const browser=await(await loadChromium()).launch();
 try {
- for(const width of [390,1440]) {
-  const page=await browser.newPage({viewport:{width,height:1000}}),errors=[],writes=[];
+ for(const width of [375,390,1440]) {
+  const page=await browser.newPage({viewport:{width,height:width===375?667:width===390?844:1000}}),errors=[],writes=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.goto(new URL('../public/index.html',import.meta.url).href);
   await page.evaluate(()=>{
@@ -35,8 +35,11 @@ try {
   assert.equal(await page.locator('.parlay-shame-card').first().locator('.hit').count(),6);
   assert.equal(await page.locator('.parlay-shame-card').first().locator('.miss').count(),1);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  if(width<700){const box=await page.locator('.parlay-shame-card').first().boundingBox();assert.ok(box.height<=page.viewportSize().height-160,`card ${box.height}px must fit between mobile header and nav`);}
   await page.screenshot({path:join(tmpdir(),`parlay-shame-${width}.png`),fullPage:true});
-  await page.locator('.parlay-shame').screenshot({path:join(tmpdir(),`parlay-shame-card-${width}.png`)});
+  await page.locator('.parlay-shame-card').first().evaluate(el=>el.scrollIntoView({block:'center'}));
+  if(width<700){const card=await page.locator('.parlay-shame-card').first().boundingBox(),nav=await page.locator('#mobile-nav').boundingBox();assert.ok(card.y>=0&&card.y+card.height<=nav.y,'whole card visible above bottom navigation');}
+  await page.locator('.parlay-shame-card').first().screenshot({path:join(tmpdir(),`parlay-shame-card-${width}.png`)});
   await page.locator('.parlay-shame-more summary').focus();await page.keyboard.press('Enter');
   await page.waitForFunction(()=>parlayState.hallExpanded);
   await page.evaluate(()=>paintParlays());assert.equal(await page.locator('.parlay-shame-more').getAttribute('open'),'');
