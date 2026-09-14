@@ -142,3 +142,22 @@ test('leading y-comma OCR noise is removed from titles, subtitles and standalone
  }
  assert.equal(client.parlayCleanName('J.K. Dobbins'),'J.K. Dobbins');assert.equal(client.parlayCleanName('A.J. Brown'),'A.J. Brown');
 });
+
+test('OCR uses repeated names and word geometry to discard logo text without stripping initials',()=>{
+ vm.runInContext(readFileSync(new URL('../public/assets/parlay-ocr.js',import.meta.url),'utf8'),client);
+ const word=(text,x0,x1,confidence=95)=>({text,confidence,bbox:{x0,x1,y0:100,y1:130}});
+ const title=(name,prefix='vy,')=>({text:prefix+' '+name+' Over +3.5',x:30,right:650,y:115,height:30,confidence:50,words:[word(prefix,30,60,20),...name.split(' ').map((t,i)=>word(t,120+i*100,200+i*100)),word('Over',450,510),word('+3.5',530,610)]});
+ const subtitle=name=>({text:name.toUpperCase()+' - TOTAL RECEPTIONS',x:120,right:650,y:160,height:25,confidence:95});
+ for(const name of ['Kenneth Walker III','RJ Harvey','J.K. Dobbins']) {
+  const filtered=client.parlayFilterLogoText([title(name),subtitle(name)]);
+  const legs=client.parseParlayText(client.parlayMergeOcrLines(filtered));
+  assert.equal(legs.length,1);assert.equal(legs[0].player,name);assert.equal(legs[0].line,3.5);
+ }
+ const icon={text:'KC',x:30,right:60,y:115,height:40,confidence:60};
+ const clean={...title('Kenneth Walker III'),text:'Kenneth Walker III Over +3.5',x:120,words:title('Kenneth Walker III').words.slice(1)};
+ assert.equal(client.parlayFilterLogoText([icon,clean,subtitle('Kenneth Walker III')]).length,2);
+ assert.equal(client.parlayFilterLogoText([{...icon,text:'15'},clean,subtitle('Kenneth Walker III')]).length,3);
+ assert.equal(client.parlayFilterLogoText([title('Kenneth Walker III')])[0].text,'vy, Kenneth Walker III Over +3.5');
+ const real=title('Harvey','RJ');real.words[0]=word('RJ',80,115);real.words[1]=word('Harvey',120,220);
+ assert.equal(client.parlayFilterLogoText([real,subtitle('Harvey')])[0].text,'RJ Harvey Over +3.5');
+});
