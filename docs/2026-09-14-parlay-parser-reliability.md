@@ -12,3 +12,9 @@ Changes:
 Validation: 150 backend tests; 341 existing logic/render checks; mobile/desktop upload, assignment, unresolved-field blocking and correction tests. Optional `node smoke/parlays-ocr.mjs` runs real Tesseract against deterministic standard (1083×1369) and tall (390×3100) blue-on-charcoal screenshots: all seven player/market/threshold combinations and source crops match. The previous implementation found zero legs on the same tall fixture; the revision finds seven. Includes separate parser regressions for wrapping, missing subtitles, unsupported markets and broken decimal text.
 
 Limit: OCR still requires human review. There were no saved production slips to replay, so the exact unsuccessful upload was unavailable; tests use faithful layout/text fixtures, not a claim that every uploaded screenshot is now error-free. No paid provider or new account/binding was introduced.
+
+## Follow-up: repeated subtitles and leading `y,`
+
+Owner clarified that a title (`Kenneth Walker III Over +3.5`) and repeated-name market subtitle (`Kenneth Walker III - Total Receptions`) were becoming two legs, and OCR was inserting `y,` before names. Subtitle pairing now tolerates missing/misread Roman suffixes, separator variations and stray short logo tokens. Close spelling differences remain one candidate but require name review; clearly different players remain separate. A later same-player anytime-TD selection is still its own leg. Strip the leading single-letter-plus-comma marker without removing legitimate dotted initials such as J.K. or A.J. The original crop/text remains unchanged for comparison.
+
+Regression cases cover exact title/subtitle pairing, suffix/logo/separator variations, split subtitles, spelling noise, `y,` in titles/subtitles/standalone names, different-player boundaries and separate same-player markets. Standard and tall real-OCR fixtures still return all seven correct legs.

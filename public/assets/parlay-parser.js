@@ -14,9 +14,34 @@ function parlayMarket(text) {
  return 'manual';
 }
 function parlayCleanName(text) {
- return String(text).replace(/^[^a-z]+/i,'').replace(/\s+/g,' ').trim().replace(/\s+[il]{3}$/i,' III');
+ return String(text).replace(/^[^a-z]+/i,'').replace(/^[a-z]\s*[,;:]\s*(?=[a-z])/i,'').replace(/\s+/g,' ').trim().replace(/\s+[il1|]{3}$/i,' III');
 }
 function parlayNameKey(text) {return parlayCleanName(text).toLowerCase().replace(/[^a-z]/g,'');}
+// A sportsbook repeats the player's name in the market subtitle. Match that
+// repetition independently of punctuation, OCR suffixes and stray logo letters.
+// Near matches are kept as one candidate but explicitly require name review.
+function parlaySubtitleMatch(title,subtitle) {
+ const core=s=>parlayCleanName(s).toLowerCase().replace(/[.'’]/g,'').replace(/[^a-z0-9 -]/g,' ').trim().replace(/\s+(?:jr|sr|[il1|]{1,4}|iv|v)$/, '').split(/\s+/).filter(Boolean);
+ const a=core(title),b=core(subtitle);
+ if(a.length<2||b.length<2)return {match:parlayNameKey(title)===parlayNameKey(subtitle),review:false};
+ if(a.join('')===b.join(''))return {match:true,review:false};
+ const trimLogo=(long,short)=>long.length===short.length+1&&long[0].length<=3&&long.slice(1).join('')===short.join('');
+ if(trimLogo(a,b)||trimLogo(b,a))return {match:true,review:true};
+ // Only one insertion/deletion/substitution in one substantial name token.
+ // A long first-name OCR typo also requires review; short distinct names
+ // such as Josh/Kyle are never matched by surname alone.
+ const oneEdit=(x,y)=>{
+  if(x===y)return true;
+  if(Math.min(x.length,y.length)<5||Math.abs(x.length-y.length)>1)return false;
+  let i=0,j=0,edits=0;
+  while(i<x.length&&j<y.length){if(x[i]===y[j]){i++;j++;continue;}if(++edits>1)return false;if(x.length>=y.length)i++;if(y.length>=x.length)j++;}
+  return edits+(x.length-i)+(y.length-j)<=1;
+ };
+ const sameFirst=a[0]===b[0];
+ if(a.length===b.length&&sameFirst&&a.slice(1).filter((token,i)=>token!==b[i+1]).length===1&&a.slice(1).every((token,i)=>oneEdit(token,b[i+1])))return {match:true,review:true};
+ if(a.length===b.length&&Math.max(a[0].length,b[0].length)>=7&&oneEdit(a[0],b[0])&&a.slice(1).every((token,i)=>token===b[i+1]))return {match:true,review:true};
+ return {match:false,review:false};
+}
 function parseParlayDocument(text) {
  const lines=String(text).replace(/[\u2013\u2014]/g,'-').split(/\n/).map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);
  const legs=[],warnings=[];let block=null;
@@ -44,6 +69,16 @@ function parseParlayDocument(text) {
   else if(!block.player)block.player=player;
   else if(!sameName(block.player,player)||selection&&block.side){finish();start(player);}
  }
+ function subtitle(player) {
+  if(block?.player){
+   const paired=parlaySubtitleMatch(block.player,player);
+   if(paired.match){
+    if(paired.review)block.issues.push('The repeated player name differs slightly. Check the name against the screenshot.');
+    return;
+   }
+  }
+  name(player);
+ }
  function addMarket(s) {
   if(!hasMarket(s))return;
   block.marketTexts.push(s);const key=parlayMarket(s);
@@ -58,7 +93,7 @@ function parseParlayDocument(text) {
   else if(line!=null)block.line=line;
   block.side=side;
  }
- for(const s of lines) {
+ for(const [index,s] of lines.entries()) {
   if(meta(s))continue;
   // Name + selection, or a selection wrapped onto the line beneath its name.
   const ou=s.match(/^(.*?)(over|under)\s*\+?\s*(\d+(?:[.,]\d+)?)(.*)$/i)||s.match(/^(.*?)\b(over|under|at least)\b\s*\+?\s*(\d+(?:[.,]\d+)?)?(.*)$/i);
@@ -74,14 +109,14 @@ function parseParlayDocument(text) {
   }
   // Repeated full name in the sportsbook's market subtitle is an anchor, not
   // another pick. It also protects adjacent players from bleeding together.
-  const descriptor=s.match(/^(.+?)\s+-\s+(.+)$/);
+  const descriptor=s.match(/^(.+?)\s*[-:|]\s*((?:total|alt|first|last|longest|shortest|passing|pass|rushing|rush|receiving|receptions|rec|completions|interceptions|any\s*time).*?)$/i);
   if(descriptor&&hasMarket(descriptor[2])) {
-   name(descriptor[1]);block.raw.push(s);addMarket(descriptor[2]);continue;
+   subtitle(descriptor[1]);block.raw.push(s);addMarket(descriptor[2]);continue;
   }
   if(hasMarket(s)) {
    const anytime=s.match(/^(.+?)\s+(?:any\s*time\s+(?:touchdown|td)|to score (?:a )?touchdown)/i);
    const heading=s.match(/^(.+?)\s+(?=(?:total|alt|first|last|longest|shortest|passing|rushing|receiving|receptions|completions|interceptions)\b)/i);
-   if(anytime)name(anytime[1],true);else if(heading&&heading[1].trim().split(/\s+/).length>=2)name(heading[1]);else if(!block)start();
+   if(anytime)name(anytime[1],true);else if(heading&&heading[1].trim().split(/\s+/).length>=2)subtitle(heading[1]);else if(!block)start();
    block.raw.push(s);addMarket(s);continue;
   }
   if(/^(?:total|alt(?:ernate)?|player)$/i.test(s)){if(block)block.raw.push(s);continue;}
@@ -90,8 +125,14 @@ function parseParlayDocument(text) {
    continue;
   }
   // A standalone player heading is kept even if OCR missed their selection.
-  if(/^[^a-z]*[a-z][a-z .'-]*(?:\s+[a-z][a-z .'-]*)+$/i.test(s)) {
-   name(s);block.raw.push(s);
+  if(/^[a-z][a-z .'-]*(?:\s+[a-z][a-z .'-]*)+$/i.test(parlayCleanName(s))) {
+   const next=lines[index+1]||'',nextMarket=hasMarket(next)?parlayMarket(next):null;
+   const known=block?.markets.filter(m=>m!=='manual')||[];
+   const newSelection=/^(?:over|under)\s*\+?\s*\d|^\d+(?:\.\d+)?\s*\+/i.test(next);
+   if(block?.side&&(newSelection||nextMarket==='anytime_td'&&block.side!=='yes'||known.length&&nextMarket&&nextMarket!=='manual'&&!known.includes(nextMarket))){finish();start(parlayCleanName(s));}
+   else if(block?.side&&nextMarket)subtitle(s);
+   else name(s);
+   block.raw.push(s);
   } else if(block) {block.raw.push(s);block.issues.push('Some text could not be read. Check the screenshot.');}
  }
  finish();
