@@ -59,6 +59,8 @@ test("null results are cached, avoiding repeated empty market requests", async (
 test("refresh failure preserves original timestamp, marks delay, and backs off", async () => {
   await sharedFeed(env, "failure", 30000, async () => ({
     fetched_at: "original",
+    live: true,
+    stale: false,
     games: [],
   }));
   await db.exec(
@@ -68,15 +70,18 @@ test("refresh failure preserves original timestamp, marks delay, and backs off",
     throw Error("outage");
   });
   assert.equal(stale.stale, true);
+  assert.equal(stale.live, false);
   assert.equal(stale.fetched_at, "original");
-  assert.equal(
-    (
-      await sharedFeed(env, "failure", 30000, () => {
-        throw Error("must back off");
-      })
-    ).fetched_at,
-    "original",
-  );
+  let retries = 0;
+  const repeated = await sharedFeed(env, "failure", 30000, () => {
+    retries++;
+    throw Error("must back off");
+  });
+  assert.equal(retries, 0);
+  assert.equal(repeated.stale, true);
+  assert.equal(repeated.live, false);
+  assert.equal(repeated.fetched_at, "original");
+  assert.equal(verifiedGames(repeated), null);
 });
 test("expired lease can be reclaimed after an isolate dies", async () => {
   await db.exec(

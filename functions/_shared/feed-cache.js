@@ -32,8 +32,8 @@ export async function sharedFeed(env, key, ttlMs, load) {
     await db`UPDATE feed_refresh SET owner=${owner},lease_until=NOW()+INTERVAL '45 seconds'
     WHERE cache_key=${key} AND lease_until<=NOW() AND expires_at<=NOW() RETURNING cache_key`;
   if (!claim.length) {
-    // Do not stamp old quotes as fresh while another isolate refreshes.
-    if (old?.payload) return { ...old.payload, refreshing: true };
+    // Expired payloads remain delayed during both refreshes and failure backoff.
+    if (old?.payload) return { ...old.payload, stale: true, live: false, refreshing: true };
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 100));
       old = await read();
