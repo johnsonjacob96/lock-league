@@ -990,6 +990,9 @@
   }
 
 
+  .game-saved-picks{margin:0 0 12px;padding:10px 12px;border:1px solid #355b68;border-left:3px solid #73c6e2;border-radius:8px;background:#142329;color:#e6e8e8}
+  .game-saved-heading{display:block;font:600 10px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#91d5eb;margin-bottom:6px}
+  .game-saved-pick{display:flex;gap:8px;align-items:baseline;font-size:12px;line-height:1.5}.game-saved-pick+.game-saved-pick{margin-top:5px}.game-saved-type{flex-shrink:0;color:#91d5eb;font:500 11px 'JetBrains Mono',monospace}.game-saved-pick>span:last-child{min-width:0;overflow-wrap:anywhere}
   .game-card .pick-btn { --accent:#46e08a; --accent-soft:rgba(70,224,138,.08); }
   .game-card .pick-btn .pb-value { color:#e6e8e8; }
   .game-card .pick-btn.picked .pb-value { color:#58df95; }
@@ -3868,6 +3871,7 @@ function switchBook(gameKey, book) {
 }
 
 function refreshMyCard() {
+  refreshGameSavedPicks();
   const disclosure = document.getElementById("my-card");
   if (disclosure?.tagName === "DETAILS") disclosure.ontoggle = () => { state.myCardOpen = disclosure.open; };
   const chips = document.getElementById("mycard-chips");
@@ -3892,6 +3896,19 @@ function bookUpdateLabel(book) {
   const t = Date.parse(book?.updated);
   if (!Number.isFinite(t)) return "";
   return `As of ${new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${book.supplemental ? " · backup" : ""}`;
+}
+// Saved selections belong to the game, independent of the displayed book/quote.
+function gameSavedPicksHtml(gameKey, picks=currentMyPicks) {
+  if(!state.user)return '';
+  const saved=BET_TYPES_ORDER.filter(bt=>picks?.[bt]?.game_key===gameKey);
+  if(!saved.length)return '';
+  return `<div class="game-saved-picks" aria-label="Your saved picks on this game"><span class="game-saved-heading">ON YOUR CARD</span>${saved.map(bt=>{const p=picks[bt];return `<div class="game-saved-pick"><span class="game-saved-type">${escapeHtml(BET_META[bt].short)}${p.book?' · '+escapeHtml(bookShort(p.book)):''}</span><span>${escapeHtml(p.pick_text||bt)}</span></div>`;}).join('')}</div>`;
+}
+function refreshGameSavedPicks(picks=currentMyPicks) {
+  document.querySelectorAll('.game-card[data-game-key]').forEach(card=>{
+    const mount=card.querySelector('[data-game-saved-picks]');
+    if(mount)mount.innerHTML=gameSavedPicksHtml(card.dataset.gameKey,picks);
+  });
 }
 function renderGameCard(g, requestedBook) {
   const gameKey = `${g.away}@${g.home}`;
@@ -3944,6 +3961,7 @@ function renderGameCard(g, requestedBook) {
         ${teamRow(g.away)}
         ${teamRow(g.home)}
       </div>
+      <div data-game-saved-picks>${gameSavedPicksHtml(gameKey)}</div>
       <div class="flex items-center justify-between mb-2">
         <span class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-widest">Pick a line</span>
         ${bookToggle}
@@ -4122,6 +4140,7 @@ function confirmPickReplacement(betType, proposed) {
 }
 
 function markPickedButtons(picksByBetType) {
+  refreshGameSavedPicks(picksByBetType);
   const buttons = document.querySelectorAll(".pick-btn[data-bet]");
   buttons.forEach(b => b.classList.remove("picked"));
   if (!picksByBetType) return;
