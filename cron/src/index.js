@@ -42,7 +42,12 @@ export default {
   // that one temporary trigger run as a dry-run so it doesn't buzz phones.
   async scheduled(event, env, ctx) {
     const dryrun = Boolean(env.VERIFY_CRON) && event.cron === env.VERIFY_CRON;
-    const types = CRON_TYPES[event.cron];
+    // Keep legacy expressions during trigger propagation; the combined daily
+    // expression preserves exactly the same hours and notification handlers.
+    const cron = event.cron === "0 16,23 * * *"
+      ? `0 ${new Date(event.scheduledTime).getUTCHours()} * * *`
+      : event.cron;
+    const types = CRON_TYPES[cron];
     if (!types) { console.log(`[scheduled] unrecognized cron: ${event.cron}`); return; }
     ctx.waitUntil(Promise.all(types.map((type) => fireNotify(env, type, { dryrun }))));
   },

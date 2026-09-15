@@ -20,7 +20,9 @@
 # 16:00 UTC daily trigger fires both reminder and line-moves (both apps guard
 # themselves — reminder no-ops on non-Sundays, line-moves runs every day
 # anyway), instead of two separate triggers at the same time. That keeps this
-# Worker at 3 triggers instead of 4. See src/index.js for the cron->type map.
+# Worker combines the 16:00 and 23:00 daily slots into one cron expression,
+# using scheduledTime to preserve each slot's handlers. This uses 2 triggers
+# and leaves capacity for the We Dem Boys scheduler.
 #
 # See ../functions/api/notify.js for both handlers.
 name = "lock-league-cron"
@@ -30,9 +32,8 @@ compatibility_date = "2025-01-01"
 # Cloudflare's cron parser rejects "0" for Sunday; use the named day.
 [triggers]
 crons = [
-  "0 16 * * *",     # reminder (Sundays only, app-guarded) + line-moves, shared slot
+  "0 16,23 * * *",  # same daily handlers, selected by scheduled UTC hour
   "0 17 * * SUN",   # reminder, second DST bracket
-  "0 23 * * *",     # line-moves + upcoming early-week kickoff reminder
 ]
 
 [vars]
