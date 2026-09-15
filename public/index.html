@@ -990,9 +990,9 @@
   }
 
 
-  .game-saved-picks{margin:0 0 12px;padding:10px 12px;border:1px solid #355b68;border-left:3px solid #73c6e2;border-radius:8px;background:#142329;color:#e6e8e8}
-  .game-saved-heading{display:block;font:600 10px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#91d5eb;margin-bottom:6px}
-  .game-saved-pick{display:flex;gap:8px;align-items:baseline;font-size:12px;line-height:1.5}.game-saved-pick+.game-saved-pick{margin-top:5px}.game-saved-type{flex-shrink:0;color:#91d5eb;font:500 11px 'JetBrains Mono',monospace}.game-saved-pick>span:last-child{min-width:0;overflow-wrap:anywhere}
+  .game-saved-picks{margin:0 0 12px;padding:10px;border:1px solid #35423c;border-radius:8px;background:#131b17;color:#e6e8e8}
+  .game-saved-heading{display:block;font:600 10px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#aeb9b2;margin-bottom:6px}
+  .game-saved-pick{--saved-book-color:#aeb9b2;display:flex;gap:8px;align-items:baseline;font-size:12px;line-height:1.5;padding:7px 8px;border-left:3px solid var(--saved-book-color);border-radius:5px;background:#1d2721}.game-saved-pick[data-saved-book="fanduel"]{--saved-book-color:#91d5eb;background:#142b36}.game-saved-pick[data-saved-book="draftkings"]{--saved-book-color:#8fe0a3;background:#193123}.game-saved-pick+.game-saved-pick{margin-top:5px}.game-saved-type{flex-shrink:0;color:var(--saved-book-color);font:500 11px 'JetBrains Mono',monospace}.game-saved-pick>span:last-child{min-width:0;overflow-wrap:anywhere}
   .game-card .pick-btn { --accent:#46e08a; --accent-soft:rgba(70,224,138,.08); }
   .game-card .pick-btn .pb-value { color:#e6e8e8; }
   .game-card .pick-btn.picked .pb-value { color:#58df95; }
@@ -3902,7 +3902,7 @@ function gameSavedPicksHtml(gameKey, picks=currentMyPicks) {
   if(!state.user)return '';
   const saved=BET_TYPES_ORDER.filter(bt=>picks?.[bt]?.game_key===gameKey);
   if(!saved.length)return '';
-  return `<div class="game-saved-picks" aria-label="Your saved picks on this game"><span class="game-saved-heading">ON YOUR CARD</span>${saved.map(bt=>{const p=picks[bt];return `<div class="game-saved-pick"><span class="game-saved-type">${escapeHtml(BET_META[bt].short)}${p.book?' · '+escapeHtml(bookShort(p.book)):''}</span><span>${escapeHtml(p.pick_text||bt)}</span></div>`;}).join('')}</div>`;
+  return `<div class="game-saved-picks" aria-label="Your saved picks on this game"><span class="game-saved-heading">ON YOUR CARD</span>${saved.map(bt=>{const p=picks[bt];return `<div class="game-saved-pick" data-saved-book="${escapeHtml(p.book||'')}"><span class="game-saved-type">${escapeHtml(BET_META[bt].short)}${p.book?' · '+escapeHtml(bookShort(p.book)):''}</span><span>${escapeHtml(p.pick_text||bt)}</span></div>`;}).join('')}</div>`;
 }
 function refreshGameSavedPicks(picks=currentMyPicks) {
   document.querySelectorAll('.game-card[data-game-key]').forEach(card=>{
