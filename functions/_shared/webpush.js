@@ -120,6 +120,7 @@ export async function sendPush(subscription, payload, env) {
   const body = await encryptPayload(payloadStr, subscription.p256dh, subscription.auth);
 
   return fetch(subscription.endpoint, {
+    signal: AbortSignal.timeout(10000),
     method: "POST",
     headers: {
       "Content-Encoding": "aes128gcm",

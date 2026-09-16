@@ -5,13 +5,11 @@
 // the app's own guards (window check, cutoff, dedupe) decide whether to
 // actually send. Reminder has two Sunday-relevant firings and only the
 // correct one (relative to the DST-aware noon-CT lock) notifies; line-moves
-// fires twice daily and self-guards past the weekly cutoff.
+// fires every 15 minutes and self-guards past the weekly cutoff.
 //
-// The 16:00 UTC slot is SHARED between reminder and line-moves (see
-// wrangler.toml) to stay within the account's 5-cron-trigger Free plan cap —
-// both handlers already no-op safely when it isn't "their" moment, so firing
-// both off one trigger is harmless, just an extra no-op HTTP call on the six
-// non-Sunday days.
+// A single quarter-hour trigger checks lines. The original 16:00/23:00 UTC
+// reminder slots are dispatched from scheduledTime without adding cron slots.
+// Legacy expressions remain recognized during schedule propagation.
 //
 // This Worker holds NO business logic — it exists purely because Cloudflare cron
 // triggers are a reliable scheduler and GitHub Actions cron is not.
@@ -27,7 +25,7 @@ async function fireNotify(env, type, { dryrun = false } = {}) {
   const qs = dryrun ? "&dryrun=1" : "";
   const res = await fetch(`${env.SITE_URL}/api/notify?type=${type}${qs}`, {
     method: "POST",
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(30000),
     headers: { "X-Cron-Secret": env.CRON_SECRET },
   });
   const body = await res.text();
@@ -47,7 +45,15 @@ export default {
     const cron = event.cron === "0 16,23 * * *"
       ? `0 ${new Date(event.scheduledTime).getUTCHours()} * * *`
       : event.cron;
-    const types = CRON_TYPES[cron];
+    let types = CRON_TYPES[cron];
+    if(event.cron === "*/15 * * * *") {
+      const time=new Date(event.scheduledTime),hour=time.getUTCHours();
+      types=["line-moves"];
+      if(time.getUTCMinutes()===0) {
+        if(hour===16 || hour===17&&time.getUTCDay()===0)types.push("reminder");
+        if(hour===23)types.push("kickoff-reminder");
+      }
+    }
     if (!types) { console.log(`[scheduled] unrecognized cron: ${event.cron}`); return; }
     ctx.waitUntil(Promise.all(types.map((type) => fireNotify(env, type, { dryrun }))));
   },

@@ -11,30 +11,19 @@
 # CDT, 18:00 in CST). The /api/notify window guard sends only the one ~1h
 # before lock and no-ops the other.
 #
-# Line-moves: ~11am CT and ~6pm CT daily, catching morning/evening odds
-# movement so members can re-lock before the Sunday cutoff. Migrated here from
-# GitHub Actions (line-alerts-cron.yml) for the same reliability reason above.
-#
-# The account is on the Workers Free plan (5 cron triggers total, account-
-# wide, shared with other projects), so the 11am-CT slot is SHARED: the
-# 16:00 UTC daily trigger fires both reminder and line-moves (both apps guard
-# themselves — reminder no-ops on non-Sundays, line-moves runs every day
-# anyway), instead of two separate triggers at the same time. That keeps this
-# Worker combines the 16:00 and 23:00 daily slots into one cron expression,
-# using scheduledTime to preserve each slot's handlers. This uses 2 triggers
-# and leaves capacity for the We Dem Boys scheduler.
-#
-# See ../functions/api/notify.js for both handlers.
+# Line moves run every 15 minutes. The worker dispatches reminder and kickoff
+# handlers at their original UTC slots, keeping one account-wide cron trigger.
+# Legacy expressions remain supported during Cloudflare trigger propagation.
 name = "lock-league-cron"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
 # Cloudflare's cron parser rejects "0" for Sunday; use the named day.
 [triggers]
-crons = [
-  "0 16,23 * * *",  # same daily handlers, selected by scheduled UTC hour
-  "0 17 * * SUN",   # reminder, second DST bracket
-]
+crons = ["*/15 * * * *"]
+
+[observability]
+enabled = true
 
 [vars]
 SITE_URL = "https://lock-league.pages.dev"

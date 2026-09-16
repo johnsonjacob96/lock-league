@@ -3192,7 +3192,7 @@ async function sendTestNotification() {
   try {
     const r = await fetch("/api/push?action=test", { method: "POST", credentials: "include" });
     const j = await r.json().catch(() => ({}));
-    showToast(j.sent ? "TEST SENT" : "NO DEVICE FOUND", j.sent ? "ok" : "err");
+    showToast(!r.ok ? "TEST FAILED — PLEASE RETRY" : j.sent ? (j.failed ? `TEST SENT; ${j.failed} DEVICE(S) FAILED` : "TEST SENT — CHECK YOUR DEVICE") : j.failed ? "PUSH FAILED — TURN NOTIFICATIONS OFF AND ON" : "NO DEVICE REGISTERED", r.ok && j.sent ? "ok" : "err");
   } catch { showToast("TEST FAILED", "err"); }
 }
 async function togglePref(btn) {

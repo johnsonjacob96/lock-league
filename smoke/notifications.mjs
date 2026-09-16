@@ -1,11 +1,11 @@
 import {test,mock} from 'node:test';
 import assert from 'node:assert/strict';
-let queries=[],sendCalls=[],claims=new Set(),rowsFor=()=>[];
+let queries=[],sendCalls=[],claims=new Set(),rowsFor=()=>[],pushResult=null;
 mock.module('../functions/_shared/db.js',{namedExports:{sql:()=> (strings,...params)=>{
  const query=strings.join('?');queries.push(query);return Promise.resolve(rowsFor(query,params));
 }}});
 mock.module('../functions/_shared/push-notify.js',{namedExports:{
- pushPersonalized:async(_env,recipients,kind)=>{sendCalls.push({recipients,kind});return {sent:Object.keys(recipients).length,failed:0,pruned:0};},
+ pushPersonalized:async(_env,recipients,kind)=>{sendCalls.push({recipients,kind});return pushResult || {sent:Object.keys(recipients).length,failed:0,pruned:0,acceptedMemberIds:Object.keys(recipients).map(Number)};},
  ensurePushTables:async()=>{queries.push('DDL ensurePushTables');},
  claimSend:async(_env,season,week,kind)=>{const key=`${season}:${week}:${kind}`;if(claims.has(key))return false;claims.add(key);return true;},
 }});
@@ -17,7 +17,7 @@ const {onRequest}=await import('../functions/api/notify.js');
 const env={CRON_SECRET:'test'};
 const game={id:'opener',away:'New England Patriots',home:'Seattle Seahawks',kickoff:'2026-09-10T00:20:00Z',books:{fanduel:{spread:{fav:'Seattle Seahawks',line:-2.5}}}};
 function setup(t,iso='2026-09-09T23:00:00Z'){
- queries=[];sendCalls=[];claims=new Set();rowsFor=()=>[];
+ queries=[];sendCalls=[];claims=new Set();rowsFor=()=>[];pushResult=null;
  t.mock.timers.enable({apis:['Date'],now:Date.parse(iso)});
  t.mock.method(globalThis,'fetch',async url=>{assert.equal(new URL(url).pathname,'/api/odds');return Response.json({games:[game]});});
 }
@@ -84,4 +84,15 @@ test('health checks real VAPID pair and subscription encryption without push req
  assert.equal(result.body.subscribedMembers,1);assert.deepEqual(result.body.enabledMembers,{reminder:1,lineMoves:1,results:1});noWritesOrSends();
  const badSubject=await call('health','dryrun=1',{...config,VAPID_SUBJECT:'invalid'});assert.equal(badSubject.body.subjectValid,false);assert.equal(badSubject.body.ok,false);
  const invalid=await call('health','dryrun=1',{...config,VAPID_PRIVATE:'invalid'});assert.equal(invalid.body.keyPairValid,false);assert.equal(invalid.body.ok,false);
+});
+
+
+test('failed line alerts remain retryable; only accepted members consume their alert threshold',async t=>{
+ setup(t);
+ rowsFor=query=>query.includes('SELECT p.id')?[1,2].map(id=>({id,member_id:id,bet_type:'Favorite',game_key:`${game.away}@${game.home}`,side:'fav',line:-4,alert_line:null})):[];
+ pushResult={sent:0,failed:2,acceptedMemberIds:[]};
+ let r=await call('line-moves','');assert.equal(r.body.alerted,0);assert.ok(!queries.some(q=>q.includes('UPDATE picks')));
+ queries=[];pushResult={sent:1,failed:1,acceptedMemberIds:[2]};
+ r=await call('line-moves','');assert.equal(r.body.alerted,1);assert.equal(r.body.picks,1);
+ const updates=queries.filter(q=>q.includes('UPDATE picks'));assert.equal(updates.length,1);assert.match(updates[0],/AND line =.*AND game_key =.*AND side =/);
 });

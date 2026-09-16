@@ -30,11 +30,13 @@ export async function ensurePushTables(env) {
 
 // items: [{ sub:{endpoint,p256dh,auth}, payload }]. Sends all, prunes dead subs.
 async function deliver(env, items) {
-  const dead = [];
+  const dead = [], accepted = new Set(), statuses = {};
   let sent = 0, failed = 0;
   const results = await Promise.allSettled(items.map((it) => sendPush(it.sub, it.payload, env)));
   results.forEach((r, i) => {
-    if (r.status === "fulfilled" && r.value.ok) sent++;
+    const status = r.status === "fulfilled" ? r.value.status : 0;
+    statuses[status] = (statuses[status] || 0) + 1;
+    if (r.status === "fulfilled" && r.value.ok) { sent++; if(items[i].memberId!=null)accepted.add(Number(items[i].memberId)); }
     else {
       failed++;
       const code = r.status === "fulfilled" ? r.value.status : 0;
@@ -42,7 +44,8 @@ async function deliver(env, items) {
     }
   });
   if (dead.length) await sql(env)`DELETE FROM push_subscriptions WHERE endpoint = ANY(${dead})`.catch(() => {});
-  return { sent, failed, pruned: dead.length };
+  console.log(JSON.stringify({event:"push-delivery",attempted:items.length,sent,failed,pruned:dead.length,statuses}));
+  return { sent, failed, pruned: dead.length, acceptedMemberIds:[...accepted] };
 }
 
 // Same payload to every subscription belonging to memberIds.
@@ -50,8 +53,8 @@ export async function pushToMembers(env, memberIds, payload) {
   await ensurePushTables(env);
   if (!memberIds?.length) return { sent: 0, failed: 0, pruned: 0 };
   const subs = await sql(env)`
-    SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE member_id = ANY(${memberIds})`;
-  return deliver(env, subs.map((sub) => ({ sub, payload })));
+    SELECT member_id, endpoint, p256dh, auth FROM push_subscriptions WHERE member_id = ANY(${memberIds})`;
+  return deliver(env, subs.map((sub) => ({ sub, payload, memberId:sub.member_id })));
 }
 
 // Personalized payload per member. byMemberId: { [memberId]: payloadObject }.
@@ -71,7 +74,7 @@ export async function pushPersonalized(env, byMemberId, kind = null) {
   const items = subs
     .filter((s) => byMemberId[s.member_id])
     .filter((s) => !kind || s.notif_prefs?.[kind] !== false)
-    .map((s) => ({ sub: { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth }, payload: byMemberId[s.member_id] }));
+    .map((s) => ({ memberId:s.member_id, sub: { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth }, payload: byMemberId[s.member_id] }));
   return deliver(env, items);
 }
 
