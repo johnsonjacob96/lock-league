@@ -23,7 +23,7 @@ const nick = (s) => String(s || "").split(" ").pop();
 
 async function fetchBoard(request) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 4000);
+  const timer = setTimeout(() => ctrl.abort(), 10000);
   try {
     const r = await fetch(new URL("/api/odds", request.url), { signal: ctrl.signal });
     if (!r.ok) return null;
@@ -273,7 +273,7 @@ export async function onRequest({ request, env }) {
         bestFmt: fmtLineForSide(p.side, best.line),
         book: bookLabel(best.book),
       });
-      toMark.push({ id: p.id, line: best.line });
+      toMark.push({ id: p.id, memberId:p.member_id, originalLine:p.line, gameKey:p.game_key, side:p.side, line: best.line });
     }
     if (!toMark.length) return json({ ok: true, week: cur.week, note: "no improvements" });
 
@@ -293,8 +293,12 @@ export async function onRequest({ request, env }) {
         devices: recipients.reduce((n, r) => n + r.devices, 0), picks: toMark.length });
     }
     const res = await pushPersonalized(env, byMemberId, "lineMoves");
-    await Promise.all(toMark.map((m) => sql(env)`UPDATE picks SET alert_line = ${m.line} WHERE id = ${m.id}`));
-    return json({ ok: true, week: cur.week, alerted: Object.keys(byMemberId).length, picks: toMark.length, ...res });
+    const accepted = new Set(res.acceptedMemberIds || []);
+    const delivered = toMark.filter(m=>accepted.has(Number(m.memberId)));
+    // Failed/unsubscribed/opted-out members must remain eligible. Do not mark
+    // a replacement pick if it changed while the push was in flight.
+    await Promise.all(delivered.map((m) => sql(env)`UPDATE picks SET alert_line = ${m.line} WHERE id = ${m.id} AND line = ${m.originalLine} AND game_key = ${m.gameKey} AND side = ${m.side}`));
+    return json({ ok: true, week: cur.week, alerted: accepted.size, picks: delivered.length, ...res });
   }
 
   return json({ error: "unknown-type" }, { status: 400 });

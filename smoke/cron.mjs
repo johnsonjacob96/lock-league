@@ -30,3 +30,11 @@ test('evening scheduler includes the Wednesday kickoff reminder without another 
  let pending;await cron.scheduled({cron:'0 23 * * *'},env,{waitUntil:p=>pending=p});await pending;
  assert.equal(urls.length,2);assert.ok(urls.some(url=>url.includes('type=kickoff-reminder')));
 });
+
+
+test('quarter-hour schedule checks lines and preserves original reminder slots',async t=>{
+ const urls=[];t.mock.method(globalThis,'fetch',async url=>{urls.push(new URL(url).searchParams.get('type'));return Response.json({ok:true});});
+ for(const [date,expected] of [['2026-09-16T12:15:00Z',['line-moves']],['2026-09-16T16:00:00Z',['line-moves','reminder']],['2026-09-16T23:00:00Z',['line-moves','kickoff-reminder']],['2026-09-20T17:00:00Z',['line-moves','reminder']],['2026-09-16T17:00:00Z',['line-moves']]]){
+  urls.length=0;let pending;await cron.scheduled({cron:'*/15 * * * *',scheduledTime:Date.parse(date)},env,{waitUntil:p=>pending=p});await pending;assert.deepEqual(urls,expected);
+ }
+});
