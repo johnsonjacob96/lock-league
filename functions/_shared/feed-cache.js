@@ -20,13 +20,14 @@ export async function sharedFeed(env, key, ttlMs, load) {
   if (!env?.DATABASE_URL) return load();
   await ensure(env);
   const db = sql(env);
-  await db`INSERT INTO feed_refresh(cache_key) VALUES(${key}) ON CONFLICT DO NOTHING`;
   const read = async () =>
     (
       await db`SELECT payload,expires_at FROM feed_refresh WHERE cache_key=${key}`
     )[0];
   let old = await read();
   if (old && Date.parse(old.expires_at) > Date.now()) return old.payload;
+  // Fresh hits need only a read; create a lease row only for a missing key.
+  if (!old) await db`INSERT INTO feed_refresh(cache_key) VALUES(${key}) ON CONFLICT DO NOTHING`;
   const owner = crypto.randomUUID();
   const claim =
     await db`UPDATE feed_refresh SET owner=${owner},lease_until=NOW()+INTERVAL '45 seconds'
