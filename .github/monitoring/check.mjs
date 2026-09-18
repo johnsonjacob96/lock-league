@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile, mkdir, writeFile, appendFile } from 'node:fs/promises';
 const config = JSON.parse(await readFile(new URL('./site.json', import.meta.url)));
 await mkdir('monitor-output', { recursive: true });
@@ -52,6 +53,17 @@ for (const probe of config.probes) await check(probe.path || probe.url, () => re
     // Completed seasons stay valid; do not demand fresh scores between majors.
   }
 }));
+// A deploy that reports success but still serves the previous bundle looks
+// exactly like a healthy site: every probe above passes against stale code.
+// Compare what production returns with what is committed here and say so.
+for (const path of config.assets || []) await check(`asset ${path}`, () => retry(async () => {
+  const r = await request(config.url + path);
+  const digest = bytes => createHash('sha256').update(new Uint8Array(bytes)).digest('hex');
+  const served = digest(await r.arrayBuffer());
+  const committed = digest(await readFile(new URL('../../public' + path, import.meta.url)));
+  assert.equal(served, committed, `Production is serving a different ${path} than this commit (served ${served.slice(0, 12)}, committed ${committed.slice(0, 12)}) — the deploy is stale or was skipped`);
+}));
+
 if (process.argv.includes('--browser')) {
   await check('Browser setup and public routes', async () => {
     const { chromium } = await import('../../.monitor-runtime/node_modules/playwright/index.mjs');

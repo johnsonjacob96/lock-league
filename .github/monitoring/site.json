@@ -8,6 +8,7 @@
       "selector": "#login-btn:visible, #login-btn-mobile:visible"
     }
   ],
+  "assets": ["/index.html", "/assets/super-lock.js"],
   "probes": [
     {
       "path": "/api/config",

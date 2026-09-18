@@ -27,7 +27,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet">
 <!-- Prebuilt Tailwind (tailwind.config.js). After editing classes here, rebuild: npm run build:css -->
-<link rel="stylesheet" href="assets/tailwind.css">
+<!-- ?v= stamp: assets are served straight from public/ with no build step and no
+     content hash, so a browser holding an old copy can hide a good deploy. Bump the
+     stamp (all tags share it) whenever an asset under public/assets changes. -->
+<link rel="stylesheet" href="assets/tailwind.css?v=20260918a">
 <style>
   * { box-sizing: border-box; }
   html, body { background: #0e1011; }
@@ -1083,9 +1086,9 @@
   @media(max-width:480px) {.pick-change-quotes {grid-template-columns:1fr;}.pick-change-actions {flex-direction:column;}}
   @media(max-width:480px) {.home-table .member-row td:nth-child(2) > .flex:first-child {flex-wrap:wrap;row-gap:2px;}}
 </style>
-<link rel="stylesheet" href="assets/standings-week.css">
-<link rel="stylesheet" href="assets/parlays.css">
-<link rel="stylesheet" href="assets/super-lock.css">
+<link rel="stylesheet" href="assets/standings-week.css?v=20260918a">
+<link rel="stylesheet" href="assets/parlays.css?v=20260918a">
+<link rel="stylesheet" href="assets/super-lock.css?v=20260918a">
 </head>
 <body class="bg-background text-on-surface min-h-screen turf-overlay">
 
@@ -1276,14 +1279,14 @@
 <div class="tooltip" id="tooltip"></div>
 <div class="toast" id="toast"></div>
 
-<script src="assets/nfl-teams.js"></script>
-<script src="assets/super-lock.js"></script>
-<script src="assets/tiebreaks.js"></script>
-<script src="assets/standings-rules.js"></script>
-<script src="assets/standings-week.js"></script>
-<script src="assets/parlay-parser.js"></script>
-<script src="assets/parlay-ocr.js"></script>
-<script src="assets/parlays.js"></script>
+<script src="assets/nfl-teams.js?v=20260918a"></script>
+<script src="assets/super-lock.js?v=20260918a"></script>
+<script src="assets/tiebreaks.js?v=20260918a"></script>
+<script src="assets/standings-rules.js?v=20260918a"></script>
+<script src="assets/standings-week.js?v=20260918a"></script>
+<script src="assets/parlay-parser.js?v=20260918a"></script>
+<script src="assets/parlay-ocr.js?v=20260918a"></script>
+<script src="assets/parlays.js?v=20260918a"></script>
 <script>
 // Plain URL - the host serves an ETag, so repeat visits get a 304 instead of
 // re-downloading ~270KB of history every load.
