@@ -60,7 +60,10 @@ for (const path of config.assets || []) await check(`asset ${path}`, () => retry
   const r = await request(config.url + path);
   const digest = bytes => createHash('sha256').update(new Uint8Array(bytes)).digest('hex');
   const served = digest(await r.arrayBuffer());
-  const committed = digest(await readFile(new URL('../../public' + path, import.meta.url)));
+  // Pages serves the site root from index.html and redirects the explicit
+  // filename to it, so ask for the path visitors actually load.
+  const file = path.endsWith('/') ? path + 'index.html' : path;
+  const committed = digest(await readFile(new URL('../../public' + file, import.meta.url)));
   assert.equal(served, committed, `Production is serving a different ${path} than this commit (served ${served.slice(0, 12)}, committed ${committed.slice(0, 12)}) — the deploy is stale or was skipped`);
 }));
 
