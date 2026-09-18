@@ -430,6 +430,49 @@
   border-top: 1px solid #34453a;
   background: #101714;
 }
+
+/* A dead button should not still look like the primary action. */
+#sl-dialog .btn-primary[disabled] {
+  background: #223029;
+  color: #9db1a4;
+}
+
+/* Rejections (an already-claimed bet, a moved line, a passed cutoff) read as an
+   alert, not a hint — a save that silently does nothing is the worst outcome. */
+.sl-msg {
+  display: block;
+  color: #ffc0c0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sl-msg:empty {
+  display: none;
+}
+
+/* Hoisted out of the scrolling body, the message sits directly above the lock
+   button, so it's on screen wherever the prop list is scrolled. */
+#sl-dialog > .sl-msg {
+  flex-shrink: 0;
+  padding: 12px 20px;
+  border-top: 2px solid #b4443f;
+  background: #2b1513;
+}
+
+.sl-taken-tag {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffb4b4;
+}
+
+.sl-side-btn.taken,
+.sl-alt-btn.taken {
+  opacity: 0.6;
+  border-style: dashed;
+}
 @media (max-width: 640px) {
   #sl-dialog {
     width: 100%;

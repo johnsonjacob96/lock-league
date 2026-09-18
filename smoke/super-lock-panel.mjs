@@ -118,8 +118,23 @@ for(const width of [375,390,844,1440]) {
  await page.locator('.sl-alt-wrap summary').click();await page.locator('[data-slchoose$=":fanduel:50.5"]').click();
  rejectSave=true;await page.locator('#sl-lock').click();await acceptReplacement();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('NO LONGER'));
  assert.equal(await page.locator('#sl-lock').isEnabled(),true);checks++;
- rejectSave='taken';await page.locator('#sl-lock').click();await acceptReplacement();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('already claimed'));
+ rejectSave='taken';await page.locator('#sl-lock').click();await acceptReplacement();await page.waitForFunction(()=>document.getElementById('mycard-sl-msg')?.textContent.includes('ALREADY PICKED'));
+ // The message rides with the lock button instead of sitting under a long prop list nobody scrolls.
+ assert.equal(await page.evaluate(()=>document.getElementById('mycard-sl-msg').parentElement.id),'sl-dialog');checks++;
+ assert.equal(await page.locator('#mycard-sl-msg').isVisible(),true);checks++;
+ assert.equal(await page.locator('#sl-lock').isEnabled(),false);checks++;
+ assert.match(await page.locator('#sl-lock').textContent(),/Already picked/);checks++;
+ await snapshot(page,{path:`${output}/taken-${width}.png`});
+ // A claim owns the bet at every book and every line, so the main side and its alternates all say so;
+ // the opposite direction is a different bet and stays lockable.
+ assert.equal(await page.locator('.sl-side-btn.taken .sl-taken-tag').count()>0,true);checks++;
+ assert.equal(await page.locator('.sl-alt-btn.taken').count()>0,true);checks++;
+ assert.equal(await page.evaluate(()=>[slIsTaken('Jalen Hurts o12.5 rush yds'),slIsTaken('Jalen Hurts OVER 80.5 Rushing Yards (DraftKings)'),slIsTaken('Jalen Hurts u39.5 rush yds'),slIsTaken('Jalen Hurts o39.5 rec yds')].join()),'true,true,false,false');checks++;
+ // Changing the selection clears the message; the bet stays marked as gone.
+ await page.locator('[data-slchoose$=":under:fanduel"]').click();
+ assert.equal(await page.locator('#mycard-sl-msg').textContent(),'');checks++;
  assert.equal(await page.locator('#sl-lock').isEnabled(),true);checks++;
+ await page.evaluate(()=>{superLockState.takenKeys.clear();superLockState.draft={market:'rush_yds',player:'Jalen Hurts',side:'over',book:'fanduel',line:50.5};refreshSuperLockEditor();});
  rejectSave=false;await page.locator('#sl-lock').click();await acceptReplacement();await page.waitForSelector('#sl-dialog',{state:'detached'});
  assert.equal(writes.at(-1).picks[0].prop.line,50.5);checks++;
  await page.locator('#sl-repick').click();await page.locator('[data-sltab="lines"]').click();await page.locator('[data-slmarket="__total__"]').click();await page.locator('[data-slside="over"]').click();await page.locator('#sl-lock-line').click();await acceptReplacement();await page.waitForSelector('#sl-dialog',{state:'detached'});

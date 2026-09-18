@@ -13,6 +13,11 @@ const superLockState = {
   search: "",
   tab: "props",
   saving: false,
+  // Rejections have to survive a re-render, so the panel's message lives in
+  // state, not in the DOM node a refresh throws away.
+  notice: "",
+  // Canonical keys of bets this browser has been told are already owned.
+  takenKeys: new Set(),
 };
 
 // Super Lock entry + grade live in My Card (no separate picks tab). Kept out of
@@ -29,6 +34,54 @@ const slShort = (n) =>
   String(n || "")
     .split(" ")
     .slice(-1)[0];
+
+// One member owns a Super Lock for the whole league that week — same player,
+// same stat, same direction is the same bet at any book and any line. The
+// server's unique index is the arbiter (functions/_shared/super-lock-claims.js);
+// this mirrors its canonical key so the picker can name the bet that's gone and
+// stop a second run at the same one. A near-miss only costs us the early
+// warning, never a wrong save.
+const SL_CLAIM_STOPWORDS = new Set([
+  "fanduel", "draftkings", "fd", "dk", "jr", "sr", "ii", "iii", "iv",
+  "the", "and", "at", "vs", "versus",
+]);
+function slClaimKey(text) {
+  const tokens = String(text || "")
+    .toLowerCase()
+    .replace(/\bo(?=\d)/g, "over ")
+    .replace(/\bu(?=\d)/g, "under ")
+    .replace(/\d+(?:\.\d+)?\+/g, " over ")
+    .replace(/\b(?:pass(?:ing)? )?completions?\b/g, "cmp")
+    .replace(/\b(?:pass(?:ing)? )?interceptions?\b/g, "int")
+    .replace(/\bpass(?:ing)? attempts?\b/g, "att")
+    .replace(/\brush(?:ing)? attempts?\b/g, "carries")
+    .replace(/\byards?\b/g, "yds")
+    .replace(/\brushing\b/g, "rush")
+    .replace(/\bpassing\b/g, "pass")
+    .replace(/\breceiving\b/g, "rec")
+    .replace(/\btouchdowns?\b/g, "td")
+    .replace(/\breceptions?\b/g, "rec")
+    .replace(/\btds?\b/g, "td")
+    .replace(/\brush\s*(?:[+&]|and)?\s*rec yds\b/g, "yds")
+    .replace(/[.'’]/g, "")
+    .replace(/[^a-z ]/g, " ")
+    .split(/ +/)
+    .filter((t) => t && !SL_CLAIM_STOPWORDS.has(t));
+  return [...new Set(tokens)].sort().join(" ");
+}
+const slMarkTaken = (text) => {
+  if (text) superLockState.takenKeys.add(slClaimKey(text));
+};
+const slIsTaken = (text) =>
+  !!text &&
+  superLockState.takenKeys.size > 0 &&
+  superLockState.takenKeys.has(slClaimKey(text));
+// The panel is a top-layer <dialog>, so a toast paints BEHIND its backdrop: a
+// message only lands if it's inside the panel, beside the button that was
+// pressed. Set it here; the next render puts it there.
+const slSetNotice = (text) => {
+  superLockState.notice = text || "";
+};
 
 // Every selectable side carries its own sportsbook line and price.
 const SL_BOOKS = ["fanduel", "draftkings"];
@@ -199,11 +252,12 @@ function superLockEditorHtml() {
     (p && (p.pick_text || p.text)
       ? slLockedHtml(p)
       : `<button class="sl-launch" id="sl-open">Choose your Super Lock <span>→</span></button>`) +
-    `<span id="mycard-sl-msg" role="status"></span>`
+    `<span id="mycard-sl-msg" role="alert" class="sl-msg">${escapeHtml(superLockState.notice)}</span>`
   );
 }
 function closeSlPanel() {
   if (superLockState.saving) return;
+  slSetNotice("");
   superLockState.open = false;
   superLockState.editing = false;
   const dialog = document.getElementById("sl-dialog");
@@ -229,6 +283,7 @@ function syncSlKickoffLock() {
 function openSlPanel() {
   if (!slCanChangePick(currentMyPicks["Super Lock"])) { closeSlPanel(); return; }
   void loadSlPlayerPhotos();
+  slSetNotice("");
   superLockState.open = true;
   superLockState.editing = true;
   refreshSuperLockEditor();
@@ -236,7 +291,7 @@ function openSlPanel() {
 function slPanelHtml() {
   return `<div class="sl-panel-head"><button id="sl-back" aria-label="Back to games">←</button><h2>SUPER LOCK</h2><button id="sl-close" aria-label="Close Super Lock">×</button></div>
     <div class="sl-panel-body">${superLockState.mode === "custom" ? `<h3>Custom pick</h3>${slCustomHtml(currentMyPicks["Super Lock"])}` : slBoardPickerHtml()}
-    <div id="mycard-sl-msg" role="status" class="sl-hint"></div></div>`;
+    <div id="mycard-sl-msg" role="alert" class="sl-msg">${escapeHtml(superLockState.notice)}</div></div>`;
 }
 
 function slLockedHtml(p) {
@@ -417,7 +472,10 @@ function slBrowsePropsHtml() {
                   superLockState.draft.book === bk &&
                   superLockState.draft.side === side &&
                   superLockState.draft.line == null;
-                return `<button class="sl-side-btn ${active ? "active" : ""}" data-slchoose="${mi}:${pi}:${side}:${bk}" aria-pressed="${active}"><span class="sl-side-lab">${side === "yes" ? "Anytime TD" : (side === "over" ? "Over " : "Under ") + info.line}</span><span class="sl-side-price">${fmtPrice(info.price)}</span></button>`;
+                const taken = slIsTaken(
+                  propTextClient({ player: pl.player, side, line: info.line }, m),
+                );
+                return `<button class="sl-side-btn ${active ? "active" : ""} ${taken ? "taken" : ""}" data-slchoose="${mi}:${pi}:${side}:${bk}" aria-pressed="${active}"><span class="sl-side-lab">${side === "yes" ? "Anytime TD" : (side === "over" ? "Over " : "Under ") + info.line}</span><span class="sl-side-price">${fmtPrice(info.price)}</span>${taken ? '<span class="sl-taken-tag">Already picked</span>' : ""}</button>`;
               })
               .join("")}</div></div>`,
         )
@@ -430,7 +488,7 @@ function slBrowsePropsHtml() {
                   const a = slBookAlt(pl, bk, alt.line);
                   return !a
                     ? ""
-                    : `<button class="sl-alt-btn ${selected && superLockState.draft.book === bk && Number(superLockState.draft.line) === Number(alt.line) ? "active" : ""}" data-slchoose="${mi}:${pi}:over:${bk}:${alt.line}">Over ${alt.line}<span>${fmtPrice(a.price)} · ${bookShort(bk)}</span></button>`;
+                    : `<button class="sl-alt-btn ${selected && superLockState.draft.book === bk && Number(superLockState.draft.line) === Number(alt.line) ? "active" : ""} ${slIsTaken(propTextClient({ player: pl.player, side: "over", line: alt.line }, m)) ? "taken" : ""}" data-slchoose="${mi}:${pi}:over:${bk}:${alt.line}">Over ${alt.line}<span>${fmtPrice(a.price)} · ${bookShort(bk)}</span></button>`;
                 }),
               )
               .join("")}</div></details>`
@@ -463,38 +521,59 @@ function slGameLineSubHtml(g, kind) {
   if (sides.includes(superLockState.draft.side)) {
     const info = slGameLineSide(g, BET_FOR_SIDE[superLockState.draft.side]);
     if (info) {
+      const taken = slIsTaken(info.text);
       const meets = info.price != null && Number(info.price) >= -120;
-      const warn =
-        info.price != null && !meets
+      const warn = taken
+        ? slTakenWarnHtml(info.label)
+        : info.price != null && !meets
           ? `<div class="sl-hint warn mt-1">${fmtPrice(info.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
           : info.price == null
             ? `<div class="sl-hint warn mt-1">No price available for this side.</div>`
             : "";
-      const dis = meets ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
-      out += `<button class="btn-primary w-full mt-2" id="sl-lock-line" ${dis}>Lock ${escapeHtml(info.label)} · ${fmtPrice(info.price)}</button>${warn}`;
+      const dis = meets && !taken ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
+      out += `<button class="btn-primary w-full mt-2" id="sl-lock-line" ${dis}>${taken ? "Already picked — choose another bet" : `Lock ${escapeHtml(info.label)} · ${fmtPrice(info.price)}`}</button>${warn}`;
     }
   }
   return out;
 }
 
+// Plain English for the bet in hand: the canonical "o50.5 rush yds" text exists
+// for the claim key, not for reading.
+const slPropLabel = (player, m, sel) =>
+  sel.side === "yes"
+    ? `${player} anytime TD`
+    : `${player} ${sel.label} ${m.label.toLowerCase()}`;
+// Someone else already owns this bet: say so where the lock button is, and keep
+// the button dead so a second attempt can't look like the app ignoring a tap.
+const slTakenNotice = (text) =>
+  `ALREADY PICKED · ${text} — someone locked it first. A Super Lock belongs to one person per week, at any book and any line, so pick a different bet. Your card is unchanged.`;
+const slTakenWarnHtml = (label) =>
+  superLockState.notice
+    ? ""
+    : `<div class="sl-hint warn mt-1">${escapeHtml(label)} is already someone else's Super Lock this week. First lock wins it, at any book and any line — pick a different bet.</div>`;
+
 function slLockBtnHtml(m, pl) {
   const sel = slPropSel(m, pl);
   if (!sel) return "";
+  const taken = slIsTaken(
+    propTextClient({ player: pl.player, side: sel.side, line: sel.line }, m),
+  );
   const meets =
     Number.isInteger(Number(sel.price)) &&
     Math.abs(Number(sel.price)) >= 100 &&
     Number(sel.price) >= -120;
-  const warn =
-    sel.price != null && !meets
+  const warn = taken
+    ? slTakenWarnHtml(slPropLabel(pl.player, m, sel))
+    : sel.price != null && !meets
       ? `<div class="sl-hint warn mt-1">${fmtPrice(sel.price)} is shorter than -120 — a Super Lock must be -120 or longer.</div>`
       : sel.price == null
         ? `<div class="sl-hint warn mt-1">No price available for this line.</div>`
         : "";
-  const dis = meets ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
+  const dis = meets && !taken ? "" : `disabled style="opacity:.5;cursor:not-allowed"`;
   const book = sel.book ? ` · ${bookShort(sel.book)}` : "";
   if (superLockState.open)
-    return `<span class="sl-selection-line">${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${sel.book ? " · " + bookLabel(sel.book) : ""}</span><button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>Lock Super Lock</button>${warn}`;
-  return `<button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>Lock Super Lock · ${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${book}</button>${warn}`;
+    return `<span class="sl-selection-line">${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${sel.book ? " · " + bookLabel(sel.book) : ""}</span><button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>${taken ? "Already picked — choose another bet" : "Lock Super Lock"}</button>${warn}`;
+  return `<button class="btn-primary w-full mt-2" id="sl-lock" ${dis}>${taken ? "Already picked — choose another bet" : `Lock Super Lock · ${escapeHtml(sel.label)} · ${fmtPrice(sel.price)}${book}`}</button>${warn}`;
 }
 
 function bindSuperLockEditor() {
@@ -519,6 +598,7 @@ function bindSuperLockEditor() {
   root.querySelectorAll(".sl-side-btn[data-slside]").forEach(
     (b) =>
       (b.onclick = () => {
+        slSetNotice("");
         superLockState.draft.side = b.dataset.slside;
         superLockState.draft.line = null;
         refreshSuperLockEditor();
@@ -553,6 +633,8 @@ async function submitSl(action) {
         el.disabled = el.dataset.wasDisabled === "true";
         delete el.dataset.wasDisabled;
       });
+      // A rejection only lives in state until here: render it.
+      refreshSuperLockEditor();
     }
   }
 }
@@ -560,6 +642,7 @@ function bindSlPanelControls(root) {
   root.querySelector("#sl-open")?.addEventListener("click", openSlPanel);
   root.querySelector("#sl-close")?.addEventListener("click", closeSlPanel);
   const back = () => {
+    slSetNotice("");
     superLockState.gameKey = "";
     superLockState.search = "";
     superLockState.mode = "board";
@@ -580,6 +663,7 @@ function bindSlPanelControls(root) {
   root.querySelectorAll("[data-slmode]").forEach(
     (b) =>
       (b.onclick = () => {
+        slSetNotice("");
         superLockState.mode = b.dataset.slmode;
         refreshSuperLockEditor();
       }),
@@ -587,6 +671,7 @@ function bindSlPanelControls(root) {
   root.querySelectorAll("[data-slgame]").forEach(
     (b) =>
       (b.onclick = () => {
+        slSetNotice("");
         superLockState.gameKey = b.dataset.slgame;
         superLockState.tab = "props";
         superLockState.search = "";
@@ -604,6 +689,7 @@ function bindSlPanelControls(root) {
   root.querySelectorAll("[data-sltab]").forEach(
     (b) =>
       (b.onclick = () => {
+        slSetNotice("");
         superLockState.tab = b.dataset.sltab;
         superLockState.draft = {
           market: "",
@@ -618,6 +704,7 @@ function bindSlPanelControls(root) {
   root.querySelectorAll("[data-slmarket]").forEach(
     (b) =>
       (b.onclick = () => {
+        slSetNotice("");
         superLockState.draft = {
           market: b.dataset.slmarket,
           player: "",
@@ -631,6 +718,7 @@ function bindSlPanelControls(root) {
   root.querySelectorAll("[data-slchoose]").forEach(
     (b) =>
       (b.onclick = () => {
+        slSetNotice("");
         const [mi, pi, side, book, line] = b.dataset.slchoose.split(":");
         const m = superLockState.markets[mi],
           pl = m.players[pi];
@@ -696,6 +784,11 @@ function refreshSuperLockEditor() {
     const filterScroll = dialog.querySelector(".sl-filters")?.scrollLeft || 0;
     el.querySelector("#mycard-sl-msg")?.remove();
     dialog.innerHTML = slPanelHtml();
+    // Lift the message and the confirm bar out of the scrolling body so a
+    // rejection is on screen next to the button that was just pressed — at the
+    // foot of a long prop list, nobody ever scrolled down to read it.
+    const notice = dialog.querySelector("#mycard-sl-msg");
+    if (notice) dialog.append(notice);
     const confirmation = dialog.querySelector(".sl-confirm");
     if (confirmation) dialog.append(confirmation);
     if (customText != null && dialog.querySelector("#mycard-superlock"))
@@ -766,8 +859,8 @@ async function lockStructuredProp() {
     book: sel.book,
     game_key: superLockState.gameKey,
   };
-  const msg = document.getElementById("mycard-sl-msg");
-  if (!await confirmPickReplacement("Super Lock", {pick_text:propTextClient(prop,m),book:sel.book,price:best.price})) return;
+  const text = propTextClient(prop, m);
+  if (!await confirmPickReplacement("Super Lock", {pick_text:text,book:sel.book,price:best.price})) return;
   try {
     const r = await fetch("/api/picks", {
       method: "POST",
@@ -781,29 +874,31 @@ async function lockStructuredProp() {
     });
     const j = await r.json();
     if (!r.ok) {
-      if(j.error==="quote-changed" || j.error==="prop-not-offered") {
-        await loadPropMenu(superLockState.gameKey);
-        const note=document.getElementById("mycard-sl-msg");
-        if(note)note.textContent=j.detail || "THAT LINE IS NO LONGER OFFERED · REVIEW THE REFRESHED MENU";
+      if (j.error === "super-lock-taken") {
+        slMarkTaken(text);
+        slSetNotice(slTakenNotice(slPropLabel(pl.player, m, sel)));
         return;
       }
-      if (msg)
-        msg.textContent =
-          j.error === "locked"
-            ? "LOCKED · CUTOFF PASSED"
-            : j.error === "super-lock-price"
-              ? "ODDS MUST BE -120 OR LONGER"
-              : j.error === "prop-not-offered"
-                ? "THAT LINE IS NO LONGER OFFERED"
-                : j.error === "game-started"
-                  ? "GAME ALREADY STARTED"
-                  : j.detail || "ERROR · " + (j.error || "");
+      if(j.error==="quote-changed" || j.error==="prop-not-offered") {
+        slSetNotice(j.detail || "THAT LINE IS NO LONGER OFFERED · REVIEW THE REFRESHED MENU");
+        await loadPropMenu(superLockState.gameKey);
+        return;
+      }
+      slSetNotice(
+        j.error === "locked"
+          ? "LOCKED · CUTOFF PASSED"
+          : j.error === "super-lock-price"
+            ? "ODDS MUST BE -120 OR LONGER"
+            : j.error === "game-started"
+              ? "GAME ALREADY STARTED"
+              : j.detail || "ERROR · " + (j.error || ""),
+      );
       return;
     }
     currentMyPicks["Super Lock"] = j.picks?.find(
       (p) => p.bet_type === "Super Lock",
     ) || {
-      pick_text: propTextClient(prop, m),
+      pick_text: text,
       prop,
       book: best.book,
       price: best.price,
@@ -821,7 +916,7 @@ async function lockStructuredProp() {
     refreshMyCard();
     refreshSuperLockEditor();
   } catch {
-    if (msg) msg.textContent = "NETWORK ERROR";
+    slSetNotice("NETWORK ERROR");
   }
 }
 async function lockGameLine() {
@@ -839,7 +934,6 @@ async function lockGameLine() {
     price: info.price,
     pick_text: info.text,
   };
-  const msg = document.getElementById("mycard-sl-msg");
   if (!await confirmPickReplacement("Super Lock", line_pick)) return;
   try {
     const r = await fetch("/api/picks", {
@@ -854,27 +948,30 @@ async function lockGameLine() {
     });
     const j = await r.json();
     if (!r.ok) {
-      if (j.error === "quote-changed") {
-        const fresh = await fetch("/api/odds", {credentials:"include"});
-        if (fresh.ok) applyLiveOdds(state.thisWeekData, await fresh.json(), true);
-        refreshSuperLockEditor();
-        const note = document.getElementById("mycard-sl-msg");
-        if (note) note.textContent = j.detail;
+      if (j.error === "super-lock-taken") {
+        slMarkTaken(info.text);
+        slSetNotice(slTakenNotice(info.text));
         return;
       }
-      if (msg)
-        msg.textContent =
-          j.error === "locked"
-            ? "LOCKED · CUTOFF PASSED"
-            : j.error === "super-lock-price"
-              ? "ODDS MUST BE -120 OR LONGER"
-              : j.error === "line-not-offered"
-                ? "THAT LINE IS NO LONGER OFFERED"
-                : j.error === "game-not-on-board"
-                  ? "GAME NOT ON THE BOARD"
-                  : j.error === "game-started"
-                    ? "GAME ALREADY STARTED"
-                    : j.detail || "ERROR · " + (j.error || "");
+      if (j.error === "quote-changed") {
+        slSetNotice(j.detail);
+        const fresh = await fetch("/api/odds", {credentials:"include"});
+        if (fresh.ok) applyLiveOdds(state.thisWeekData, await fresh.json(), true);
+        return;
+      }
+      slSetNotice(
+        j.error === "locked"
+          ? "LOCKED · CUTOFF PASSED"
+          : j.error === "super-lock-price"
+            ? "ODDS MUST BE -120 OR LONGER"
+            : j.error === "line-not-offered"
+              ? "THAT LINE IS NO LONGER OFFERED"
+              : j.error === "game-not-on-board"
+                ? "GAME NOT ON THE BOARD"
+                : j.error === "game-started"
+                  ? "GAME ALREADY STARTED"
+                  : j.detail || "ERROR · " + (j.error || ""),
+      );
       return;
     }
     const meta = {
@@ -901,19 +998,18 @@ async function lockGameLine() {
     refreshMyCard();
     refreshSuperLockEditor();
   } catch {
-    if (msg) msg.textContent = "NETWORK ERROR";
+    slSetNotice("NETWORK ERROR");
   }
 }
 async function saveSuperLockText(raw) {
   const price = Number(document.getElementById("mycard-sl-price")?.value);
   const text = (raw || "").trim();
-  const msg = document.getElementById("mycard-sl-msg");
   if (!text) {
-    if (msg) msg.textContent = "ENTER A SUPER LOCK FIRST";
+    slSetNotice("ENTER A SUPER LOCK FIRST");
     return;
   }
   if (!Number.isInteger(price) || Math.abs(price) < 100 || price < -120) {
-    if (msg) msg.textContent = "ENTER ODDS: -120 TO -100, OR +100 AND UP";
+    slSetNotice("ENTER ODDS: -120 TO -100, OR +100 AND UP");
     return;
   }
   if (!await confirmPickReplacement("Super Lock", {pick_text:text,price})) return;
@@ -930,13 +1026,18 @@ async function saveSuperLockText(raw) {
     });
     const j = await r.json();
     if (!r.ok) {
-      if (msg)
-        msg.textContent =
-          j.error === "locked"
-            ? "LOCKED · CUTOFF PASSED"
-            : j.error === "super-lock-price"
-              ? "ODDS MUST BE -120 OR LONGER"
-              : j.detail || "ERROR · " + (j.error || "");
+      if (j.error === "super-lock-taken") {
+        slMarkTaken(text);
+        slSetNotice(slTakenNotice(text));
+        return;
+      }
+      slSetNotice(
+        j.error === "locked"
+          ? "LOCKED · CUTOFF PASSED"
+          : j.error === "super-lock-price"
+            ? "ODDS MUST BE -120 OR LONGER"
+            : j.detail || "ERROR · " + (j.error || ""),
+      );
       return;
     }
     // Free-text overwrites any prior structured pick, so clear prop metadata.
@@ -950,7 +1051,7 @@ async function saveSuperLockText(raw) {
     refreshMyCard();
     refreshSuperLockEditor();
   } catch {
-    if (msg) msg.textContent = "NETWORK ERROR";
+    slSetNotice("NETWORK ERROR");
   }
 }
 async function markSuperLockMyCard(result) {
