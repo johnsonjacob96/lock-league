@@ -4931,6 +4931,7 @@ function scrollAppToTop() {
 }
 
 async function render() {
+  const requestId = render._requestId = (render._requestId || 0) + 1;
   syncNavActive();
   updatePreseasonBanner();
   const root = document.getElementById("root");
@@ -4948,6 +4949,8 @@ async function render() {
   // Live season data comes from the DB; load it before views that show it.
   if ((state.view === "standings" && state.season === "2026") || state.view === "lifetime") {
     await Promise.all([ensureLive2026(), state.view === "standings" ? loadScores() : Promise.resolve(), state.view === "standings" && state.user && !state.pot ? loadPot() : Promise.resolve()]);
+    // A newer render owns the page after navigation while this load was pending.
+    if (requestId !== render._requestId) return;
   }
   renderTickerWeekSelect();
   renderTicker();
