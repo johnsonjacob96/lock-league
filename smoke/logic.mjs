@@ -3,6 +3,8 @@
 // board normalization, prop menu + alt lines, pick anti-cheat re-derivation, the
 // started/Monday guards, and grading. This is the primary bug net before Week 1.
 import { suite } from "./assert.mjs";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
 import { normalizeSharp, fetchSharpRaw } from "../functions/api/odds.js";
 import { normalizeSharpProps, plausibleMainPrice, marketKeyFromName } from "../functions/_shared/props.js";
 import { menuForGame } from "../functions/api/props.js";
@@ -17,6 +19,38 @@ const lockable = (price) => price != null && Number(price) >= LOCK_MIN;
 
 export async function run() {
   const s = suite("logic — Week-1 simulation (board · props · picks · grading)");
+
+  // Run the real navigation dispatcher with deferred, synthetic data loaders.
+  // A previous tab's response must not replace the current tab's DOM.
+  const page = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  const renderSource = page.slice(page.indexOf("async function render() {"), page.indexOf("function attachStandingsHandlers()"));
+  for (const origin of ["standings", "lifetime"]) {
+    let finishLoad;
+    const pending = new Promise(resolve => { finishLoad = resolve; });
+    let writes = 0;
+    const root = { set innerHTML(value) { writes++; }, scrollTop: 0 };
+    const context = {
+      state: { view: origin, season: "2026" },
+      document: { getElementById: () => root, querySelectorAll: () => [] },
+      syncNavActive() {}, updatePreseasonBanner() {}, scrollAppToTop() {},
+      ensureLive2026: () => pending, loadScores: async () => {},
+      renderTickerWeekSelect() {}, renderTicker() {}, renderUserArea() {},
+      renderRules: () => "Rules", renderLifetime: () => "Lifetime",
+    };
+    vm.createContext(context);
+    vm.runInContext(renderSource, context);
+    const oldRender = context.render();
+    context.state.view = "rules";
+    await context.render();
+    s.eq(`${origin} navigation displays Rules while data is pending`, writes, 1);
+    finishLoad();
+    await oldRender;
+    s.eq(`${origin} late response preserves the current Rules DOM`, writes, 1);
+    writes = 0;
+    context.state.view = "lifetime";
+    await context.render();
+    s.eq(`${origin} subsequent Lifetime navigation still renders`, writes, 1);
+  }
 
   // ── 1. Board: derivative markets must never reach the game spread/total ──
   const games = normalizeSharp(sharpBoardRows());
