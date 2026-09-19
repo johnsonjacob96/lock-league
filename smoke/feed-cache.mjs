@@ -56,6 +56,22 @@ test("null results are cached, avoiding repeated empty market requests", async (
     null,
   );
 });
+test("fresh shared-cache hits use one read and no writes, including cached null", async (t) => {
+  for (const [key, payload] of [["warm-board", { games: ["one"], fetched_at: "original" }], ["warm-null", null]]) {
+    await sharedFeed(env, key, 30000, async () => payload);
+    const query = t.mock.method(db, "query");
+    try {
+      const result = await sharedFeed(env, key, 30000, () => {
+        assert.fail("fresh cache must not reload the provider");
+      });
+      assert.deepEqual(result, payload);
+      assert.equal(query.mock.callCount(), 1, "fresh hit needs only one database round trip");
+      assert.match(query.mock.calls[0].arguments[0], /^SELECT\s/i);
+    } finally {
+      query.mock.restore();
+    }
+  }
+});
 test("refresh failure preserves original timestamp, marks delay, and backs off", async () => {
   await sharedFeed(env, "failure", 30000, async () => ({
     fetched_at: "original",
