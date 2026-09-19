@@ -3979,7 +3979,8 @@ function renderGameCard(g, requestedBook) {
 
 function quoteDelayed(quote, parent) {
   const stamp = quote?.updated || parent?.updated;
-  return !!quote?.stale || !!parent?.stale || (!!stamp && (Date.now() - Date.parse(stamp) > 120000 || Date.parse(stamp) > Date.now()+5000));
+  const updated = Date.parse(stamp);
+  return !!quote?.stale || !!parent?.stale || !Number.isFinite(updated) || Date.now() - updated > 120000 || updated > Date.now()+5000;
 }
 function renderBookButtons(bookKey, book, game) {
   const s = book.spread;
