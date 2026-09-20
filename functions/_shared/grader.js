@@ -31,13 +31,26 @@ export function sameTeam(a, b) {
 // successfully fetched through a transient failure. Stale live scores beat a
 // blank board, and the seed / next good fetch refreshes it.
 const _sbCache = new Map();
+const _sbPending = new Map();
 const SB_TTL_MS = 10 * 1000;
 
 export async function fetchScoreboard(season, week, seasontype = 2, env = null) {
   const cacheKey = `${season}:${week}:${seasontype}`;
   const cached = _sbCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < SB_TTL_MS) return cached.events;
+  if (_sbPending.has(cacheKey)) return _sbPending.get(cacheKey);
 
+  const pending = refreshScoreboard(season, week, seasontype, env, cacheKey, cached);
+  _sbPending.set(cacheKey, pending);
+  try {
+    return await pending;
+  } finally {
+    // Release both successful and failed refreshes so the next poll can retry.
+    _sbPending.delete(cacheKey);
+  }
+}
+
+async function refreshScoreboard(season, week, seasontype, env, cacheKey, cached) {
   let raw = null;
   let sourceUpdatedAt = new Date().toISOString();
   try {

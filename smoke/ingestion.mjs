@@ -504,3 +504,32 @@ test('ESPN web malformed responses retain canonical and CDN fallbacks', async t 
   assert.equal((await espnScoreboardEvents(2026,2,1))[0].id,'fallback');
   assert.deepEqual(calls,['site.web.api.espn.com','site.api.espn.com','cdn.espn.com']);
 });
+
+test('concurrent scoreboard readers share one refresh per week and retry after failure', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    // Keep refreshes overlapping without relying on wall-clock timing.
+    await new Promise(resolve => setImmediate(resolve));
+    return json({ events: [event('shared')] });
+  });
+  const readers = await Promise.all(Array.from({ length: 8 }, () => fetchScoreboard(2040, 1)));
+  assert.equal(calls, 1, 'a cold burst should make one upstream request');
+  for (const events of readers) assert.equal(events[0].id, 'shared');
+  await fetchScoreboard(2040, 1);
+  assert.equal(calls, 1, 'warm reads still use the cache');
+  await fetchScoreboard(2040, 2);
+  assert.equal(calls, 2, 'different weeks refresh independently');
+
+  calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    await new Promise(resolve => setImmediate(resolve));
+    return new Response('', { status: 503 });
+  });
+  const failed = await Promise.allSettled(Array.from({ length: 8 }, () => fetchScoreboard(2040, 3)));
+  assert.ok(failed.every(result => result.status === 'rejected'));
+  assert.equal(calls, 6, 'failed burst shares the two rounds of three ESPN hosts');
+  t.mock.method(globalThis, 'fetch', async () => json({ events: [event('recovered')] }));
+  assert.equal((await fetchScoreboard(2040, 3))[0].id, 'recovered', 'failed refresh must be released for retry');
+});
