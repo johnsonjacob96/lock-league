@@ -365,6 +365,35 @@ test('conflicting main totals require independent confirmation, including cached
  const oneBook={...primary,games:[{...game,books:{draftkings:book(73.5)}}]};
  assert.equal(mergeBookSupplement(oneBook,backup,now).games[0].books.draftkings.total.point,46.5);
 });
+test('an out-of-band derivative line reaches neither the board nor a card',async()=>{
+ const {sanitizeBoard}=await import('../functions/api/odds.js');
+ // Total touchdowns sit around 5.5, so an over-9.5 rung at +4000 is a genuine
+ // quote for a market that has no business on this board -- and "total_tds"
+ // carries none of the words the market-name filter looks for.
+ const base={away_team:'Miami Dolphins',home_team:'San Francisco 49ers',event_start_time:'2026-09-13T20:25Z',sportsbook:'draftkings',is_main_line:true};
+ const real=[{...base,market_type:'total_points',line:45.5,selection_type:'over',odds_american:-110},
+             {...base,market_type:'total_points',line:45.5,selection_type:'under',odds_american:-110}];
+ const derivative={...base,market_type:'total_tds',line:9.5,selection_type:'over',odds_american:4000};
+ assert.equal(normalizeSharp([...real,derivative])[0].books.draftkings.total.point,45.5);
+ // With no full-game total in the feed the book shows none, never the 9.5.
+ assert.deepEqual(normalizeSharp([derivative]),[]);
+ assert.deepEqual(normalizeSharp([{...base,market_type:'alternate_handicap',line:-44,selection_type:'home',odds_american:-110}]),[]);
+ // Same guard on the way out, so a payload cached or snapshotted before this
+ // shipped is cleaned on read instead of serving 9.5 until it expires.
+ const upd='2026-09-13T14:45:00Z';
+ const spread={fav:'San Francisco 49ers',line:-13.5,favPrice:-110,dogPrice:-110};
+ const poisoned={source:'sharpapi',games:[{away:'Miami Dolphins',home:'San Francisco 49ers',kickoff:'2026-09-13T20:25Z',books:{
+  fanduel:{total:{point:45.5,overPrice:-110,underPrice:-110},spread,updated:upd},
+  draftkings:{total:{point:9.5,overPrice:4000,underPrice:null},spread,updated:upd}}}]};
+ const clean=sanitizeBoard(poisoned);
+ assert.equal(clean.games[0].books.draftkings.total,null);
+ assert.equal(clean.games[0].books.draftkings.total_unavailable_reason,'implausible-line');
+ assert.equal(clean.games[0].books.fanduel.total.point,45.5,'the book with a sane number keeps it');
+ assert.ok(clean.games[0].books.draftkings.spread,'only the offending market is withheld');
+ assert.equal(poisoned.games[0].books.draftkings.total.point,9.5,'does not mutate cached input');
+ const wideSpread={source:'sharpapi',games:[{away:'a',home:'b',books:{draftkings:{spread:{fav:'b',line:-44,favPrice:-110,dogPrice:-110}}}}]};
+ assert.equal(sanitizeBoard(wideSpread).games[0].books.draftkings.spread,null);
+});
 test('Sharp main board ignores alternate, inactive and flagged-invalid selections',()=>{
  const base={away_team:'Chicago Bears',home_team:'Carolina Panthers',event_start_time:'2026-09-13T17:00Z',sportsbook:'draftkings',market_type:'total_points',is_main_line:true,odds_american:-110};
  const rows=[{...base,line:46.5,selection_type:'over'},{...base,line:46.5,selection_type:'under'}];

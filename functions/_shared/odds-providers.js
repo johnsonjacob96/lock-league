@@ -337,6 +337,17 @@ function resolveSpread(rows, g) {
     ...(pick.fav?.updated && pick.dog?.updated ? {updated:[pick.fav.updated,pick.dog.updated].sort()[0]} : {}),
   };
 }
+// Full-game NFL lines live in a narrow band: no game total has been posted
+// below the high 20s or above the low 70s, and no spread has passed ~27. A
+// number outside these bands is never a line anyone can bet on this game — it
+// is a derivative market the name-based filter missed (total touchdowns ~5.5,
+// quarter totals ~9.5) or a stray rung of one. It must not reach the board:
+// /api/picks re-derives from the board, so a tappable tile carrying one becomes
+// a saved pick at whatever price the derivative was quoting.
+const TOTAL_MIN = 28, TOTAL_MAX = 75, SPREAD_MAX = 30;
+export const plausibleTotalPoint = (p) => Number.isFinite(p) && p >= TOTAL_MIN && p <= TOTAL_MAX;
+export const plausibleSpreadLine = (l) => Number.isFinite(l) && Math.abs(l) <= SPREAD_MAX;
+
 function resolveTotal(rows) {
   if (!rows.length) return null;
   const byPoint = new Map();
@@ -509,6 +520,10 @@ export function normalizeSharp(rows) {
     if (row.espn_supplement) b.supplementedAt = row.timestamp;
     const pt = sharpPoint(row);
     if (pt == null) continue;
+    // Drop out-of-band numbers here as well as on the way out: a derivative
+    // market sets is_main_line on its own rows, which would otherwise let it
+    // win resolveTotal's main-line pool outright.
+    if (isTotal ? !plausibleTotalPoint(pt) : !plausibleSpreadLine(pt)) continue;
     const price = Number.isFinite(Number(row.odds_american))
       ? Number(row.odds_american)
       : null;

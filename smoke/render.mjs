@@ -103,6 +103,16 @@ export async function run() {
           game.books.draftkings.spread.line = -6.5;
           host.innerHTML = renderGameCard(game,"draftkings");
           out.checks.backupBookVisible = host.querySelectorAll(".book-toggle").length === 2 && host.querySelector(".book-toggle.on").dataset.book === "draftkings" && host.textContent.includes("6.5") && host.textContent.includes("backup");
+          // A side the book hasn't priced is shown but not offered: /api/picks
+          // refuses to write a pick it can't price, so a tappable button would
+          // only ever produce a failed submit.
+          const unpriced = structuredClone(next.games[0]);
+          unpriced.kickoff = new Date(Date.now() + 86400000).toISOString();
+          unpriced.books = { fanduel: { ...unpriced.books.fanduel, total: { point: 44.5, overPrice: -110, underPrice: null } } };
+          host.innerHTML = renderGameCard(unpriced, "fanduel");
+          out.checks.noPriceNotPickable = !!host.querySelector('.pick-btn[data-bet="Over"]')
+            && !host.querySelector('.pick-btn[data-bet="Under"]')
+            && host.textContent.includes("44.5");
         } catch (e) { out.err = String(e && e.stack || e); }
         return out;
       }, markets);
@@ -114,7 +124,7 @@ export async function run() {
       s.ok(`[${vw}px] War Room Super Lock chip shows odds`, r.checks.wrOdds === true);
       s.ok(`[${vw}px] locked Super Lock card shows odds`, r.checks.lockedOdds === true);
       s.ok(`[${vw}px] locked Over/Under slot shows its line, not truncated`, r.checks.overSlotShowsLine === true);
-      for (const key of ["livePush","finalPush","propProgress","propMissing","sourceAge","noTimestampRerender","refreshFocus","liveNoOverflow","deferActive","deferredCatchesUp","keepLastGood","refreshReenabled","backupBookVisible"]) s.ok(`[${vw}px] ${key}`, r.checks[key] === true);
+      for (const key of ["livePush","finalPush","propProgress","propMissing","sourceAge","noTimestampRerender","refreshFocus","liveNoOverflow","deferActive","deferredCatchesUp","keepLastGood","refreshReenabled","backupBookVisible","noPriceNotPickable"]) s.ok(`[${vw}px] ${key}`, r.checks[key] === true);
       const payments = await page.evaluate(() => {
         const roster = [{id:1,name:'Jacob',paid:false},{id:2,name:'Jared',paid:false}];
         state.pot = {season:2026,can_configure:true,

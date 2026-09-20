@@ -20,7 +20,8 @@ import { sql, ignoringConcurrentCreate } from "../_shared/db.js";
 import { weekWindow } from "../_shared/nfl.js";
 import { saveScoreboardSeed, saveSummarySeed } from "../_shared/scoreseed.js";
 
-import { currentSeasonWeek, fetchOddsApi, fetchEspn, fetchSharpApi, normalizeEspnEvents } from "../_shared/odds-providers.js";
+import { currentSeasonWeek, fetchOddsApi, fetchEspn, fetchSharpApi, normalizeEspnEvents, plausibleTotalPoint, plausibleSpreadLine } from "../_shared/odds-providers.js";
+export { plausibleTotalPoint, plausibleSpreadLine } from "../_shared/odds-providers.js";
 export { normalizeEspnEvents, normalizeSharp, fetchSharpRaw } from "../_shared/odds-providers.js";
 import { oddsDiagnostics } from "../_shared/odds-diagnostics.js";
 
@@ -40,6 +41,32 @@ let backupReady = false;
 const completeMarket = (m, type) => !!m && (type === "spread"
   ? Number.isFinite(m.line) && Number.isFinite(m.favPrice) && Number.isFinite(m.dogPrice)
   : Number.isFinite(m.point) && Number.isFinite(m.overPrice) && Number.isFinite(m.underPrice));
+// A cross-book disagreement can't say which book is wrong, but an out-of-band
+// number identifies itself, so only the offending book's market is withheld —
+// the other book keeps showing its line. Applied on the way out as well as at
+// parse time, so a payload cached or snapshotted before this shipped is cleaned
+// on read instead of serving the bad number until it expires.
+export function quarantineImplausibleMarkets(payload) {
+  if (!Array.isArray(payload?.games)) return payload;
+  const bad = (b) => (b?.total && !plausibleTotalPoint(b.total.point)) || (b?.spread && !plausibleSpreadLine(b.spread.line));
+  if (!payload.games.some(g => Object.values(g.books || {}).some(bad))) return payload;
+  return { ...payload, games: payload.games.map(g => {
+    const entries = Object.entries(g.books || {});
+    if (!entries.some(([, b]) => bad(b))) return g;
+    return { ...g, books: Object.fromEntries(entries.map(([key, book]) => {
+      if (!bad(book)) return [key, book];
+      const out = { ...book };
+      if (book.total && !plausibleTotalPoint(book.total.point)) { out.total = null; out.total_unavailable_reason = "implausible-line"; }
+      if (book.spread && !plausibleSpreadLine(book.spread.line)) { out.spread = null; out.spread_unavailable_reason = "implausible-line"; }
+      return [key, out];
+    })) };
+  }) };
+}
+// Every board, from every source and every cache layer, goes out through this.
+export function sanitizeBoard(payload) {
+  return quarantineConflictingTotals(quarantineImplausibleMarkets(payload));
+}
+
 // Main totals should not differ by ten points between books. Do not guess
 // which is right: confirm from the independent feed or withhold both totals.
 function conflictingTotals(g) {
@@ -63,9 +90,9 @@ export function needsBookSupplement(payload) {
     ["spread", "total"].some(m => !completeMarket(g.books?.[b]?.[m], m))));
 }
 export function mergeBookSupplement(primary, backup, now = Date.now()) {
-  if (!backup || now - Date.parse(backup.fetched_at) > BACKUP_TTL_MS || !Number.isFinite(Date.parse(backup.fetched_at))) return quarantineConflictingTotals(primary);
+  if (!backup || now - Date.parse(backup.fetched_at) > BACKUP_TTL_MS || !Number.isFinite(Date.parse(backup.fetched_at))) return sanitizeBoard(primary);
   const byGame = new Map((backup.games || []).map(g => [`${g.away}@${g.home}`, g]));
-  return quarantineConflictingTotals({ ...primary, games: primary.games.map(g => {
+  return sanitizeBoard({ ...primary, games: primary.games.map(g => {
     const extra = byGame.get(`${g.away}@${g.home}`);
     if (!extra || !Number.isFinite(Date.parse(extra.kickoff)) || !Number.isFinite(Date.parse(g.kickoff)) || Math.abs(Date.parse(extra.kickoff) - Date.parse(g.kickoff)) > 3600000) return g;
     const books = { ...g.books };
@@ -178,7 +205,7 @@ export function scopedPayload(payload, env) {
     const t = Date.parse(g.kickoff);
     return Number.isFinite(t) && t >= start && t < end;
   });
-  return games.length ? quarantineConflictingTotals({ ...payload, season, week, games }) : null;
+  return games.length ? sanitizeBoard({ ...payload, season, week, games }) : null;
 }
 
 // ── Mock (dev / screenshots) ────────────────────────────────────────────────
@@ -259,7 +286,7 @@ export async function getUnshared(context, coordinated = false) {
     try {
       let payload = await fetchPrimary(env, primary);
       if (primary === "sharpapi") payload = await supplementMissingBooks(env, payload);
-      payload = quarantineConflictingTotals(payload);
+      payload = sanitizeBoard(payload);
       // An empty board means "no lines posted yet" or a malformed response,
       // never "no games this week" — always fall through to the ESPN board
       // instead of returning/snapshotting a blank one. (This used to only
@@ -281,8 +308,8 @@ export async function getUnshared(context, coordinated = false) {
   if (primary === "sharpapi") {
     const backup = await fetchSharedBackup(env);
     if (backup?.games?.length) {
-      const payload = { ...backup, games: backup.games.map(g => ({ ...g,
-        books: Object.fromEntries(Object.entries(g.books || {}).map(([k,b]) => [k,{...b,supplemental:true}])) })) };
+      const payload = sanitizeBoard({ ...backup, games: backup.games.map(g => ({ ...g,
+        books: Object.fromEntries(Object.entries(g.books || {}).map(([k,b]) => [k,{...b,supplemental:true}])) })) });
       cache = { ts: Date.now(), data: payload };
       waitUntil(putEdge(edge, payload, ttlS));
       waitUntil(saveSnapshot(env, payload));
@@ -302,7 +329,7 @@ export async function getUnshared(context, coordinated = false) {
   // (possibly wrong-week) snapshot. This is the current-best board regardless of
   // source; a later SharpAPI success overwrites it with FD/DK.
   try {
-    const payload = await fetchEspn(env);
+    const payload = sanitizeBoard(await fetchEspn(env));
     const hasLines = payload.games.some(g => Object.values(g.books || {}).some(b => b.spread || b.total));
     if (!hasLines) {
       const last = await loadSnapshot(env);

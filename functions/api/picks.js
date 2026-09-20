@@ -7,7 +7,7 @@ import { pickCutoff, BET_TYPES, seasonTypeFor, currentNflWeek } from "../_shared
 import { fetchScoreboard, sameTeam } from "../_shared/grader.js";
 import { ensureExtras } from "../_shared/migrations.js";
 import { PROP_DEFS, propPickText, samePlayer } from "../_shared/props.js";
-import { scopedPayload } from "./odds.js";
+import { scopedPayload, plausibleTotalPoint, plausibleSpreadLine } from "./odds.js";
 
 // ESPN scoreboard, cached briefly per warm isolate — used to reject picks on
 // games that have already kicked off.
@@ -86,6 +86,10 @@ export function deriveGradable(game, betType, side, preferredBook) { // exported
   if (betType === "Favorite" || betType === "Dog") {
     const s = data.spread;
     if (!hasNumber(s.line) || ![game.home, game.away].includes(s.fav)) return null;
+    // /api/odds withholds out-of-band numbers, but this is the last gate before
+    // a line is written to a card: never accept one a book could not be posting
+    // for a full game, whatever served the board.
+    if (!plausibleSpreadLine(s.line)) return null;
     if (side === "fav") {
       return { line: s.line, price: s.favPrice ?? null, book, pick_text: `${s.fav} ${s.line}` };
     }
@@ -93,7 +97,7 @@ export function deriveGradable(game, betType, side, preferredBook) { // exported
     return { line: s.line, price: s.dogPrice ?? null, book, pick_text: `${dog} +${Math.abs(s.line)}` };
   }
   const t = data.total;
-  if (!hasNumber(t.point)) return null;
+  if (!hasNumber(t.point) || !plausibleTotalPoint(t.point)) return null;
   const tag = side === "over" ? "O" : "U";
   const price = side === "over" ? (t.overPrice ?? null) : (t.underPrice ?? null);
   return { line: t.point, price, book, pick_text: `${game.away} / ${game.home} ${tag}${t.point}` };
