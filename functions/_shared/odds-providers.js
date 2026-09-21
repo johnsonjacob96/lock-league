@@ -337,6 +337,12 @@ function resolveSpread(rows, g) {
     ...(pick.fav?.updated && pick.dog?.updated ? {updated:[pick.fav.updated,pick.dog.updated].sort()[0]} : {}),
   };
 }
+// Conservative board safety limits, not proof of market identity or universal
+// historical bounds. Unknown markets must be rejected independently below.
+const TOTAL_MIN = 28, TOTAL_MAX = 75, SPREAD_MAX = 30;
+export const plausibleTotalPoint = (p) => Number.isFinite(p) && p >= TOTAL_MIN && p <= TOTAL_MAX;
+export const plausibleSpreadLine = (l) => Number.isFinite(l) && Math.abs(l) <= SPREAD_MAX;
+
 function resolveTotal(rows) {
   if (!rows.length) return null;
   const byPoint = new Map();
@@ -453,22 +459,13 @@ export function normalizeSharp(rows) {
       row.is_impossible_scoreline === true
     )
       continue;
-    const mt = String(row.market_type ?? row.market ?? "").toLowerCase();
-    // SharpAPI's spread,total feed also carries derivative markets that share the
-    // same keywords and would otherwise pollute the board: team totals (~20-24
-    // pts, e.g. team_total / 1st_half_team_total), half/quarter lines
-    // (1st_half_total_points, 3rd_quarter_point_spread, ...), total_touchdowns
-    // (~5.5), and odd/even. Only the FULL-GAME point spread and points total
-    // belong on the board, so drop anything scoped to a team, a period, or a
-    // non-points derivative before the keyword match.
-    const isDerivative =
-      /team/.test(mt) || // team_total, *_team_total
-      /1st|2nd|3rd|4th|half|quarter|period/.test(mt) || // half/quarter lines
-      /touchdown|odd|even/.test(mt); // total_touchdowns, odd/even
-    if (isDerivative) continue;
-    const isSpread = mt.includes("spread") || mt.includes("handicap");
-    const isTotal =
-      mt.includes("total") || mt.includes("over") || mt.includes("under");
+    // Only explicitly supported full-game points markets belong on this board.
+    // A derivative's own is_main_line flag says nothing about its game scope.
+    // Normalize spelling separators, but never strip period/team qualifiers.
+    const mt = String(row.market_type ?? row.market ?? "").trim().toLowerCase()
+      .replace(/[\s/-]+/g, "_");
+    const isSpread = /^(?:point_spread|spread|spreads|handicap|full_game_point_spread|full_game_spread)$/.test(mt);
+    const isTotal = /^(?:total_points|points_total|total|totals|over_under|full_game_total_points|full_game_total)$/.test(mt);
     if (!isSpread && !isTotal) continue;
     const book = sharpBookKey(row.sportsbook);
     if (!book) continue;
@@ -509,6 +506,10 @@ export function normalizeSharp(rows) {
     if (row.espn_supplement) b.supplementedAt = row.timestamp;
     const pt = sharpPoint(row);
     if (pt == null) continue;
+    // Drop out-of-band numbers here as well as on the way out: a derivative
+    // market sets is_main_line on its own rows, which would otherwise let it
+    // win resolveTotal's main-line pool outright.
+    if (isTotal ? !plausibleTotalPoint(pt) : !plausibleSpreadLine(pt)) continue;
     const price = Number.isFinite(Number(row.odds_american))
       ? Number(row.odds_american)
       : null;
@@ -516,8 +517,9 @@ export function normalizeSharp(rows) {
     const stype = String(row.selection_type ?? "").toLowerCase();
     const sel = String(row.selection ?? "").toLowerCase();
     if (isTotal) {
-      const ou =
-        stype === "over" || (!stype && sel.includes("over")) ? "over" : "under";
+      const ou = stype === "over" || stype === "under" ? stype
+        : !stype ? sel.match(/^(over|under)\b/)?.[1] : null;
+      if (!ou) continue;
       if (row.is_alternate_line === true) {
         (b._alternate_total ||= []).push({
           point: pt,

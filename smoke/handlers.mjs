@@ -282,6 +282,16 @@ test('a started game on the full slate still locks its slot',async()=>{
  assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,423);
  assert.equal((await request({season:2026,week:1,bet_type:'Favorite'},'action=remove')).status,423);
 });
+test('a board line outside the NFL range cannot be written to a card',async()=>{
+ // Belt and braces behind /api/odds: whatever served the board, a number no
+ // book could be posting for a full game never becomes a saved pick.
+ const total=liveGames[1].books.fanduel.total, saved={...total};
+ Object.assign(total,{point:9.5,overPrice:4000,underPrice:null});
+ try {
+  assert.equal((await request({season:2026,week:1,picks:[pick('Over')]})).body.error,'line-not-offered');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM picks')).rows[0].n,0);
+ } finally { Object.assign(total,saved); }
+});
 test('Monday game rejected in Central time',async()=>{assert.equal((await request({season:2026,week:1,picks:[pick('Favorite',2)]})).body.error,'monday-not-allowed');});
 test('unknown game rejected',async()=>{assert.equal((await request({season:2026,week:1,picks:[{...pick(),game_key:'Unknown@Unknown'}]})).status,422);});
 test('invalid periods, duplicates and null picks rejected cleanly',async()=>{

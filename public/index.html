@@ -3990,7 +3990,16 @@ function renderBookButtons(bookKey, book, game) {
   // A game that has kicked off can no longer be picked (server enforces too).
   const started = game.kickoff && new Date(game.kickoff).getTime() <= Date.now();
 
-  const btn = (bet, side, lbl, value, price, text) => started ? `
+  // A side with no posted price is not pickable: /api/picks refuses to write a
+  // pick it can't price, so showing a tappable button would only produce a
+  // failed submit. Render the number, not a button.
+  const btn = (bet, side, lbl, value, price, text) => price == null ? `
+    <div class="pick-btn opacity-40 cursor-not-allowed ${BET_META[bet].cls}" title="No price posted for this side">
+      <span class="pb-label">${lbl}</span>
+      <span class="pb-value">${value}</span>
+      <span class="pb-price">&mdash;</span>
+    </div>
+  ` : started ? `
     <div class="pick-btn locked ${BET_META[bet].cls}" title="Game started, pick locked">
       <span class="pb-label">${lbl}</span>
       <span class="pb-value">${value}</span>
