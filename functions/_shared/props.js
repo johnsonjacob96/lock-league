@@ -367,6 +367,8 @@ export function playerStatMap(boxscore, playerName) {
         const stats = a.stats || [];
         keys.forEach((k, i) => {
           const v = stats[i];
+          // Missing cells are unavailable stats, not a recorded zero.
+          if (v == null || (typeof v === "string" && !v.trim())) return;
           if (k.includes("/") && String(v).includes("/")) {
             const ks = k.split("/"), vs = String(v).split("/");
             ks.forEach((kk, j) => { map[kk] = Number(vs[j]); });
