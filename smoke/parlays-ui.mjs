@@ -7,7 +7,8 @@ try {
  for(const width of [375,390,1440]) {
   const page=await browser.newPage({viewport:{width,height:width===375?667:width===390?844:1000}}),errors=[],writes=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
-  await page.goto(new URL('../public/index.html',import.meta.url).href);
+  await page.route('https://fonts.googleapis.com/**',r=>r.abort());
+  await page.goto(new URL('../public/index.html',import.meta.url).href,{waitUntil:'domcontentloaded'});
   await page.evaluate(()=>{
    state.user={id:1,name:'Jacob'};state.view='parlays';
    const members=[{id:1,name:'Jacob'},{id:2,name:'Mason'},{id:3,name:'Chris'}];
@@ -55,7 +56,7 @@ try {
   assert.equal(await page.evaluate(()=>parlayWrites[0].legs[0].member_id),2);
   await page.locator('#parlay-new').click();
   // Deterministic OCR transport stub; recognition itself is checked separately.
-  await page.evaluate(()=>window.Tesseract={createWorker:async()=>({recognize:async()=>({data:{text:'Emmett Johnson 15+ Yards\nEMMETT JOHNSON - ALT RUSHING YDS\nRashee Rice 6+ Receptions\nRASHEE RICE - ALT RECEPTIONS'}}),terminate:async()=>{}})});
+  await page.evaluate(()=>window.Tesseract={createWorker:async()=>({recognize:async()=>({data:{text:'Same Game Parlay +30504 +38132\nPROFIT BOOST 25%\nDenver Broncos @ Kansas City Chiefs\nEmmett Johnson 15+ Yards\nEMMETT JOHNSON - ALT RUSHING YDS\nRashee Rice 6+ Receptions\nRASHEE RICE - ALT RECEPTIONS'}}),terminate:async()=>{}})});
   const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=300;c.height=300;c.getContext('2d').fillRect(0,0,300,300);return c.toDataURL().split(',')[1];});
   await page.locator('#parlay-image').setInputFiles({name:'slip.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
   await page.waitForFunction(()=>document.querySelectorAll('[data-leg-index]').length===2);
@@ -69,7 +70,7 @@ try {
   await page.locator('#parlay-form button[type=submit]').click();
   await page.waitForSelector('#parlay-new');
   const posted=await page.evaluate(()=>parlayWrites.at(-1));
-  assert.equal(posted.legs.length,2);assert.equal(posted.legs[0].side,'atleast');assert.match(posted.image,/^data:image\/jpeg;base64,/);
+  assert.equal(posted.odds,38132);assert.equal(posted.legs.length,2);assert.equal(posted.legs[0].side,'atleast');assert.match(posted.image,/^data:image\/jpeg;base64,/);
   await page.locator('#parlay-new').click();
   await page.evaluate(()=>{
    parlayState.draft.game_key='Denver Broncos@Kansas City Chiefs';
@@ -85,6 +86,19 @@ try {
   await page.locator('#parlay-form button[type=submit]').click();
   await page.waitForSelector('#parlay-new');
   assert.equal(await page.evaluate(()=>parlayWrites.length),before+1);
+  await page.locator('#parlay-new').click();
+  await page.locator('#parlay-add').click();
+  await page.locator('[data-field="market"]').selectOption('game_total');
+  assert.equal(await page.locator('[data-field="player"]').isDisabled(),true);
+  assert.deepEqual(await page.locator('[data-field="side"] option').allTextContents(),['Choose direction','Over','Under']);
+  await page.locator('[data-field="side"]').selectOption('under');
+  await page.locator('[data-field="line"]').fill('54.5');
+  await page.locator('[name="game_key"]').selectOption('Denver Broncos@Kansas City Chiefs');
+  await page.screenshot({path:join(tmpdir(),`parlays-game-total-${width}.png`),fullPage:true});
+  await page.locator('#parlay-form button[type=submit]').click();
+  await page.waitForSelector('#parlay-new');
+  const total=await page.evaluate(()=>parlayWrites.at(-1).legs[0]);
+  assert.equal(total.market,'game_total');assert.equal(total.side,'under');assert.equal(total.line,54.5);
   assert.deepEqual(errors,[]);console.log(`PASS ${width}px: live cards, leaderboard, edit assignments, upload review and save`);await page.close();
  }
 }finally{await browser.close();}

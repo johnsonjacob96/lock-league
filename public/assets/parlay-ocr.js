@@ -40,6 +40,13 @@ function parlayFilterLogoText(lines) {
  // Never remove a numeric threshold or a line without a corroborated name.
  return cleaned.filter(l=>!(!/\d/.test(l.text)&&l.text.length<=12&&cleaned.some(other=>other!==l&&anchors.some(name=>other.text.toLowerCase().startsWith(name.toLowerCase()))&&Math.abs(other.y-l.y)<other.height*.6&&l.right!=null&&l.right<other.x-other.height*.5)));
 }
+// Number confidence is separate from logo/name confidence on the same line.
+function parlayUncertainThreshold(line) {
+ if(!/\d/.test(line.text)||!/over|under|\+/i.test(line.text))return false;
+ const words=line.words||[],direction=words.findIndex(w=>/over|under/i.test(w.text));
+ const numbers=words.slice(Math.max(0,direction)).filter(w=>/\d/.test(w.text));
+ return numbers.length?numbers.some(w=>w.confidence<65):line.confidence<65;
+}
 function parlayImproveContrast(canvas) {
  const ctx=canvas.getContext('2d',{willReadFrequently:true}),data=ctx.getImageData(0,0,canvas.width,canvas.height),p=data.data,samples=[];
  for(let i=0;i<p.length;i+=4*131)samples.push((p[i]+p[i+1]+p[i+2])/3);
@@ -97,9 +104,10 @@ async function readParlayImage(file,draft) {
    for(const leg of doc.legs) {
     const source=leg.source_text.split('\n').map(normalize),matched=lines.filter(l=>source.includes(normalize(l.text)));
     if(!matched.length)continue;
-    if(matched.some(l=>l.confidence<65)) {
+    const uncertainNumber=leg.market!=='anytime_td'&&matched.some(parlayUncertainThreshold);
+    if(matched.some(l=>l.confidence<65)||uncertainNumber) {
      leg.review.push('Low-confidence text. Compare this leg with the original.');
-     if(matched.some(l=>l.confidence<65&&/\d/.test(l.text)&&/over|under|\+/i.test(l.text))&&leg.market!=='anytime_td')leg.line=null;
+     if(uncertainNumber)leg.line=null;
     }
     const top=Math.max(0,Math.min(...matched.map(l=>l.y-l.height/2))-18)/ocrScale;
     const bottom=Math.min(height,Math.max(...matched.map(l=>l.y+l.height/2))+18)/ocrScale;

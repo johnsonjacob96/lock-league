@@ -175,3 +175,87 @@ test('Hall of Shame requires exactly one settled miss and uses the $5 American-o
  const sorted=client.parlayHallEntries([slip,{...slip,id:'b',odds:20000},{...slip,id:'c',odds:null}],2026);
  assert.equal(sorted[0].slip.id,'b');assert.equal(sorted[2].slip.id,'c');
 });
+
+const expanded=`Open Settled Saved
+SGP Same Game Parlay +30504 +38132
+REWARDS 30 PTS PENDING
+PROFIT BOOST 25%
+BET PROTECT+
+D.J. Moore Over 63.5 D.J. Moore - Receiving Yds, Under 54.5 Total
+Points, Sam LaPorta Any Time Touchdown Scorer, Josh Allen Over...
+Detroit Lions @ Buffalo Bills 7:15PM CT
+D.J. Moore Over 63.5
+D. J. MOORE - RECEIVING YDS
+Under 54.5
+TOTAL POINTS
+Sam LaPorta
+ANY TIME TOUCHDOWN SCORER
+Josh Allen Over 31.5
+JOSH ALLEN - RUSHING YDS
+D.J. Moore Over 4.5
+D.J. MOORE - TOTAL RECEPTIONS
+Amon-Ra St. Brown Over 7.5
+AMON-RA ST. BROWN - TOTAL RECEPTIONS
+Josh Allen
+ANY TIME TOUCHDOWN SCORER
+Jahmyr Gibbs Over 30.5
+JAHMYR GIBBS - RECEIVING YDS
+$5.00 $1911.65
+TOTAL CHARGED: $5.00
+TOTAL PAYOUT
+Cash out $1.74
+Home My Bets Live Now All Sports`;
+test('expanded boosted slip yields eight detailed legs including game total',()=>{
+ const doc=client.parseParlayDocument(expanded);
+ assert.equal(doc.legs.length,8);
+ assert.deepEqual(Array.from(doc.legs,l=>l.market),['rec_yds','game_total','anytime_td','rush_yds','receptions','receptions','anytime_td','rec_yds']);
+ assert.deepEqual(Array.from(doc.legs,l=>l.player),['D.J. Moore','Game total','Sam LaPorta','Josh Allen','D.J. Moore','Amon-Ra St. Brown','Josh Allen','Jahmyr Gibbs']);
+ assert.deepEqual(Array.from(doc.legs,l=>l.line),[63.5,54.5,null,31.5,4.5,7.5,null,30.5]);
+ assert.equal(doc.legs[1].side,'under');assert.equal(doc.odds,38132);
+ assert.ok(doc.legs.every(l=>l.review.length===0));
+ assert.equal(client.parseParlayDocument(expanded.replace('PROFIT BOOST 25%','')).odds,null);
+ assert.equal(client.parseParlayDocument(sample).odds,10087);
+ const unclear=client.parseParlayDocument(expanded.replace('+38132','unreadable'));assert.equal(unclear.odds,null);assert.ok(unclear.warnings.some(w=>w.includes('combined odds')));
+});
+test('game total validation and score-based progress handle final wins, losses, pushes and missing scores',()=>{
+ const leg={player:'',market:'game_total',side:'under',line:54.5,member_id:1};
+ assert.equal(validateSlip({...body,legs:[leg]},[1]).legs[0].player,'Game total');
+ assert.throws(()=>validateSlip({...body,legs:[{...leg,side:'atleast'}]},[1]));
+ assert.deepEqual(legProgress(leg,null,false,{state:'in',away_score:21,home_score:24}),{actual:45,result:null});
+ assert.equal(legProgress(leg,null,false,{state:'post',away_score:21,home_score:24}).result,'W');
+ assert.equal(legProgress(leg,null,false,{state:'post',away_score:28,home_score:27}).result,'L');
+ assert.equal(legProgress({...leg,side:'over'},null,false,{state:'post',away_score:28,home_score:27}).result,'W');
+ assert.equal(legProgress({...leg,line:54},null,false,{state:'post',away_score:27,home_score:27}).result,'P');
+ for(const game of [null,{state:'pre',away_score:0,home_score:0},{state:'post',away_score:null,home_score:27}])assert.equal(legProgress(leg,null,true,game).result,null);
+ assert.equal(legProgress({...leg,manual:true,result:'V'},null,true,{state:'post',away_score:27,home_score:27}).result,'V');
+});
+
+test('game totals save and settle from final scoreboard even without a player boxscore',async()=>{
+ user=1;gameSummary=null;
+ const id=crypto.randomUUID();
+ const slip={...body,id,legs:[{market:'game_total',side:'under',line:54.5,member_id:2}]};
+ assert.equal((await post(slip)).status,200);
+ events=[{id:'total-game',away:'Denver Broncos',home:'Kansas City Chiefs',state:'in',away_score:20,home_score:24}];
+ const get=async()=>await(await onRequest({env:{},request:new Request('https://app.invalid/api/parlays?season=2026&week=1')})).json();
+ let data=await get();assert.equal(data.games[body.game_key].progress[id][0].actual,44);assert.equal(data.slips.find(s=>s.id===id).legs[0].result,null);
+ events[0].state='post';events[0].home_score=null;data=await get();assert.equal(data.slips.find(s=>s.id===id).legs[0].result,null);
+ events[0].home_score=24;data=await get();assert.equal(data.slips.find(s=>s.id===id).legs[0].result,'W');
+ assert.equal(data.slips.find(s=>s.id===id).legs[0].player,'Game total');
+});
+
+test('real expanded-slip OCR shield fragments preserve standalone touchdown legs',()=>{
+ const text='D.J. Moore Over 63.5 ©®\nD.J. MOORE - RECEIVING YDS\nUnder 54.5\nTOTAL POINTS\n2. Sam LaPorta ©®\nANY TIME TOUCHDOWN SCORER\nJosh Allen Over 31.5 ®\nJOSH ALLEN - RUSHING YDS\nD.J. Moore Over 4.5 ©\nD.J. MOORE - TOTAL RECEPTIONS\n~ Amon-Ra St. Brown Over 7.5 ©\nAMON-RA ST. BROWN - TOTAL RECEPTIONS\nJosh Allen ©\nANY TIME TOUCHDOWN SCORER\nJahmyr Gibbs Over 30.5 ®\nJAHMYR GIBBS - RECEIVING YDS';
+ const parsed=client.parseParlayDocument(text);
+ assert.equal(parsed.legs.length,8);assert.equal(parsed.legs[1].market,'game_total');
+ assert.equal(parsed.legs[2].player,'Sam LaPorta');assert.equal(parsed.legs[2].market,'anytime_td');
+ assert.equal(parsed.legs[6].player,'Josh Allen');assert.equal(parsed.legs[6].market,'anytime_td');
+ assert.ok(parsed.legs.every(l=>!l.review.length));
+});
+
+test('low-confidence shields do not erase clear number words, but uncertain numbers remain unresolved',()=>{
+ const word=(text,confidence)=>({text,confidence});
+ const line={text:'D.J. Moore Over 4.5 ©',confidence:55,words:[word('D.J.',98),word('Moore',98),word('Over',98),word('4.5',98),word('©',5)]};
+ assert.equal(client.parlayUncertainThreshold(line),false);
+ assert.equal(client.parlayUncertainThreshold({...line,confidence:90,words:[word('Over',99),word('4.5',45)]}),true);
+ assert.equal(client.parlayUncertainThreshold({...line,words:[]}),true);
+});

@@ -9,6 +9,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      ocr:
+        description: "Also run real parlay image recognition (CDN required)"
+        type: boolean
+        default: false
       live:
         description: "Also run the live prod health probe"
         type: boolean
@@ -50,3 +54,6 @@ jobs:
       - run: node smoke/parlays-ui.mjs
       - run: npm run smoke:browser
       - run: npm run smoke:super-lock
+      - name: Real parlay image recognition
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.ocr }}
+        run: node smoke/parlays-ocr.mjs && node smoke/parlays-expanded-ocr.mjs
