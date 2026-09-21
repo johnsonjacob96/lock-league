@@ -241,3 +241,12 @@ test('game totals save and settle from final scoreboard even without a player bo
  events[0].home_score=24;data=await get();assert.equal(data.slips.find(s=>s.id===id).legs[0].result,'W');
  assert.equal(data.slips.find(s=>s.id===id).legs[0].player,'Game total');
 });
+
+test('real expanded-slip OCR shield fragments preserve standalone touchdown legs',()=>{
+ const text='D.J. Moore Over 63.5 ©®\nD.J. MOORE - RECEIVING YDS\nUnder 54.5\nTOTAL POINTS\n2. Sam LaPorta ©®\nANY TIME TOUCHDOWN SCORER\nJosh Allen Over 31.5 ®\nJOSH ALLEN - RUSHING YDS\nD.J. Moore Over 4.5 ©\nD.J. MOORE - TOTAL RECEPTIONS\n~ Amon-Ra St. Brown Over 7.5 ©\nAMON-RA ST. BROWN - TOTAL RECEPTIONS\nJosh Allen ©\nANY TIME TOUCHDOWN SCORER\nJahmyr Gibbs Over 30.5 ®\nJAHMYR GIBBS - RECEIVING YDS';
+ const parsed=client.parseParlayDocument(text);
+ assert.equal(parsed.legs.length,8);assert.equal(parsed.legs[1].market,'game_total');
+ assert.equal(parsed.legs[2].player,'Sam LaPorta');assert.equal(parsed.legs[2].market,'anytime_td');
+ assert.equal(parsed.legs[6].player,'Josh Allen');assert.equal(parsed.legs[6].market,'anytime_td');
+ assert.ok(parsed.legs.every(l=>!l.review.length));
+});

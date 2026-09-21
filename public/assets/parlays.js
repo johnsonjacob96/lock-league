@@ -25,7 +25,7 @@ function renderParlayHall() {
  };
  return `<section class="parlay-shame" aria-labelledby="parlay-shame-title"><div class="parlay-shame-heading"><h2 id="parlay-shame-title">HALL OF SHAME</h2><p>Season ${parlayState.season} · ${parlayState.night==='All'?'Both nights':escapeHtml(parlayState.night)} · Biggest almost first</p></div>${card(entries[0])}${entries.length>1?`<details class="parlay-shame-more" ${parlayState.hallExpanded?'open':''}><summary>More almosts (${entries.length-1})</summary>${entries.slice(1).map(card).join('')}</details>`:''}<p class="parlay-shame-note">One settled miss. Every other leg hit. Based on a $5 stake, excluding its return.</p></section>`;
 }
-function parlayLegLabel(l) {return l.market==='manual'?l.player:`${l.player} · ${l.market==='anytime_td'?'Anytime TD':`${l.side==='atleast'?`${l.line}+`:l.side+' '+l.line} ${PARLAY_MARKETS[l.market]||l.market}`}`;}
+function parlayLegLabel(l) {if(l.market==='game_total')return `Game total · ${l.side==='under'?'Under':'Over'} ${l.line}`;return l.market==='manual'?l.player:`${l.player} · ${l.market==='anytime_td'?'Anytime TD':`${l.side==='atleast'?`${l.line}+`:l.side+' '+l.line} ${PARLAY_MARKETS[l.market]||l.market}`}`;}
 function parlayOptions(options,value) {return Object.entries(options).map(([k,v])=>`<option value="${escapeHtml(k)}" ${String(value)===k?'selected':''}>${escapeHtml(v)}</option>`).join('');}
 async function parlayFetch(url,body) {
  const r=await fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});

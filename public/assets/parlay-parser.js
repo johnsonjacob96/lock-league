@@ -15,7 +15,7 @@ function parlayMarket(text) {
  return 'manual';
 }
 function parlayCleanName(text) {
- return String(text).replace(/^[^a-z]+/i,'').replace(/^[a-z]\s*[,;:]\s*(?=[a-z])/i,'').replace(/\s+/g,' ').trim().replace(/\s+[il1|]{3}$/i,' III');
+ return String(text).replace(/[©®™]+\s*$/g,'').replace(/^[^a-z]+/i,'').replace(/^[a-z]\s*[,;:]\s*(?=[a-z])/i,'').replace(/\s+/g,' ').trim().replace(/\s+[il1|]{3}$/i,' III');
 }
 function parlayNameKey(text) {return parlayCleanName(text).toLowerCase().replace(/[^a-z]/g,'');}
 // A sportsbook repeats the player's name in the market subtitle. Match that
