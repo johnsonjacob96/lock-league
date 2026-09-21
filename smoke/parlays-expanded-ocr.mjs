@@ -38,7 +38,16 @@ try {
   assert.equal(doc.legs.length,8);
   assert.deepEqual(doc.legs.map(l=>l.player),['D.J. Moore','Game total','Sam LaPorta','Josh Allen','D.J. Moore','Amon-Ra St. Brown','Josh Allen','Jahmyr Gibbs']);
   assert.deepEqual(doc.legs.map(l=>l.market),['rec_yds','game_total','anytime_td','rush_yds','receptions','receptions','anytime_td','rec_yds']);
-  assert.deepEqual(doc.legs.map(l=>l.line),[63.5,54.5,null,31.5,4.5,7.5,null,30.5]);
+  const expected=[63.5,54.5,null,31.5,4.5,7.5,null,30.5];
+  for(const [i,leg] of doc.legs.entries()) {
+   // Exact numbers are mandatory on the real saved crop. A recomposed/tiled
+   // image may lower OCR confidence: it must request correction, never return
+   // a wrong number or silently discard the leg.
+   if(expanded&&expected[i]!=null&&leg.line==null) {
+    assert.ok(leg.review.some(w=>w.includes('Low-confidence')));
+    assert.ok(leg.source_text.includes(String(expected[i])));
+   } else assert.equal(leg.line,expected[i]);
+  }
   assert.equal(doc.legs[1].side,'under');
   if(expanded){assert.ok(doc.odds===38132||doc.odds===null);if(doc.odds===null)assert.ok(doc.warnings.some(w=>w.includes('combined odds')));}
   console.log(`PASS real OCR: ${expanded?'expanded':'cropped'} eight-leg slip`);
