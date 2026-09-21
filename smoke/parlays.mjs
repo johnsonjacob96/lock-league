@@ -215,6 +215,7 @@ test('expanded boosted slip yields eight detailed legs including game total',()=
  assert.ok(doc.legs.every(l=>l.review.length===0));
  assert.equal(client.parseParlayDocument(expanded.replace('PROFIT BOOST 25%','')).odds,null);
  assert.equal(client.parseParlayDocument(sample).odds,10087);
+ const unclear=client.parseParlayDocument(expanded.replace('+38132','unreadable'));assert.equal(unclear.odds,null);assert.ok(unclear.warnings.some(w=>w.includes('combined odds')));
 });
 test('game total validation and score-based progress handle final wins, losses, pushes and missing scores',()=>{
  const leg={player:'',market:'game_total',side:'under',line:54.5,member_id:1};
@@ -249,4 +250,12 @@ test('real expanded-slip OCR shield fragments preserve standalone touchdown legs
  assert.equal(parsed.legs[2].player,'Sam LaPorta');assert.equal(parsed.legs[2].market,'anytime_td');
  assert.equal(parsed.legs[6].player,'Josh Allen');assert.equal(parsed.legs[6].market,'anytime_td');
  assert.ok(parsed.legs.every(l=>!l.review.length));
+});
+
+test('low-confidence shields do not erase clear number words, but uncertain numbers remain unresolved',()=>{
+ const word=(text,confidence)=>({text,confidence});
+ const line={text:'D.J. Moore Over 4.5 ©',confidence:55,words:[word('D.J.',98),word('Moore',98),word('Over',98),word('4.5',98),word('©',5)]};
+ assert.equal(client.parlayUncertainThreshold(line),false);
+ assert.equal(client.parlayUncertainThreshold({...line,confidence:90,words:[word('Over',99),word('4.5',45)]}),true);
+ assert.equal(client.parlayUncertainThreshold({...line,words:[]}),true);
 });

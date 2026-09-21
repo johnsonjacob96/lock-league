@@ -112,7 +112,7 @@ function bindParlays() {
   if(parlayState.draft.legs.length&&!confirm('Read this screenshot and replace the draft legs?'))return;
   const draft=parlayState.draft;
   const form=byId('parlay-form');for(const el of form.elements)el.disabled=true;
-  try {const parsed=await readParlayImage(file,draft);if(parlayState.draft!==draft)return;if(parsed.legs.length)draft.legs=parsed.legs;if(parsed.odds!=null)draft.odds=parsed.odds;draft.ocr_warnings=parsed.warnings||[];parlayState.error=parsed.legs.length?'':'No legs were read confidently. Add them manually using the screenshot preview.';}catch(err){parlayState.error=err.message;}finally{paintParlays();}
+  try {const parsed=await readParlayImage(file,draft);if(parlayState.draft!==draft)return;if(parsed.legs.length)draft.legs=parsed.legs;if(parsed.odds_review)draft.odds=null;else if(parsed.odds!=null)draft.odds=parsed.odds;draft.ocr_warnings=parsed.warnings||[];parlayState.error=parsed.legs.length?'':'No legs were read confidently. Add them manually using the screenshot preview.';}catch(err){parlayState.error=err.message;}finally{paintParlays();}
  };
  if(byId('parlay-form'))byId('parlay-form').onsubmit=async e=>{
   e.preventDefault();readParlayDraft();const draft=parlayState.draft;

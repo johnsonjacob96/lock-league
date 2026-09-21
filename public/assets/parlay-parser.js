@@ -55,8 +55,9 @@ function parseParlayDocument(text) {
  const prices=[...header.matchAll(/[+]\s*(\d{3,6})\b/g)].map(m=>Number(m[1]));
  // Profit boosts show old and new odds left-to-right; do not infer a boost
  // from its percentage. Leave ambiguous odds for manual review.
- const odds=prices.length===1?prices[0]:prices.length===2&&/boost/i.test(header)&&prices[1]>prices[0]?prices[1]:null;
- if(prices.length>1&&odds==null)warnings.push('Check the combined odds against the slip.');
+ const boosted=/boost/i.test(header);
+ const odds=prices.length===1&&!boosted?prices[0]:prices.length===2&&boosted&&prices[1]>prices[0]?prices[1]:null;
+ if((prices.length>1||boosted)&&odds==null)warnings.push('Check the combined odds against the slip.');
  const hasMarket=s=>/\b(?:yds|yards|receptions?|rec|touchdowns?|tds?|passing|rushing|receiving|completions?|attempts?|interceptions?|carries|total points)\b/i.test(s);
  const meta=s=>/\b(?:parlay|wager|payout|stake|balance|betslip|bet slip|potential|boost|cash out|total odds|placed|receipt|bet id|bet amount|to win|same game|not settled|monday night football|thursday night football|selection|fanduel|draftkings)\b|@|\bvs\.?\b|\b(?:AM|PM)\s*(?:CT|CDT|CST|ET|EDT|EST)?\b|^[+\-]\d{3,}$|^\$|^\d+\s+legs?\b/i.test(s);
  const sameName=(a,b)=>parlayNameKey(a)===parlayNameKey(b);
@@ -154,6 +155,6 @@ function parseParlayDocument(text) {
  if(declared&&Number(declared)!==legs.length)warnings.push(`The slip says ${declared} legs, but ${legs.length} were found. Check for missing or extra legs.`);
  if(legs.some(l=>l.review.length))warnings.push('Some legs need correction. Uncertain fields have been left blank.');
  if(legs.length>25)warnings.push('More than 25 candidates were found. Remove non-pick text before saving.');
- return {legs,text:String(text),warnings,odds};
+ return {legs,text:String(text),warnings,odds,odds_review:(prices.length>1||boosted)&&odds==null};
 }
 function parseParlayText(text) {return parseParlayDocument(text).legs;}
