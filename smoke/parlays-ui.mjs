@@ -56,7 +56,7 @@ try {
   assert.equal(await page.evaluate(()=>parlayWrites[0].legs[0].member_id),2);
   await page.locator('#parlay-new').click();
   // Deterministic OCR transport stub; recognition itself is checked separately.
-  await page.evaluate(()=>window.Tesseract={createWorker:async()=>({recognize:async()=>({data:{text:'Emmett Johnson 15+ Yards\nEMMETT JOHNSON - ALT RUSHING YDS\nRashee Rice 6+ Receptions\nRASHEE RICE - ALT RECEPTIONS'}}),terminate:async()=>{}})});
+  await page.evaluate(()=>window.Tesseract={createWorker:async()=>({recognize:async()=>({data:{text:'Same Game Parlay +30504 +38132\nPROFIT BOOST 25%\nDenver Broncos @ Kansas City Chiefs\nEmmett Johnson 15+ Yards\nEMMETT JOHNSON - ALT RUSHING YDS\nRashee Rice 6+ Receptions\nRASHEE RICE - ALT RECEPTIONS'}}),terminate:async()=>{}})});
   const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=300;c.height=300;c.getContext('2d').fillRect(0,0,300,300);return c.toDataURL().split(',')[1];});
   await page.locator('#parlay-image').setInputFiles({name:'slip.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
   await page.waitForFunction(()=>document.querySelectorAll('[data-leg-index]').length===2);
@@ -70,7 +70,7 @@ try {
   await page.locator('#parlay-form button[type=submit]').click();
   await page.waitForSelector('#parlay-new');
   const posted=await page.evaluate(()=>parlayWrites.at(-1));
-  assert.equal(posted.legs.length,2);assert.equal(posted.legs[0].side,'atleast');assert.match(posted.image,/^data:image\/jpeg;base64,/);
+  assert.equal(posted.odds,38132);assert.equal(posted.legs.length,2);assert.equal(posted.legs[0].side,'atleast');assert.match(posted.image,/^data:image\/jpeg;base64,/);
   await page.locator('#parlay-new').click();
   await page.evaluate(()=>{
    parlayState.draft.game_key='Denver Broncos@Kansas City Chiefs';
