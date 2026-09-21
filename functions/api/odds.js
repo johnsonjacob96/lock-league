@@ -418,7 +418,7 @@ export async function onRequestGet(context) {
       const events=await loadScoreboardSeed(context.env,cur.season,cur.week,2);
       return retainSchedule(payload,events);
     });
-    return json(data,hdr(data.stale?'SHARED-DELAYED':'SHARED'));
+    return json(sanitizeBoard(data),hdr(data.stale?'SHARED-DELAYED':'SHARED'));
   } catch {
     const events=await loadScoreboardSeed(context.env,cur.season,cur.week,2);
     return json(retainSchedule({source:'unavailable',live:false,stale:true,games:[]},events),hdr('SCHEDULE'));
