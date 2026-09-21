@@ -7,7 +7,8 @@ try {
  for(const width of [375,390,1440]) {
   const page=await browser.newPage({viewport:{width,height:width===375?667:width===390?844:1000}}),errors=[],writes=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
-  await page.goto(new URL('../public/index.html',import.meta.url).href);
+  await page.route('https://fonts.googleapis.com/**',r=>r.abort());
+  await page.goto(new URL('../public/index.html',import.meta.url).href,{waitUntil:'domcontentloaded'});
   await page.evaluate(()=>{
    state.user={id:1,name:'Jacob'};state.view='parlays';
    const members=[{id:1,name:'Jacob'},{id:2,name:'Mason'},{id:3,name:'Chris'}];
@@ -85,6 +86,19 @@ try {
   await page.locator('#parlay-form button[type=submit]').click();
   await page.waitForSelector('#parlay-new');
   assert.equal(await page.evaluate(()=>parlayWrites.length),before+1);
+  await page.locator('#parlay-new').click();
+  await page.locator('#parlay-add').click();
+  await page.locator('[data-field="market"]').selectOption('game_total');
+  assert.equal(await page.locator('[data-field="player"]').isDisabled(),true);
+  assert.deepEqual(await page.locator('[data-field="side"] option').allTextContents(),['Choose direction','Over','Under']);
+  await page.locator('[data-field="side"]').selectOption('under');
+  await page.locator('[data-field="line"]').fill('54.5');
+  await page.locator('[name="game_key"]').selectOption('Denver Broncos@Kansas City Chiefs');
+  await page.screenshot({path:join(tmpdir(),`parlays-game-total-${width}.png`),fullPage:true});
+  await page.locator('#parlay-form button[type=submit]').click();
+  await page.waitForSelector('#parlay-new');
+  const total=await page.evaluate(()=>parlayWrites.at(-1).legs[0]);
+  assert.equal(total.market,'game_total');assert.equal(total.side,'under');assert.equal(total.line,54.5);
   assert.deepEqual(errors,[]);console.log(`PASS ${width}px: live cards, leaderboard, edit assignments, upload review and save`);await page.close();
  }
 }finally{await browser.close();}

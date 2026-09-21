@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {loadChromium} from './playwright.mjs';
 const browser=await(await loadChromium()).launch();
 try {
- const page=await browser.newPage();await page.goto(new URL('../public/index.html',import.meta.url).href);
+ const page=await browser.newPage();await page.goto(new URL('../public/index.html',import.meta.url).href,{waitUntil:'domcontentloaded'});
  for(const mode of ['standard','tall','logos']) {
   const tall=mode==='tall',logos=mode==='logos';
   const result=await page.evaluate(async ({tall,logos})=>{
