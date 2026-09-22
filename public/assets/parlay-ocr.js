@@ -1,5 +1,5 @@
-// Read original-resolution image strips, not the compressed archive preview.
-// Tall screenshots retain the same text size as short ones.
+// Browser-only image recognition. No screenshot is sent to an OCR service.
+// Legacy text helpers remain available to the text-parser regression suite.
 function parlayMergeOcrLines(lines) {
  const kept=[];
  for(const line of lines) {
@@ -67,57 +67,58 @@ async function parlayOcrWorker() {
  creation.then(w=>{if(expired)w.terminate();},()=>{});
  try{return await Promise.race([creation,new Promise((_,reject)=>{timer=setTimeout(()=>{expired=true;reject(Error('Image reader could not load. Retry or enter the legs manually.'));},45000);})]);}finally{clearTimeout(timer);}
 }
+// The full image is read in complementary contrast modes. Every word retains
+// its coordinates; thresholded mode is only used for high-contrast metadata.
+function parlayStrikeScore(pixels,box) {
+ const lum=(x,y)=>{const i=(Math.max(0,Math.min(pixels.height-1,Math.round(y)))*pixels.width+Math.max(0,Math.min(pixels.width-1,Math.round(x))))*4;return .299*pixels.data[i]+.587*pixels.data[i+1]+.114*pixels.data[i+2];};
+ const w=box.x1-box.x0,h=box.y1-box.y0;
+ const bg=[lum(box.x0-4,box.y0-4),lum(box.x1+4,box.y0-4),lum(box.x0-4,box.y1+4),lum(box.x1+4,box.y1+4)].sort((a,b)=>a-b)[2];
+ let score=0;
+ // Crossed-out odds can be horizontal or diagonal. Require a near-continuous
+ // stroke through the word, not merely a minus sign or a digit's middle bar.
+ for(let start=.15;start<=.85;start+=.025)for(let slope=-.8;slope<=.8;slope+=.025){
+  let ink=0,total=0;
+  for(let x=.05;x<=.95;x+=.01){const y=start+slope*(x-.5);if(y<0||y>1)continue;total++;if(Math.abs(lum(box.x0+x*w,box.y0+y*h)-bg)>35)ink++;}
+  if(total>80)score=Math.max(score,ink/total);
+ }
+ return score;
+}
 async function readParlayImage(file,draft) {
  if(file.size>15000000)throw Error('Choose a screenshot smaller than 15 MB.');
- const bitmap=await createImageBitmap(file);let worker,timer;
+ const bitmap=await createImageBitmap(file);let worker,timer,canvas;
  try {
-  const preview=document.createElement('canvas'),scale=Math.min(1,1400/bitmap.width,Math.sqrt(5000000/(bitmap.width*bitmap.height)));
-  preview.width=Math.round(bitmap.width*scale);preview.height=Math.round(bitmap.height*scale);
-  preview.getContext('2d').drawImage(bitmap,0,0,preview.width,preview.height);
-  let image=preview.toDataURL('image/jpeg',.85);
-  if(image.length>1500000)image=preview.toDataURL('image/jpeg',.6);
-  if(image.length>1500000)throw Error('This screenshot is too large. Crop to the slip and retry.');
-  draft.image=image;preview.width=preview.height=1;
-  const width=Math.min(1800,Math.max(1200,bitmap.width)),ocrScale=width/bitmap.width;
-  const height=Math.round(bitmap.height*ocrScale),tileHeight=1800,step=1500;
-  const starts=[];for(let y=0;y<height;y+=step){starts.push(y);if(y+tileHeight>=height)break;}
-  if(starts.length>12)throw Error('This screenshot is too tall to read reliably. Crop to a single slip.');
+  const pixels=bitmap.width*bitmap.height;
+  if(pixels>12000000||bitmap.height>16000||bitmap.width>6000)throw Error('This image is too large to read on this device. Choose a single slip or enter the selections manually.');
+  const preview=document.createElement('canvas'),previewScale=Math.min(1,1400/bitmap.width,Math.sqrt(5000000/pixels));
+  preview.width=Math.round(bitmap.width*previewScale);preview.height=Math.round(bitmap.height*previewScale);preview.getContext('2d').drawImage(bitmap,0,0,preview.width,preview.height);
+  let image=preview.toDataURL('image/jpeg',.85);if(image.length>1500000)image=preview.toDataURL('image/jpeg',.6);
+  if(image.length>1500000)throw Error('This screenshot is too large to save. Choose a single slip.');
+  preview.width=preview.height=1;
+  const scale=Math.min(Math.max(1,Math.min(1.5,2400/bitmap.width)),Math.sqrt(12000000/pixels));
+  canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  const original=ctx.getImageData(0,0,canvas.width,canvas.height),passes=[];
   worker=await parlayOcrWorker();
-  let lines=[];const fallback=[];
   const read=async()=>{
-   for(const [index,y] of starts.entries()) {
-    const status=document.getElementById('parlay-ocr-status');if(status)status.textContent=`Reading slip section ${index+1} of ${starts.length}…`;
-    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=Math.min(tileHeight,height-y);
-    canvas.getContext('2d').drawImage(bitmap,0,y/ocrScale,bitmap.width,canvas.height/ocrScale,0,0,canvas.width,canvas.height);
-    parlayImproveContrast(canvas);
-    const {data}=await worker.recognize(canvas,{}, {text:true,blocks:true});
-    const found=(data.blocks||[]).flatMap(b=>(b.paragraphs||[]).flatMap(p=>p.lines||[]));
-    if(found.length)for(const l of found){const box=l.bbox;if(box&&l.text?.trim())lines.push({text:l.text.trim(),words:(l.words||[]).map(w=>({text:w.text,bbox:w.bbox,confidence:w.confidence})),right:box.x1,x:box.x0,y:y+(box.y0+box.y1)/2,height:Math.max(1,box.y1-box.y0),confidence:l.confidence||0});}
-    else if(!data.text?.trim()){canvas.width=canvas.height=1;continue;}
-    else if(starts.length===1)fallback.push(data.text||'');
-    else throw Error('The reader could not locate all slip sections. Crop the screenshot or enter the legs manually.');
-    canvas.width=canvas.height=1;
-   }
-   lines=parlayFilterLogoText(lines);
-   const doc=parseParlayDocument(lines.length?parlayMergeOcrLines(lines):fallback.join('\n'));
-   const normalize=s=>s.replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
-   for(const leg of doc.legs) {
-    const source=leg.source_text.split('\n').map(normalize),matched=lines.filter(l=>source.includes(normalize(l.text)));
-    if(!matched.length)continue;
-    const uncertainNumber=leg.market!=='anytime_td'&&matched.some(parlayUncertainThreshold);
-    if(matched.some(l=>l.confidence<65)||uncertainNumber) {
-     leg.review.push('Low-confidence text. Compare this leg with the original.');
-     if(uncertainNumber)leg.line=null;
+   await worker.setParameters({tessedit_pageseg_mode:'11'});
+   for(const [index,mode] of ['gray','channel','binary'].entries()){
+    const status=document.getElementById('parlay-ocr-status');if(status)status.textContent=`Reading the full screenshot · ${index+1} of 3…`;
+    ctx.putImageData(original,0,0);
+    if(mode==='channel')parlayImproveContrast(canvas);
+    else {
+     const data=ctx.getImageData(0,0,canvas.width,canvas.height),p=data.data;
+     for(let i=0;i<p.length;i+=4){const v=.299*p[i]+.587*p[i+1]+.114*p[i+2];p[i]=p[i+1]=p[i+2]=mode==='binary'?(v>128?255:0):v;}
+     ctx.putImageData(data,0,0);
     }
-    const top=Math.max(0,Math.min(...matched.map(l=>l.y-l.height/2))-18)/ocrScale;
-    const bottom=Math.min(height,Math.max(...matched.map(l=>l.y+l.height/2))+18)/ocrScale;
-    const crop=document.createElement('canvas');crop.width=Math.min(bitmap.width,1200);crop.height=Math.max(1,Math.round((bottom-top)*crop.width/bitmap.width));
-    crop.getContext('2d').drawImage(bitmap,0,top,bitmap.width,bottom-top,0,0,crop.width,crop.height);
-    leg.source_crop=crop.toDataURL('image/jpeg',.85);crop.width=crop.height=1;
+    const {data}=await worker.recognize(canvas,{}, {text:true,blocks:true});
+    const lines=(data.blocks||[]).flatMap(b=>(b.paragraphs||[]).flatMap(p=>p.lines||[])).filter(l=>l.bbox&&l.words?.length).map(l=>({text:l.text.trim(),bbox:l.bbox,confidence:l.confidence,words:l.words.map(w=>({text:w.text,bbox:w.bbox,confidence:w.confidence,struck:/^[+\-]\d{3,6}$/.test(w.text)&&parlayStrikeScore(original,w.bbox)>.9}))}));
+    passes.push({mode,lines});
    }
-   if(doc.legs.some(l=>l.review.length)&&!doc.warnings.length)doc.warnings.push('Some legs need correction. Check each marked leg against the screenshot.');
+   if(!passes.some(p=>p.lines.length))throw Error('No readable selections found. Try a clearer screenshot or add selections manually.');
+   const doc=parseParlayLayout(passes,canvas.width,canvas.height);
+   draft.image=image;
    return doc;
   };
-  return await Promise.race([read(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Reading took too long. Crop the slip and retry, or enter legs manually.')),120000);})]);
- }finally{clearTimeout(timer);bitmap.close();if(worker)await worker.terminate();}
+  return await Promise.race([read(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Reading took too long on this device. Try again or add selections manually.')),120000);})]);
+ }finally{clearTimeout(timer);if(worker)await worker.terminate();if(canvas)canvas.width=canvas.height=1;bitmap.close();}
 }

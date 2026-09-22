@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {loadChromium} from './playwright.mjs';
@@ -56,7 +57,7 @@ try {
   assert.equal(await page.evaluate(()=>parlayWrites[0].legs[0].member_id),2);
   await page.locator('#parlay-new').click();
   // Deterministic OCR transport stub; recognition itself is checked separately.
-  await page.evaluate(()=>window.Tesseract={createWorker:async()=>({recognize:async()=>({data:{text:'Same Game Parlay +30504 +38132\nPROFIT BOOST 25%\nDenver Broncos @ Kansas City Chiefs\nEmmett Johnson 15+ Yards\nEMMETT JOHNSON - ALT RUSHING YDS\nRashee Rice 6+ Receptions\nRASHEE RICE - ALT RECEPTIONS'}}),terminate:async()=>{}})});
+  await page.evaluate(()=>window.readParlayImage=async(file,draft)=>{draft.image='data:image/jpeg;base64,/9j/';return parseParlayDocument('Same Game Parlay +30504 +38132\nPROFIT BOOST 25%\nDenver Broncos @ Kansas City Chiefs\nEmmett Johnson 15+ Yards\nEMMETT JOHNSON - ALT RUSHING YDS\nRashee Rice 6+ Receptions\nRASHEE RICE - ALT RECEPTIONS');});
   const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=300;c.height=300;c.getContext('2d').fillRect(0,0,300,300);return c.toDataURL().split(',')[1];});
   await page.locator('#parlay-image').setInputFiles({name:'slip.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
   await page.waitForFunction(()=>document.querySelectorAll('[data-leg-index]').length===2);
@@ -99,6 +100,33 @@ try {
   await page.waitForSelector('#parlay-new');
   const total=await page.evaluate(()=>parlayWrites.at(-1).legs[0]);
   assert.equal(total.market,'game_total');assert.equal(total.side,'under');assert.equal(total.line,54.5);
+  await page.locator('#parlay-new').click();
+  const capture=JSON.parse(readFileSync(new URL('./assets/parlay-images/ocr.json',import.meta.url)))[0];
+  const actualImage='data:image/jpeg;base64,'+readFileSync(new URL('./assets/parlay-images/draftkings-eight.jpg',import.meta.url)).toString('base64');
+  await page.evaluate(({capture,actualImage})=>{
+   const parsed=parseParlayLayout(capture.passes,capture.width,capture.height);
+   Object.assign(parlayState.draft,{image:actualImage,legs:parsed.legs,odds:parsed.odds,declared_count:parsed.declared_count,game_key:'New York Giants@Los Angeles Rams'});
+   paintParlays();
+  },{capture,actualImage});
+  assert.equal(await page.locator('.parlay-evidence-box').count(),8);
+  assert.equal(await page.locator('[data-leg-index="0"] [data-field="line"]').inputValue(),'-6.5');
+  assert.equal(await page.locator('[data-leg-index="0"] [data-field="side"]').inputValue(),'spread');
+  assert.equal(await page.locator('[data-leg-index="0"] [data-field="line"]').getAttribute('min'),'-2000');
+  await page.locator('#parlay-source-0').click();
+  assert.equal(await page.evaluate(()=>location.hash),'#parlay-leg-0');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:join(tmpdir(),`parlays-full-image-${width}.png`),fullPage:true});
+  await page.locator('[data-parlay-remove="7"]').click();
+  assert.equal(await page.locator('#parlay-count-reviewed').isVisible(),true);
+  const beforeCount=await page.evaluate(()=>parlayWrites.length);
+  await page.locator('#parlay-form button[type=submit]').click();
+  assert.equal(await page.evaluate(()=>parlayWrites.length),beforeCount,'missing declared selection blocks save');
+  await page.locator('#parlay-count-reviewed').check();
+  await page.locator('#parlay-form button[type=submit]').click();
+  await page.waitForSelector('#parlay-new');
+  const spreadPosted=await page.evaluate(()=>parlayWrites.at(-1));
+  assert.equal(spreadPosted.odds,9100);assert.equal(spreadPosted.legs[0].line,-6.5);assert.equal(spreadPosted.legs[0].market,'spread');
+  assert.equal('source_box' in spreadPosted.legs[0],false);
   assert.deepEqual(errors,[]);console.log(`PASS ${width}px: live cards, leaderboard, edit assignments, upload review and save`);await page.close();
  }
 }finally{await browser.close();}

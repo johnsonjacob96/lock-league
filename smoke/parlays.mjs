@@ -259,3 +259,25 @@ test('low-confidence shields do not erase clear number words, but uncertain numb
  assert.equal(client.parlayUncertainThreshold({...line,confidence:90,words:[word('Over',99),word('4.5',45)]}),true);
  assert.equal(client.parlayUncertainThreshold({...line,words:[]}),true);
 });
+
+test('team spreads resolve only against the selected game and preserve signed lines',()=>{
+ const spread={player:'LA Rams',market:'spread',side:'spread',line:-6.5};
+ const input={...body,game_key:'New York Giants@Los Angeles Rams',legs:[spread]};
+ assert.equal(validateSlip(input,[1,2,3]).legs[0].player,'Los Angeles Rams');
+ for(const bad of [{player:'LA Chargers'},{line:NaN},{side:'over'},{market:'receptions',side:'spread'}])assert.throws(()=>validateSlip({...input,legs:[{...spread,...bad}]},[1,2,3]));
+ assert.throws(()=>validateSlip({...input,legs:[{...spread,market:'rush_yds',side:'over'}]},[1,2,3]));
+});
+test('spread grading uses selected team margin, both signs, final status and pushes',()=>{
+ const game={home:'Los Angeles Rams',away:'New York Giants',home_score:27,away_score:20,state:'post'};
+ const leg={player:'Los Angeles Rams',market:'spread',side:'spread',line:-6.5};
+ assert.deepEqual(legProgress(leg,null,true,game),{actual:7,result:'W'});
+ assert.equal(legProgress({...leg,line:-7},null,true,game).result,'P');
+ assert.equal(legProgress({...leg,line:-7.5},null,true,game).result,'L');
+ assert.equal(legProgress({...leg,player:game.away,line:7.5},null,true,game).result,'W');
+ assert.equal(legProgress({...leg,player:game.away,line:6.5},null,true,game).result,'L');
+ assert.equal(legProgress({...leg,line:0},null,true,{...game,home_score:20}).result,'P');
+ assert.equal(legProgress(leg,null,true,{...game,state:'in'}).result,null);
+ assert.equal(legProgress(leg,null,true,{...game,away_score:null}).result,null);
+ assert.equal(legProgress({...leg,player:'Kansas City Chiefs'},null,true,game).result,null);
+ assert.equal(legProgress({...leg,manual:true,result:'V'},null,true,game).result,'V');
+});

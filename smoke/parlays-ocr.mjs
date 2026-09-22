@@ -2,9 +2,10 @@
 // engine on deterministic images; no account, vendor API key or saved slips.
 import assert from 'node:assert/strict';
 import {loadChromium} from './playwright.mjs';
+import {ocrBrowserTransport} from './ocr-browser.mjs';
 const browser=await(await loadChromium()).launch();
 try {
- const page=await browser.newPage();await page.goto(new URL('../public/index.html',import.meta.url).href,{waitUntil:'domcontentloaded'});
+ const page=await browser.newPage();await ocrBrowserTransport(page.context());await page.goto(new URL('../public/index.html',import.meta.url).href,{waitUntil:'domcontentloaded'});
  for(const mode of ['standard','tall','logos']) {
   const tall=mode==='tall',logos=mode==='logos';
   const result=await page.evaluate(async ({tall,logos})=>{
@@ -23,7 +24,7 @@ try {
    }
    const blob=await new Promise(resolve=>canvas.toBlob(resolve));
    const parsed=await readParlayImage(new File([blob],'slip.png',{type:'image/png'}),{});
-   return parsed.legs.map(l=>({player:l.player,market:l.market,side:l.side,line:l.line,crop:!!l.source_crop,review:l.review}));
+   return parsed.legs.map(l=>({player:l.player,market:l.market,side:l.side,line:l.line,crop:!!l.source_box,review:l.review}));
   },{tall,logos});
   assert.equal(result.length,7);
   assert.deepEqual(result.map(l=>l.player),['Kenneth Walker III','Patrick Mahomes','RJ Harvey','Emmett Johnson','Rashee Rice','Courtland Sutton','Kenneth Walker III']);
