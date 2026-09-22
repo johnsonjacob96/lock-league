@@ -21,10 +21,13 @@ export async function onRequest({request,env}) {
    if(!row?.image)return json({error:'Slip image unavailable.'},{status:404});
    return new Response(Uint8Array.from(atob(row.image.split(',')[1]),c=>c.charCodeAt(0)),{headers:{'Content-Type':'image/jpeg','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
   }
-  const events=await fetchScoreboard(season,week,seasonTypeFor(env),env).catch(()=>[]);
+  let scheduleError=null;
+  const events=await fetchScoreboard(season,week,seasonTypeFor(env),env).catch(()=>{scheduleError='Unable to load games. Please try again.';return [];});
+  const schedule=events.map(e=>({key:`${e.away}@${e.home}`,kickoff:e.kickoff}));
+  if(url.searchParams.get('action')==='schedule')return scheduleError?json({error:scheduleError},{status:503}):json({season,week,schedule});
   const games=await refreshParlays(env,season,week,events);
   const slips=await sql(env)`SELECT id,season,week,night,game_key,title,odds,legs,created_by,version,created_at,image IS NOT NULL AS has_image FROM parlay_slips WHERE season=${season} ORDER BY week DESC,created_at DESC LIMIT 500`;
-  return json({season,week,members:members.map(({id,name})=>({id,name})),me:{id:memberId,admin:!!me?.is_admin},slips,games,schedule:events.map(e=>({key:`${e.away}@${e.home}`,kickoff:e.kickoff})),markets:[]});
+  return json({season,week,members:members.map(({id,name})=>({id,name})),me:{id:memberId,admin:!!me?.is_admin},slips,games,schedule,schedule_error:scheduleError,markets:[]});
  }
  if(request.method!=='POST')return json({error:'Method not allowed.'},{status:405});
  const raw=await request.text();if(raw.length>1600000)return json({error:'Slip is too large.'},{status:413});

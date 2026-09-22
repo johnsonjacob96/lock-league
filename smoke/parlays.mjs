@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {PGlite} from '@electric-sql/pglite';
-const db=new PGlite();let user=1,events=[],gameSummary=null;
+const db=new PGlite();let user=1,events=[],gameSummary=null,scoreboardError=false,scoreboardRequest=null;
 function sql(){return (strings,...params)=>db.query(strings.reduce((q,s,i)=>q+(i?'$'+i:'')+s,''),params).then(r=>r.rows);}
 mock.module('../functions/_shared/db.js',{namedExports:{sql,ignoringConcurrentCreate:p=>p}});
 mock.module('../functions/_shared/auth.js',{namedExports:{verifyCookie:async()=>user,json:(x,init)=>Response.json(x,init)}});
 mock.module('../functions/_shared/migrations.js',{namedExports:{ensureExtras:async()=>{}}});
-mock.module('../functions/_shared/grader.js',{namedExports:{fetchScoreboard:async()=>events}});
+mock.module('../functions/_shared/grader.js',{namedExports:{fetchScoreboard:async(season,week)=>{scoreboardRequest={season,week};if(scoreboardError)throw Error('upstream unavailable');return events;}}});
 mock.module('../functions/_shared/espn.js',{namedExports:{espnSummary:async()=>gameSummary}});
 const {validateSlip,legProgress}=await import('../functions/_shared/parlays.js');
 const {onRequest}=await import('../functions/api/parlays.js');
@@ -280,4 +280,21 @@ test('spread grading uses selected team margin, both signs, final status and pus
  assert.equal(legProgress(leg,null,true,{...game,away_score:null}).result,null);
  assert.equal(legProgress({...leg,player:'Kansas City Chiefs'},null,true,game).result,null);
  assert.equal(legProgress({...leg,manual:true,result:'V'},null,true,game).result,'V');
+});
+
+test('draft schedule accepts earlier weeks and completed games, validates input, and reports outages',async()=>{
+ const oldEvents=events,oldUser=user;
+ try {
+  user=1;events=[{away:'Denver Broncos',home:'Kansas City Chiefs',kickoff:'2026-09-22T00:15:00Z',state:'post'}];
+  const get=query=>onRequest({env:{},request:new Request('https://app.invalid/api/parlays?action=schedule&'+query)});
+  const response=await get('season=2026&week=2');
+  assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{season:2026,week:2,schedule:[{key:'Denver Broncos@Kansas City Chiefs',kickoff:'2026-09-22T00:15:00Z'}]});
+  assert.deepEqual(scoreboardRequest,{season:2026,week:2});
+  assert.equal((await get('season=2026&week=0')).status,400);
+  assert.equal((await get('season=2025&week=2')).status,400);
+  scoreboardError=true;
+  const failed=await get('season=2026&week=2');assert.equal(failed.status,503);assert.match((await failed.json()).error,/Unable to load games/);
+  user=null;assert.equal((await get('season=2026&week=2')).status,401);
+ }finally{events=oldEvents;user=oldUser;scoreboardError=false;}
 });

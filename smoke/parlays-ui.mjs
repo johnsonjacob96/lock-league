@@ -127,6 +127,65 @@ try {
   const spreadPosted=await page.evaluate(()=>parlayWrites.at(-1));
   assert.equal(spreadPosted.odds,9100);assert.equal(spreadPosted.legs[0].line,-6.5);assert.equal(spreadPosted.legs[0].market,'spread');
   assert.equal('source_box' in spreadPosted.legs[0],false);
-  assert.deepEqual(errors,[]);console.log(`PASS ${width}px: live cards, leaderboard, edit assignments, upload review and save`);await page.close();
+  // Tuesday rollover: last Monday is in the previous week. Changing the draft
+  // slate must preserve OCR, assignments, and edits made while games are loading.
+  await page.evaluate(()=>{
+   parlayState.week=3;parlayState.data.week=3;paintParlays();
+   window.scheduleRequests=[];window.schedulePending={};window.failSchedule=false;
+   window.fetch=async(url,options)=>{
+    if(options?.method==='POST'){window.parlayWrites.push(JSON.parse(options.body));return Response.json({ok:true});}
+    const q=new URL(url,'https://app.invalid').searchParams;
+    if(q.get('action')==='schedule'){
+     scheduleRequests.push(url);
+     if(window.failSchedule)return Response.json({error:'Unable to load games. Please try again.'},{status:503});
+     return new Promise(resolve=>{schedulePending[q.get('season')+':'+q.get('week')]=resolve;});
+    }
+    return Response.json({...parlayState.data,season:Number(q.get('season')),week:Number(q.get('week'))});
+   };
+  });
+  await page.locator('#parlay-new').click();
+  await page.evaluate(()=>{
+   Object.assign(parlayState.draft,{image:'data:image/jpeg;base64,/9j/',odds:10087,legs:[{player:'Patrick Mahomes',market:'rush_yds',side:'over',line:13.5,member_id:1}],game_key:'Denver Broncos@Kansas City Chiefs'});paintParlays();
+  });
+  await page.locator('[name="week"]').selectOption('2');
+  assert.equal(await page.locator('[name="game_key"]').isDisabled(),true);
+  assert.equal(await page.locator('[name="game_key"]').inputValue(),'','changing the slate clears the old game');
+  assert.match(await page.locator('#parlay-schedule-status').innerText(),/Loading games/);
+  await page.locator('[name="title"]').fill('Last night’s slip');
+  await page.locator('[data-field="member_id"]').selectOption('2');
+  await page.evaluate(()=>schedulePending['2026:2'](Response.json({season:2026,week:2,schedule:[{key:'Denver Broncos@Kansas City Chiefs',kickoff:'2026-09-22T00:15:00Z'}]})));
+  await page.waitForFunction(()=>!document.querySelector('[name="game_key"]').disabled);
+  assert.match(await page.locator('[name="game_key"]').innerText(),/Mon, Sep 21/);
+  assert.equal(await page.locator('[name="title"]').inputValue(),'Last night’s slip');
+  assert.equal(await page.locator('[data-field="member_id"]').inputValue(),'2');
+  assert.equal(await page.locator('[data-field="line"]').inputValue(),'13.5');
+  assert.equal(await page.locator('[name="odds"]').inputValue(),'10087');
+  assert.equal(await page.locator('.parlay-evidence img').getAttribute('src'),'data:image/jpeg;base64,/9j/');
+  await page.locator('[name="game_key"]').selectOption('Denver Broncos@Kansas City Chiefs');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:join(tmpdir(),`parlays-past-game-${width}.png`),fullPage:true});
+  await page.locator('#parlay-form button[type=submit]').click();await page.waitForSelector('#parlay-new');
+  const past=await page.evaluate(()=>({posted:parlayWrites.at(-1),week:parlayState.week}));
+  assert.equal(past.posted.week,2);assert.equal(past.week,2);assert.equal(past.posted.legs[0].member_id,2);assert.equal(past.posted.title,'Last night’s slip');
+  await page.locator('#parlay-new').click();
+  await page.locator('[name="week"]').selectOption('4');
+  await page.locator('[name="week"]').selectOption('5');
+  await page.evaluate(()=>schedulePending['2026:5'](Response.json({schedule:[{key:'New York Giants@Los Angeles Rams'}]})));
+  await page.waitForFunction(()=>!document.querySelector('[name="game_key"]').disabled);
+  await page.evaluate(()=>schedulePending['2026:4'](Response.json({schedule:[{key:'Old Away@Old Home'}]})));
+  assert.match(await page.locator('[name="game_key"]').innerText(),/New York Giants/);
+  assert.doesNotMatch(await page.locator('[name="game_key"]').innerText(),/Old Away/);
+  await page.evaluate(()=>window.failSchedule=true);
+  await page.locator('[name="season"]').fill('2027');await page.locator('[name="season"]').press('Tab');
+  await page.waitForSelector('#parlay-schedule-retry');
+  assert.match(await page.locator('#parlay-schedule-status').innerText(),/Unable to load games/);
+  assert.equal(await page.locator('[name="game_key"]').isDisabled(),true);
+  await page.evaluate(()=>window.failSchedule=false);await page.locator('#parlay-schedule-retry').click();
+  await page.evaluate(()=>schedulePending['2027:5'](Response.json({schedule:[]})));
+  await page.waitForFunction(()=>document.getElementById('parlay-schedule-status').textContent.includes('No games found'));
+  await page.locator('[name="week"]').selectOption('6');await page.locator('#parlay-cancel').click();
+  await page.evaluate(()=>schedulePending['2027:6'](Response.json({schedule:[{key:'Cancelled@Draft'}]})));
+  assert.equal(await page.locator('#parlay-form').count(),0,'cancelled draft stays closed after request resolves');
+  assert.deepEqual(errors,[]);console.log(`PASS ${width}px: live cards, leaderboard, edit assignments, upload review, past-game selection, retry and save`);await page.close();
  }
 }finally{await browser.close();}
