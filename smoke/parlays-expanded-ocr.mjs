@@ -3,9 +3,10 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {loadChromium} from './playwright.mjs';
+import {ocrBrowserTransport} from './ocr-browser.mjs';
 const browser=await(await loadChromium()).launch();
 try {
- const page=await browser.newPage();
+ const page=await browser.newPage();await ocrBrowserTransport(page.context());
  await page.goto(new URL('../public/index.html',import.meta.url).href,{waitUntil:'domcontentloaded'});
  const base64=readFileSync(new URL('./assets/parlay-expanded-legs.jpg',import.meta.url)).toString('base64');
  for(const expanded of [false,true]) {

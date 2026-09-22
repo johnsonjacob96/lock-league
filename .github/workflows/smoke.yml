@@ -56,4 +56,4 @@ jobs:
       - run: npm run smoke:super-lock
       - name: Real parlay image recognition
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.ocr }}
-        run: node smoke/parlays-ocr.mjs && node smoke/parlays-expanded-ocr.mjs
+        run: node smoke/parlays-ocr.mjs && node smoke/parlays-expanded-ocr.mjs && npm run smoke:parlay-images

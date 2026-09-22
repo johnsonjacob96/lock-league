@@ -2,6 +2,14 @@ import { sql, ignoringConcurrentCreate } from './db.js';
 import { PROP_DEFS, playerStatMap } from './props.js';
 import { espnSummary } from './espn.js';
 let ready=false;
+export function parlaySpreadTeam(input, gameKey) {
+ const key=s=>String(s||'').toLowerCase().replace(/[^a-z]/g,'');
+ const matches=String(gameKey||'').split('@').filter(team=>{
+  const words=team.trim().split(/\s+/),nickname=words.at(-1),city=words.slice(0,-1).map(w=>w[0]).join('');
+  return [team,nickname,city+' '+nickname,city+nickname[0]].some(alias=>key(alias)===key(input));
+ });
+ return matches.length===1?matches[0]:null;
+}
 export async function ensureParlays(env) {
  if(ready)return;
  await ignoringConcurrentCreate(sql(env)`CREATE TABLE IF NOT EXISTS parlay_slips (
@@ -20,19 +28,28 @@ export function validateSlip(body, memberIds) {
  if(!Array.isArray(body.legs)||body.legs.length<1||body.legs.length>25)throw Error('Add between 1 and 25 legs.');
  const legs=body.legs.map(l=>{
   if(l.market!=='game_total'&&(typeof l.player!=='string'||!l.player.trim()||l.player.length>150))throw Error('Enter the player or pick for every leg.');
-  if(!PROP_DEFS[l.market]&&!['manual','game_total'].includes(l.market))throw Error('Choose a supported market or Custom.');
-  if(!['over','under','atleast','yes'].includes(l.side))throw Error('Choose a valid direction.');
+  if(!PROP_DEFS[l.market]&&!['manual','game_total','spread'].includes(l.market))throw Error('Choose a supported market or Custom.');
+  if(!['over','under','atleast','yes','spread'].includes(l.side))throw Error('Choose a valid direction.');
+  if(l.market==='spread'&&(l.side!=='spread'||!parlaySpreadTeam(l.player,body.game_key)))throw Error('Choose a team in the selected game for each spread.');
+  if(l.market!=='spread'&&l.side==='spread')throw Error('Spread direction requires a team spread.');
   if(l.market==='game_total'&&!['over','under'].includes(l.side))throw Error('Game totals use Over or Under.');
   if(l.market==='anytime_td'&&l.side!=='yes')throw Error('Anytime TD uses Yes.');
-  if(!['anytime_td','manual'].includes(l.market)&&(!Number.isFinite(l.line)||l.line<0||l.line>2000||l.side==='yes'))throw Error('Enter a valid threshold.');
+  if(!['anytime_td','manual'].includes(l.market)&&(!Number.isFinite(l.line)||l.line<(l.market==='spread'?-2000:0)||l.line>2000||l.side==='yes'))throw Error('Enter a valid threshold.');
   if(l.member_id!=null&&!memberIds.includes(l.member_id))throw Error('Choose a league member for each assigned leg.');
-  return {player:l.market==='game_total'?'Game total':l.player.trim(),market:l.market,side:l.side,line:['anytime_td','manual'].includes(l.market)?null:l.line,member_id:l.member_id??null,result:null};
+  return {player:l.market==='game_total'?'Game total':l.market==='spread'?parlaySpreadTeam(l.player,body.game_key):l.player.trim(),market:l.market,side:l.side,line:['anytime_td','manual'].includes(l.market)?null:l.line,member_id:l.member_id??null,result:null};
  });
  if(body.image!=null&&(typeof body.image!=='string'||body.image.length>1500000||!/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/=]+$/.test(body.image)))throw Error('Upload a JPEG slip smaller than 1 MB.');
  return {...body,title:body.title.trim(),legs};
 }
 export function legProgress(leg, summary, final=false, game=null) {
  if(leg.manual)return {result:leg.result,actual:leg.actual??null};
+ if(leg.market==='spread') {
+  if(!game||!['in','post'].includes(game.state)||![game.away_score,game.home_score].every(v=>Number.isFinite(v)&&v>=0)||!Number.isFinite(leg.line))return {result:null,actual:null};
+  const team=parlaySpreadTeam(leg.player,`${game.away}@${game.home}`);
+  if(!team)return {result:null,actual:null};
+  const actual=team===game.home?game.home_score-game.away_score:game.away_score-game.home_score,adjusted=actual+leg.line;
+  return {actual,result:game.state!=='post'?null:adjusted===0?'P':adjusted>0?'W':'L'};
+ }
  if(leg.market==='game_total') {
   if(!game||!['in','post'].includes(game.state)||![game.away_score,game.home_score].every(v=>typeof v==='number'&&Number.isFinite(v)&&v>=0))return {result:null,actual:null};
   const actual=game.away_score+game.home_score;

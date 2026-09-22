@@ -1,0 +1,46 @@
+[
+  {
+    "image": "draftkings-eight.jpg",
+    "odds": 9100,
+    "declared_count": 8,
+    "legs": [
+      ["LA Rams", "spread", "spread", -6.5],
+      ["Matthew Stafford", "pass_yds", "atleast", 240],
+      ["Davante Adams", "anytime_td", "yes", null],
+      ["Kyren Williams", "rec_yds", "atleast", 15],
+      ["Tyler Higbee", "receptions", "atleast", 2],
+      ["Malik Nabers", "receptions", "atleast", 6],
+      ["Jaxson Dart", "rush_yds", "atleast", 30],
+      ["Game total", "game_total", "over", 47.5]
+    ]
+  },
+  {
+    "image": "fanduel-expanded-eight.jpg",
+    "odds": 38132,
+    "declared_count": null,
+    "legs": [
+      ["D.J. Moore", "rec_yds", "over", 63.5],
+      ["Game total", "game_total", "under", 54.5],
+      ["Sam LaPorta", "anytime_td", "yes", null],
+      ["Josh Allen", "rush_yds", "over", 31.5],
+      ["D.J. Moore", "receptions", "over", 4.5],
+      ["Amon-Ra St. Brown", "receptions", "over", 7.5],
+      ["Josh Allen", "anytime_td", "yes", null],
+      ["Jahmyr Gibbs", "rec_yds", "over", 30.5]
+    ]
+  },
+  {
+    "image": "fanduel-seven.png",
+    "odds": 10087,
+    "declared_count": null,
+    "legs": [
+      ["Kenneth Walker III", "receptions", "over", 3.5],
+      ["Patrick Mahomes", "rush_yds", "over", 13.5],
+      ["RJ Harvey", "rec_yds", "over", 16.5],
+      ["Emmett Johnson", "rush_yds", "atleast", 15],
+      ["Rashee Rice", "receptions", "atleast", 6],
+      ["Courtland Sutton", "receptions", "over", 3.5],
+      ["Kenneth Walker III", "anytime_td", "yes", null]
+    ]
+  }
+]
