@@ -1,6 +1,6 @@
 // Group parlays are independent of league picks, standings and payouts.
 const PARLAY_MARKETS={spread:'Team spread',game_total:'Game total points (Over/Under)',pass_yds:'Passing yards',pass_tds:'Passing TDs',pass_cmp:'Completions',pass_att:'Pass attempts',pass_int:'Interceptions',rush_yds:'Rushing yards',rush_att:'Rush attempts',rush_tds:'Rushing TDs',rec_yds:'Receiving yards',receptions:'Receptions',rec_tds:'Receiving TDs',rush_rec_yds:'Rush + rec yards',anytime_td:'Anytime touchdown',manual:'Custom / manual result'};
-const parlayState={data:null,draft:null,busy:false,error:'',week:null,season:null,night:'All',hallExpanded:false,timer:null};
+const parlayState={data:null,draft:null,busy:false,error:'',week:null,season:null,night:'All',hallExpanded:false,timer:null,draftSchedule:null};
 function parlayRecord(slips,members,night='All') {
  return members.map(m=>{
   const legs=slips.filter(s=>night==='All'||s.night===night).flatMap(s=>s.legs).filter(l=>l.member_id===m.id);
@@ -72,11 +72,47 @@ function renderParlayEvidence(s) {
  if(!s.image)return '';
  return `<details class="parlay-evidence" open><summary>Full screenshot · ${s.legs.length} selections</summary><div class="parlay-evidence-scroll"><div class="parlay-evidence-image"><img src="${s.image}" alt="Original parlay screenshot. Numbered highlights link to the extracted selections.">${s.legs.map((l,i)=>{const b=l.source_box;if(!b)return '';return `<a id="parlay-source-${i}" href="#parlay-leg-${i}" class="parlay-evidence-box" aria-label="Review selection ${i+1}: ${escapeHtml(l.player)}" style="left:${b.x*100}%;top:${b.y*100}%;width:${b.width*100}%;height:${b.height*100}%"><span>${i+1}</span></a>`;}).join('')}</div></div></details>`;
 }
+function parlayGameOptions() {
+ const s=parlayState.draft,loaded=parlayState.draftSchedule;
+ const games=loaded?.season===s.season&&loaded?.week===s.week&&!loaded.loading&&!loaded.error?loaded.games:[];
+ const options=Object.fromEntries(games.map(g=>{
+  const date=g.kickoff&&Number.isFinite(Date.parse(g.kickoff))?new Date(g.kickoff).toLocaleDateString('en-US',{timeZone:'America/Chicago',weekday:'short',month:'short',day:'numeric'}):'';
+  return [g.key,`${g.key.replace('@',' @ ')}${date?' · '+date:''}`];
+ }));
+ if(s.game_key&&!options[s.game_key])options[s.game_key]=s.game_key.replace('@',' @ ');
+ return `<option value="">Choose game</option>${parlayOptions(options,s.game_key)}`;
+}
+function updateParlayGamePicker() {
+ const form=document.getElementById('parlay-form'),s=parlayState.draft,loaded=parlayState.draftSchedule;
+ if(!form||!s||!loaded||form.dataset.readingImage)return;
+ form.elements.game_key.innerHTML=parlayGameOptions();
+ form.elements.game_key.disabled=loaded.loading||!!loaded.error;
+ const status=document.getElementById('parlay-schedule-status');
+ status.innerHTML=loaded.loading?'Loading games…':loaded.error?`${escapeHtml(loaded.error)} <button type="button" id="parlay-schedule-retry" class="text-action">Retry games</button>`:loaded.games.length?`Showing all games for Week ${s.week}, ${s.season}, including completed games.`:'No games found for this week. Choose another week or season.';
+ const retry=document.getElementById('parlay-schedule-retry');if(retry)retry.onclick=()=>{readParlayDraft();loadParlayDraftSchedule(true);};
+}
+async function loadParlayDraftSchedule(force=false) {
+ const draft=parlayState.draft;if(!draft)return;
+ const {season,week}=draft,previous=parlayState.draftSchedule;
+ if(!force&&previous?.draft===draft&&previous.season===season&&previous.week===week){updateParlayGamePicker();return;}
+ const loaded=parlayState.draftSchedule={draft,season,week,games:[],loading:false,error:''};
+ if(!Number.isInteger(season)||season<2026||season>2100||!Number.isInteger(week)||week<1||week>18){loaded.error='Choose a season from 2026–2100 and a week from 1–18.';updateParlayGamePicker();return;}
+ const d=parlayState.data;
+ if(!force&&d.season===season&&d.week===week&&!d.schedule_error){loaded.games=d.schedule||[];updateParlayGamePicker();return;}
+ loaded.loading=true;updateParlayGamePicker();
+ try {
+  const result=await parlayFetch(`/api/parlays?action=schedule&season=${season}&week=${week}`);
+  loaded.games=result.schedule||[];
+ }catch(err){loaded.error=err.message;}finally{
+  loaded.loading=false;
+  if(parlayState.draft===draft&&parlayState.draftSchedule===loaded)updateParlayGamePicker();
+ }
+}
 function renderParlayEditor() {
  const s=parlayState.draft,d=parlayState.data;
  return `<section class="parlays"><div class="parlay-heading"><h1>${s.version?'EDIT SLIP':'ADD A PARLAY'}</h1><button id="parlay-cancel" class="text-action">Cancel</button></div><p class="quiet-copy">Upload a screenshot, check every leg, and choose who picked it. Nothing is saved until you confirm.</p>
  <form id="parlay-form"><div class="compact-panel"><label>Slip screenshot<input id="parlay-image" type="file" accept="image/*"></label><p id="parlay-ocr-status" role="status">${s.image?`${s.legs.length} selections found${s.declared_count!=null?` · ${s.declared_count} printed on the slip`: ''}. Review the highlighted selections.`:'Read a screenshot on your device for free, or add selections manually.'}</p>${s.ocr_warnings?.length?`<p class="parlay-error" role="alert">${s.ocr_warnings.map(escapeHtml).join(' ')}</p>`:''}
- <div class="parlay-fields"><label>Title<input name="title" maxlength="100" required value="${escapeHtml(s.title)}"></label><label>Night<select name="night">${parlayOptions({Monday:'Monday',Thursday:'Thursday'},s.night)}</select></label><label>Week<input name="week" type="number" min="1" max="18" required value="${s.week}"></label><label>Season<input name="season" type="number" min="2026" max="2100" required value="${s.season}"></label><label>Game<select name="game_key" required><option value="">Choose game</option>${parlayOptions(Object.fromEntries([...new Set([...(d.schedule||[]).map(g=>g.key),...(s.game_key?[s.game_key]:[])])].map(k=>[k,k.replace('@',' @ ')])),s.game_key)}</select></label><label>Combined odds (optional)<input name="odds" type="number" placeholder="+10087" value="${s.odds??''}"></label></div><p class="quiet-copy">Choose a different week on the tracker before adding a slip for another slate.</p></div>
+ <div class="parlay-fields"><label>Title<input name="title" maxlength="100" required value="${escapeHtml(s.title)}"></label><label>Night<select name="night">${parlayOptions({Monday:'Monday',Thursday:'Thursday'},s.night)}</select></label><label>Week<select name="week">${parlayOptions(Object.fromEntries(Array.from({length:18},(_,i)=>[i+1,`Week ${i+1}`])),s.week)}</select></label><label>Season<input name="season" type="number" min="2026" max="2100" required value="${s.season}"></label><label>Game<select name="game_key" required>${parlayGameOptions()}</select></label><label>Combined odds (optional)<input name="odds" type="number" placeholder="+10087" value="${s.odds??''}"></label></div><p id="parlay-schedule-status" class="quiet-copy" role="status"></p><p class="quiet-copy">Uploading an earlier game? Change the week here; your screenshot and picks stay in place. Monday games belong to the week that started the previous Tuesday.</p></div>
  <div class="parlay-review-layout ${s.image?'has-image':''}">${renderParlayEvidence(s)}<div id="parlay-edit-legs">${s.legs.map((l,i)=>`<fieldset class="compact-panel parlay-edit-leg" id="parlay-leg-${i}" data-leg-index="${i}"><legend>Leg ${i+1}${l.review?.length?' · Check this leg':''}</legend>${l.source_box?`<a class="text-action" href="#parlay-source-${i}">View selection ${i+1} in screenshot</a>`:l.source_crop?`<img class="parlay-source-crop" src="${l.source_crop}" alt="Original screenshot for leg ${i+1}">`:l.source_text?`<details><summary>Text read from screenshot</summary><pre class="parlay-source-text">${escapeHtml(l.source_text)}</pre></details>`:''}${l.review?.length?`<p class="parlay-error">${l.review.map(escapeHtml).join(' ')}</p>`:''}<div class="parlay-fields"><label>${l.market==='game_total'?'Game total — uses selected game':l.market==='spread'?'Team in selected game':'Player / custom pick'}<input data-field="player" maxlength="150" ${l.market==='game_total'?'disabled':'required'} value="${escapeHtml(l.market==='game_total'?'Game total':l.player)}"></label><label>Market<select data-field="market" required>${parlayOptions({'':'Choose market',...PARLAY_MARKETS},l.market)}</select></label><label>Direction<select data-field="side" required>${parlayOptions(l.market==='spread'?{spread:'Team spread'}:l.market==='game_total'?{'':'Choose direction',over:'Over',under:'Under'}:{'':'Choose direction',over:'Over',under:'Under',atleast:'At least (N+)',yes:'Yes — anytime TD'},l.side)}</select></label><label>Threshold<input data-field="line" type="number" step="0.5" min="${l.market==='spread'?-2000:0}" max="2000" ${['anytime_td','manual'].includes(l.market)?'disabled':'required'} value="${l.line??''}"></label><label>Picked by<select data-field="member_id">${parlayOptions({'':'Unassigned',...Object.fromEntries(d.members.map(m=>[m.id,m.name]))},l.member_id??'')}</select></label></div>${l.review?.length?`<label class="parlay-review"><input type="checkbox" data-field="reviewed" required ${l.reviewed?'checked':''}> I corrected this leg against the screenshot</label>`:''}<button type="button" class="text-action" data-parlay-remove="${i}">Remove leg</button></fieldset>`).join('')}</div></div>
  ${s.image&&(s.count_review||s.declared_count!=null&&s.legs.length!==s.declared_count)?`<label class="parlay-review"><input id="parlay-count-reviewed" type="checkbox" required ${s.count_reviewed?'checked':''}> I compared the full screenshot and corrected the selection count (${s.legs.length} entered${s.declared_count!=null?`; ${s.declared_count} printed`:''})</label>`:''}
  <div class="parlay-actions"><button type="button" id="parlay-add" class="text-action">+ Add leg</button><button type="submit" class="parlay-primary">${s.version?'Save changes':'Save parlay'}</button></div></form></section>`;
@@ -113,20 +149,26 @@ function bindParlays() {
  if(byId('parlay-add'))byId('parlay-add').onclick=()=>{readParlayDraft();if(parlayState.draft.legs.length>=25)return;parlayState.draft.count_reviewed=false;parlayState.draft.legs.push({player:'',market:'receptions',side:'over',line:null,member_id:null});paintParlays();};
  document.querySelectorAll('[data-parlay-remove]').forEach(b=>b.onclick=()=>{readParlayDraft();parlayState.draft.count_reviewed=false;parlayState.draft.legs.splice(Number(b.dataset.parlayRemove),1);paintParlays();});
  document.querySelectorAll('[data-field="market"]').forEach(el=>el.onchange=()=>{readParlayDraft();const l=parlayState.draft.legs[Number(el.closest('[data-leg-index]').dataset.legIndex)];if(l.market==='game_total'){l.player='Game total';if(!['over','under'].includes(l.side))l.side='over';}else if(l.player==='Game total')l.player='';if(l.market==='spread'){l.side='spread';}else if(l.market==='anytime_td'){l.side='yes';l.line=null;}else if(['yes','spread'].includes(l.side))l.side='over';paintParlays();});
+ const form=byId('parlay-form');
+ if(form){
+  for(const key of ['season','week'])form.elements[key].onchange=()=>{readParlayDraft();parlayState.draft.game_key='';loadParlayDraftSchedule();};
+  loadParlayDraftSchedule();
+ }
  if(byId('parlay-image'))byId('parlay-image').onchange=async e=>{
   const file=e.target.files[0];if(!file)return;readParlayDraft();
   if(parlayState.draft.legs.length&&!confirm('Read this screenshot and replace the draft legs?'))return;
   const draft=parlayState.draft;
-  const form=byId('parlay-form');for(const el of form.elements)el.disabled=true;
+  const form=byId('parlay-form');form.dataset.readingImage='true';for(const el of form.elements)el.disabled=true;
   try {const parsed=await readParlayImage(file,draft);if(parlayState.draft!==draft)return;draft.legs=parsed.legs;draft.declared_count=parsed.declared_count??null;draft.count_review=!!parsed.count_review;draft.count_reviewed=false;if(parsed.odds_review)draft.odds=null;else if(parsed.odds!=null)draft.odds=parsed.odds;draft.ocr_warnings=parsed.warnings||[];parlayState.error=parsed.legs.length?'':'No legs were read confidently. Add them manually using the screenshot preview.';}catch(err){parlayState.error=err.message;}finally{paintParlays();}
  };
  if(byId('parlay-form'))byId('parlay-form').onsubmit=async e=>{
   e.preventDefault();readParlayDraft();const draft=parlayState.draft;
+  if(parlayState.draftSchedule?.loading||parlayState.draftSchedule?.error){parlayState.error='Load the games for this week before saving.';paintParlays();return;}
   if(!draft.legs.length){parlayState.error='Add at least one leg.';paintParlays();return;}
   if((draft.count_review||draft.declared_count!=null&&draft.legs.length!==draft.declared_count)&&!draft.count_reviewed){parlayState.error='Compare the full screenshot and reconcile the selection count before saving.';paintParlays();return;}
   if(!confirm(`Save ${draft.legs.length} reviewed legs for ${draft.title}?`))return;
   const button=e.submitter;if(button)button.disabled=true;
-  try{await parlayFetch('/api/parlays?action=save',{...draft,ocr_warnings:undefined,declared_count:undefined,count_review:undefined,count_reviewed:undefined,legs:draft.legs.map(({source_box,source_crop,source_text,review,reviewed,...leg})=>leg)});parlayState.draft=null;parlayState.error='';await refreshParlayView();}catch(err){parlayState.error=err.message;paintParlays();}
+  try{await parlayFetch('/api/parlays?action=save',{...draft,ocr_warnings:undefined,declared_count:undefined,count_review:undefined,count_reviewed:undefined,legs:draft.legs.map(({source_box,source_crop,source_text,review,reviewed,...leg})=>leg)});parlayState.season=draft.season;parlayState.week=draft.week;parlayState.night=draft.night;parlayState.draft=null;parlayState.draftSchedule=null;parlayState.error='';await refreshParlayView();}catch(err){parlayState.error=err.message;paintParlays();}
  };
  document.querySelectorAll('[data-parlay-grade]').forEach(el=>el.onchange=async()=>{
   if(!confirm('Confirm this result correction? It changes the member’s parlay record.')){paintParlays();return;}
