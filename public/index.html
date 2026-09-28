@@ -1002,10 +1002,9 @@
   .wr-grid .wr-name { color:#e6e8e8!important; }
   .wr-grid .row-you .wr-name { color:#58df95!important; }
   .wr-grid .wr-bt { color:#b3bcb8!important; }
-  .wr-grid .wr-chip.is-settled.st-win { background:rgba(70,224,138,.04); }
-  /* Neutral card surfaces; green identifies selection and progress. */
+  /* Live result colors are independent of bet category and sportsbook. */
   .personal-live-card { background:#15191a; border-color:#303735; padding:14px; }
-  .personal-live-card .wr-bt { color:#58df95!important; font:600 12px Inter,sans-serif; }
+  .personal-live-card .wr-bt { color:#b3bcb8!important; font:600 12px Inter,sans-serif; }
   .personal-live-card .wr-chip { gap:5px; }
   .personal-live-card .wr-pick { font-size:14px; }
   .personal-live-card .quiet-copy { font-size:12px; }
@@ -1017,9 +1016,26 @@
   .comparison-anchor { padding:12px; margin-bottom:14px; border:1px solid #34443a; border-radius:10px; background:#141819; font-size:12px; }
   .comparison-anchor .card-chips { margin-top:8px; }
   .comparison-anchor .card-chip { padding:4px 2px; }
+
+  .result-neutral { --live-result-color:#b7c0bc; }
+  .result-win { --live-result-color:#69e5a1; }
+  .result-lose { --live-result-color:#ff9898; }
+  .result-push { --live-result-color:#f4d77e; }
+  .personal-live-card.result-win { background:#153526; border-color:#39835a; }
+  .personal-live-card.result-lose { background:#3b2023; border-color:#a3535a; }
+  .personal-live-card.result-push { background:#302c1e; border-color:#756843; }
+  .live-result-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border:1px solid currentColor; border-radius:6px; color:var(--live-result-color); font:700 12px/1.25 Inter,sans-serif; letter-spacing:.03em; white-space:normal; }
+  .live-result-badge > span { font-size:17px; line-height:1; }
+  .personal-live-card > .live-result-badge { margin-bottom:8px; }
+  .wr-grid .wr-chip.is-settled.st-win { background:#153526; border-color:#39835a; }
+  .wr-grid .wr-chip.is-settled.st-lose { background:#3b2023; border-color:#a3535a; opacity:1; }
+  .wr-grid .wr-chip.is-settled.st-push { background:#302c1e; }
+  .wr-chip.is-live { box-shadow:none; }
+  .wr-livepill { color:#b7c0bc; border-color:#59645e; }
+  .wr-livepill .wr-livedot { background:currentColor; }
   .pick-progress { margin-top:12px; }
   .pick-progress-track { position:relative; height:7px; border-radius:6px; background:#343c39; }
-  .pick-progress-fill { display:block; height:100%; border-radius:6px; background:#38cb83; }
+  .pick-progress-fill { display:block; height:100%; border-radius:6px; background:var(--live-result-color,#aeb8b3); }
   .pick-progress-target { position:absolute; top:-4px; height:15px; border-left:2px dashed #d4dbd7; }
   .pick-progress-label { display:flex; justify-content:space-between; gap:10px; margin-top:8px; font:11px/1.4 Inter,sans-serif; color:#aeb8b3; }
   .card-chip { background:transparent; }
@@ -2136,27 +2152,29 @@ function liveMemberSummary(m, season) {
   }
   return {units,unpriced,live:m.picks.filter(p => p.state === "in" && !p.final).length};
 }
-// Bars show measured progress, never a probability or a settled result.
-function liveProgressBar(p, d) {
+// Shared measured progress for the bar and its presentation; never grades a pick.
+function liveProgressData(p, d) {
   if (!d) return "";
-  let actual, target, min = 0, max, label = "Current", targetLabel = "Line";
+  let actual, target, min = 0, max, label = "Current", targetLabel = "Line", side, threshold = false;
   if (p.prop?.market) {
     const norm = s => String(s || "").toLowerCase().replace(/[.'-]/g," ").replace(/\b(jr|sr|ii|iii|iv|v)\b/g," ").replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
     const matches = (d.players || []).filter(x => norm(x.name) === norm(p.prop.player));
     const stat = matches.length === 1 ? matches[0].markets?.[p.prop.market] : null;
     if (!stat || !Number.isFinite(stat.actual)) return "";
     actual = stat.actual; target = p.prop.market === "anytime_td" ? 1 : Number(p.prop.line);
+    side = p.prop.side; threshold = side === "over" || side === "under" || p.prop.market === "anytime_td";
     if (p.prop.market !== "anytime_td" && p.prop.line == null) return "";
     label = stat.unit || "Current";
     targetLabel = p.prop.market === "anytime_td" ? "TD target" : p.prop.side === "under" ? "Under" : "Over";
   } else {
     if (d.away?.score == null || d.home?.score == null) return "";
     const a = Number(d.away.score), h = Number(d.home.score);
-    if (p.bet_type === "Over" || p.bet_type === "Under") {
+    if (p.bet_type === "Over" || p.bet_type === "Under" || p.prop?.kind === "total") {
       const match = (p.pick_text || "").match(/([OU])\s*([\d.]+)/i);
       if (!match) return "";
-      actual = a + h; target = Number(match[2]); label = "Total points"; targetLabel = p.bet_type;
-    } else if (p.bet_type === "Favorite" || p.bet_type === "Dog") {
+      actual = a + h; target = Number(match[2]); label = "Total points";
+      side = match[1].toUpperCase() === "U" ? "under" : "over"; threshold = true; targetLabel = side === "under" ? "Under" : "Over";
+    } else if (p.bet_type === "Favorite" || p.bet_type === "Dog" || p.prop?.kind === "spread") {
       const match = (p.pick_text || "").match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?)/);
       if (!match) return "";
       const home = sameTeamName(match[1],d.home.name), away = sameTeamName(match[1],d.away.name);
@@ -2167,9 +2185,35 @@ function liveProgressBar(p, d) {
     } else return "";
   }
   if (!Number.isFinite(actual) || !Number.isFinite(target)) return "";
-  if (max == null) { if (target <= 0) return ""; max = target * 1.25; }
+  if (max == null) { min = Math.min(0,actual,target); max = Math.max(1,target * 1.25); }
+  return {actual,target,min,max,label,targetLabel,side,threshold};
+}
+function liveResultPresentation(p, d) {
+  if (p.final && ["win","lose","push"].includes(p.status)) {
+    return {tone:p.status,label:{win:"WON",lose:"LOST",push:"PUSH"}[p.status],symbol:{win:"✓",lose:"✕",push:"–"}[p.status]};
+  }
+  const neutral = {tone:"neutral",label:p.state === "in" ? "LIVE · IN PROGRESS" : p.final || p.state === "post" ? "AWAITING GRADE" : "UPCOMING",symbol:""};
+  // Threshold signals are observed stats, not projected results. Spreads can
+  // reverse; unders below their limit still need the rest of the game.
+  if (p.state !== "in" || d?.stale) return neutral;
+  const progress = liveProgressData(p,d);
+  if (!progress?.threshold) return neutral;
+  const {actual,target,side} = progress;
+  const crossed = p.prop?.market === "anytime_td" ? actual >= target : actual > target;
+  if (!crossed) return neutral;
+  return side === "under"
+    ? {tone:"lose",label:"OVER LIMIT · LIVE",symbol:"✕"}
+    : {tone:"win",label:"TARGET REACHED · LIVE",symbol:"✓"};
+}
+function liveResultBadge(result) {
+  return `<span class="live-result-badge result-${result.tone}">${result.symbol ? `<span aria-hidden="true">${result.symbol}</span>` : ""}${result.label}</span>`;
+}
+function liveProgressBar(p, d) {
+  const progress = liveProgressData(p,d);
+  if (!progress) return "";
+  const {actual,target,min,max,label,targetLabel} = progress;
   const position = value => Math.max(0,Math.min(100,(value-min)/(max-min)*100));
-  return `<div class="pick-progress" role="img" aria-label="${escapeHtml(`${label}: ${actual}. ${targetLabel}: ${target}. Progress, not a final result.`)}"><div class="pick-progress-track" aria-hidden="true"><span class="pick-progress-fill" style="width:${position(actual)}%"></span><span class="pick-progress-target" style="left:${position(target)}%"></span></div><div class="pick-progress-label"><span>${escapeHtml(label)}: ${actual}</span><span>${escapeHtml(targetLabel)} ${target}</span></div></div>`;
+  return `<div class="pick-progress result-${liveResultPresentation(p,d).tone}" role="img" aria-label="${escapeHtml(`${label}: ${actual}. ${targetLabel}: ${target}. Progress, not a final result.`)}"><div class="pick-progress-track" aria-hidden="true"><span class="pick-progress-fill" style="width:${position(actual)}%"></span><span class="pick-progress-target" style="left:${position(target)}%"></span></div><div class="pick-progress-label"><span>${escapeHtml(label)}: ${actual}</span><span>${escapeHtml(targetLabel)} ${target}</span></div></div>`;
 }
 
 // Rank by the same W/L ordering as the weekly API; alphabetical order only
@@ -2211,10 +2255,10 @@ function renderPersonalLive(wr) {
   const L = me.live;
   const liveCount = me.picks.filter(p => p.state === "in" && !p.final).length;
   const comparing = me !== own;
-  const active = me.picks.filter(p => p.kind === "pick" && (comparing || !p.final)).sort((a,b) => Number(!!a.final)-Number(!!b.final));
+  const active = me.picks.filter(p => p.kind === "pick").sort((a,b) => Number(!!a.final)-Number(!!b.final));
   const cards = active.map(p => {
     const score = p.score;
-    const d = score ? {away:{name:score.away,score:score.away_score},home:{name:score.home,score:score.home_score},state:p.state} : null;
+    const d = score ? {away:{name:score.away,score:score.away_score},home:{name:score.home,score:score.home_score},state:p.state,stale:!!wr.stale} : null;
     const cached = p.game_key && wrGameCache[p.game_key]?.data;
     // Scoreboard progress is already in the existing poll. Player stats use the
     // same deduplicated game-detail cache as the expandable league cards.
@@ -2225,15 +2269,17 @@ function renderPersonalLive(wr) {
     const photoUrl = playerMatches.length === 1 ? playerMatches[0].headshot : null;
     const photo = typeof photoUrl === "string" && /^https:\/\/([a-z0-9-]+\.)*espncdn\.com\//i.test(photoUrl) ? `<img class="slip-player-photo" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(p.prop.player)}" loading="lazy" onerror="this.hidden=true">` : "";
     const expanded = state.wrExpanded === `${me.member_id}:${p.bet_type}`;
-    return `<article class="personal-live-card"><div class="slip-selection">${photo}${wrChip(p,{...me,personal:true})}</div><p class="quiet-copy">${escapeHtml(bookLabel(p.book))}${p.price != null ? " · " + americanOdds(p.price) : " · Odds unavailable"}</p>${scoreHtml}${track ? `<p class="quiet-copy">${escapeHtml(track)}</p>` : ""}${liveProgressBar(p,cached?.found ? cached : d)}${p.prop?.market && cached?.found ? `<p class="quiet-copy">Stats: ${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</p>` : ""}${expanded ? wrGamePanel(p) : ""}</article>`;
+    const progressData = p.prop?.market ? cached : d;
+    const result = liveResultPresentation(p,progressData);
+    return `<article class="personal-live-card result-${result.tone}">${liveResultBadge(result)}<div class="slip-selection">${photo}${wrChip(p,{...me,personal:true})}</div><p class="quiet-copy">${escapeHtml(bookLabel(p.book))}${p.price != null ? " · " + americanOdds(p.price) : " · Odds unavailable"}</p>${scoreHtml}${track ? `<p class="quiet-copy">${escapeHtml(track)}</p>` : ""}${liveProgressBar(p,progressData)}${p.prop?.market && cached?.found ? `<p class="quiet-copy">Stats: ${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</p>` : ""}${expanded ? wrGamePanel(p) : ""}</article>`;
   }).join("");
   const selector = `<div class="live-view-control"><label for="live-member">${comparing ? escapeHtml(me.name) + "’s card" : "My Card"}</label><select id="live-member" aria-label="Track a participant">${(wr.members || []).map(m => `<option value="${m.member_id}" ${m === me ? "selected" : ""}>${escapeHtml(m.name)}${isMe(m.name) ? " (You)" : ""}</option>`).join("")}</select></div>`;
   const comparison = comparing && own ? `<section class="comparison-anchor"><div class="compact-heading"><strong>Your card</strong><span>${own.live.fW || 0}–${own.live.fL || 0}${own.live.fP ? "–"+own.live.fP : ""} settled</span></div>${pickStatusChips(own.picks)}</section>` : "";
-  return `${comparison}<section class="compact-panel" id="live-card-summary">${selector}<div class="compact-heading"><div class="home-record">${L.fW || 0}–${L.fL || 0}${L.fP ? "–"+L.fP : ""}</div><span class="quiet-copy">${liveCount} live</span></div><p class="quiet-copy">Settled results</p>${pickStatusChips(me.picks)}</section><h3 class="font-headline-lg text-xl uppercase">${comparing ? escapeHtml(me.name) + "’s revealed picks" : "Your live picks"}</h3>${cards ? `<div class="personal-live-grid">${cards}</div>` : `<p class="quiet-copy" style="margin:12px 0 24px">${me.picks.some(p => p.kind === "hidden") ? "Your remaining picks appear as their games start." : "No picks still in play. Your results are below."}</p>`}`;
+  return `${comparison}<section class="compact-panel" id="live-card-summary">${selector}<div class="compact-heading"><div class="home-record">${L.fW || 0}–${L.fL || 0}${L.fP ? "–"+L.fP : ""}</div><span class="quiet-copy">${liveCount} live</span></div><p class="quiet-copy">Settled results</p>${pickStatusChips(me.picks)}</section><h3 class="font-headline-lg text-xl uppercase">${comparing ? escapeHtml(me.name) + "’s revealed picks" : "Your picks this week"}</h3>${cards ? `<p class="quiet-copy" style="margin:8px 0 12px">Live colors show recorded progress. WON / LOST are settled results.</p><div class="personal-live-grid">${cards}</div>` : `<p class="quiet-copy" style="margin:12px 0 24px">${me.picks.some(p => p.kind === "hidden") ? "Your remaining picks appear as their games start." : "No picks still in play. Your results are below."}</p>`}`;
 }
 function refreshPersonalLiveStats() {
   const me = state.warRoom?.members?.find(m => String(m.member_id) === String(state.wrMemberId)) || state.warRoom?.members?.find(m => isMe(m.name));
-  const keys = new Set((me?.picks || []).filter(p => p.kind === "pick" && (!p.final || String(me.member_id) === String(state.wrMemberId)) && p.prop?.market && p.game_key).map(p => p.game_key));
+  const keys = new Set((me?.picks || []).filter(p => p.kind === "pick" && p.prop?.market && p.game_key && (!p.final || !wrGameCache[p.game_key]?.data?.stats_final)).map(p => p.game_key));
   for (const key of keys) loadWrGame(key);
 }
 
@@ -4679,7 +4725,7 @@ function wrChip(p, ctx) {
   let mark = "";
   if (settled) {
     const g = p.status === "win" ? "✓" : p.status === "lose" ? "✗" : "P";
-    mark = `<span class="wr-mark ${p.status}">${g}</span>`;
+    mark = `<span class="live-result-badge result-${p.status}"><span aria-hidden="true">${g}</span>${{win:"WON",lose:"LOST",push:"PUSH"}[p.status]}</span>`;
   } else if (live) {
     mark = `<span class="wr-livepill"><span class="wr-livedot"></span>LIVE</span>`;
   }
@@ -4696,7 +4742,7 @@ function wrChip(p, ctx) {
     ? `<span class="wr-odds">${americanOdds(p.price)}</span>` : "";
   const inner = `${btEl}
       <span class="wr-pick">${escapeHtml(ctx?.personal ? p.pick_text : shortPickText(p.pick_text))}</span>
-      <span class="wr-sub">${ctx?.personal ? "" : oddsTag + escapeHtml(scoreTxt)}${mark}${chev}</span>`;
+      <span class="wr-sub">${ctx?.personal ? "" : oddsTag + escapeHtml(scoreTxt) + mark}${chev}</span>`;
   if (canExpand) {
     return `<button type="button" class="wr-chip ${stateCls} expandable" data-exp="${expId}" data-personal="${!!ctx?.personal}" data-key="${escapeHtml(p.game_key)}" aria-expanded="${isExp ? "true" : "false"}">${inner}</button>`;
   }
