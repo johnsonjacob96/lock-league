@@ -227,7 +227,7 @@ export async function run() {
         checks.refreshPreservesDraft=root.querySelector('#design-draft').value==='Unsaved custom prop' && card.open && root.querySelector('#mycard-progress').textContent==='2 of 5 selected';
         state.warRoom={season:2026,week:1,revealed:true,anyLive:true,members:[me],source_updated_at:new Date().toISOString()};
         root.innerHTML=renderWarRoom();
-        checks.personalCard=root.textContent.includes('Your live picks') && !root.textContent.includes('+2.00u') && root.textContent.includes('leaderboard');
+        checks.personalCard=root.textContent.includes('Your picks this week') && !root.textContent.includes('+2.00u') && root.textContent.includes('leaderboard');
         const longPick={bet_type:'Super Lock',kind:'pick',pick_text:'Jalen Hurts over 224.5 passing yards',game_key:'Dallas Cowboys@Philadelphia Eagles',status:'pending',state:'in',price:-110};
         checks.fullTitle=wrChip(longPick,{...me,personal:true}).includes(longPick.pick_text);
         state.warRoom.revealed=false;

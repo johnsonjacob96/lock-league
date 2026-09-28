@@ -50,6 +50,7 @@ jobs:
       - run: npm run smoke:render
       - run: node smoke/pick-confirmation.mjs
       - run: node smoke/game-saved-picks.mjs
+      - run: node smoke/live-results-ui.mjs
       - run: node smoke/tiebreaks-ui.mjs
       - run: node smoke/parlays-ui.mjs
       - run: npm run smoke:browser
