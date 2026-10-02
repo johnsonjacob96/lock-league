@@ -1,4 +1,4 @@
-import { providerFetch, sharedFeed } from "../_shared/feed-cache.js";
+import { providerFetch, sharedFeed, readSharedFeed } from "../_shared/feed-cache.js";
 // Lazy, per-game player props: use every SharpAPI event ID represented by the
 // current odds board (FD and DK can use different IDs). Never scan the whole
 // league merely to open one player's menu.
@@ -75,15 +75,21 @@ async function getJson(url, init, timeout, env = null) {
 // Event odds returns every current row without pagination, available on the
 // existing tier. One request per distinct event ID instead of 2–4 pages/game.
 // https://docs.sharpapi.io/en/api-reference/events-odds/
-async function fetchGameProps(env, request, away, home, week) {
+async function fetchGameProps(env, request, away, home, season, week) {
   const empty = { source: "unavailable", props: [], complete: false, ids: [], pages: 0 };
   if (!env.SHARPAPI_KEY) return {...empty, reason:"provider-unavailable"};
   const deadline = Date.now() + 3500;
-  let board;
-  try { board = await getJson(new URL("/api/odds", request.url), {}, 1200); }
-  catch { return {...empty, reason:"board-unavailable"}; }
-  const game = board.games?.find(g => sameTeam(g.away, away) && sameTeam(g.home, home));
-  const ids = [...new Set((game?.sharp_event_ids || []).map(String).filter(id => /^[A-Za-z0-9_-]+$/.test(id)))];
+  const eventIds = board => [...new Set((board?.games?.find(g => sameTeam(g.away,away) && sameTeam(g.home,home))?.sharp_event_ids || [])
+    .map(String).filter(id => /^[A-Za-z0-9_-]+$/.test(id)))];
+  // Only reuse event identity from this season/week, never the cached prices.
+  // The picker has already loaded the board; avoid an HTTP call back through
+  // Pages/Neon on every game that can time out before props are even requested.
+  let ids = [];
+  try { ids = eventIds(await readSharedFeed(env,`board-v4:${season}:${week}`,30*60*1000)); } catch {}
+  if (!ids.length) {
+    try { ids = eventIds(await getJson(new URL("/api/odds", request.url), {}, 1200)); }
+    catch { return {...empty, reason:"board-unavailable"}; }
+  }
   if (!ids.length) return {...empty, reason:"event-unavailable"};
   const raw = [];
   let pages = 0, complete = true, reason = null;
@@ -195,7 +201,7 @@ async function loadGame(context, key, away, home, season, week, previous = null)
   // The primary request includes touchdown scorers. Spend backup credits only
   // when that market is missing, and keep the complete menu latency bounded.
   const deadline = Date.now() + 3500;
-  const result = await fetchGameProps(env, request, away, home, week);
+  const result = await fetchGameProps(env, request, away, home, season, week);
   const stale = !result.complete || !result.props.length;
   const props = stale ? mergePartialProps(last || [], result.props) : result.props;
   const markets = menuForGame(props, away, home);

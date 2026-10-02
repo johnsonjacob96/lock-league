@@ -13,6 +13,9 @@ A refresh loader now receives the previous shared payload. Props can recover its
 Temporary failures use a 10-second server cache and a 20-second picker retry. The picker explains unavailable/delayed props and keeps manual refresh. Paid touchdown fallback only runs after a successful primary request confirms that market is missing, rather than spending credits during primary throttling.
 
 ## Validation
-194 backend tests; 344 logic/render checks; 424 Super Lock browser interactions at 375/390/844/1440px. Added coverage for a 960-row event response in one call, FD/DK event IDs, failed-book retention, rate-limit recovery, age/game/week bounds and full cold-isolate recovery through the shared database. Browser checks exercise delayed menus, empty responses and refresh recovery.
+195 backend tests; 344 logic/render checks; 424 Super Lock browser interactions at 375/390/844/1440px. Added coverage for a 960-row event response in one call, FD/DK event IDs, failed-book retention, rate-limit recovery, age/game/week bounds and full cold-isolate recovery through the shared database. Browser checks exercise delayed menus, empty responses and refresh recovery.
 
 Preview has no SharpAPI secret configured; live provider verification must occur after production deployment. The attempted local authenticated vendor diagnostic could not read that encrypted secret and returned 401; it is not evidence of a production key failure. No picks, grades, or notifications were modified.
+
+
+Production follow-up: the paced audit exposed a second path, `board-unavailable`, caused by the 1.2-second HTTP self-lookup. Props now read event IDs directly from a bounded shared board snapshot for the current season/week before falling back to HTTP. Only identity is reused; board quote freshness is unaffected. A database/browser-independent regression test proves the extra board HTTP request is skipped and expired/wrong-week snapshots are rejected.
