@@ -242,3 +242,39 @@ test("changed price, line, or book requires reconfirmation", () => {
   for (const change of [{ price: -115 }, { line: 45 }, { book: "draftkings" }])
     assert.equal(quoteChanged(quote, { ...quote, ...change }), true);
 });
+
+
+test('a cold refresh loader receives durable previous data for bounded last-good recovery',async()=>{
+ const previous={game_key:'Away@Home',markets:[{market:'anytime_td'}],fetched_at:'2026-10-02T12:00:00Z'};
+ await sharedFeed(env,'previous-props',60000,async()=>previous);
+ await db.exec("UPDATE feed_refresh SET expires_at='epoch' WHERE cache_key='previous-props'");
+ let received;
+ const result=await sharedFeed(env,'previous-props',60000,async old=>{received=old;return {...old,stale:true};});
+ assert.deepEqual(received,previous);assert.deepEqual(result.markets,previous.markets);assert.equal(result.fetched_at,previous.fetched_at);
+});
+
+test('props survive a cold-isolate rate limit without refreshing old prices or retention age',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-09-06T12:00:00Z')});
+ const away='New England Patriots',home='Seattle Seahawks',game_key=`${away}@${home}`,key=`props-v6:2026:1:${game_key}`;
+ const previous={game_key,away,home,season:2026,week:1,fetched_at:'2026-09-06T11:59:00Z',markets:[{market:'receptions',kind:'ou',players:[{player:'Cooper Kupp',line:3.5,fanduel:{line:3.5,over:-110,under:-110,updated:'2026-09-06T11:59:00Z'}}]}]};
+ await sharedFeed(env,key,60000,async()=>previous);
+ const oldCaches=globalThis.caches;
+ globalThis.caches={default:{match:async()=>null,put:async()=>{}}};
+ t.after(()=>{if(oldCaches===undefined)delete globalThis.caches;else globalThis.caches=oldCaches;});
+ t.mock.method(globalThis,'fetch',async input=>new URL(input).pathname==='/api/odds'
+  ? new Response(JSON.stringify({games:[{away,home,sharp_event_ids:['event']}]}))
+  : new Response('',{status:429}));
+ const request=async n=>{
+  await db.query("UPDATE feed_refresh SET expires_at='epoch' WHERE cache_key=$1",[key]);
+  const {onRequestGet}=await import(`../functions/api/props.js?cold=${n}`);
+  return (await onRequestGet({env:{...env,SHARPAPI_KEY:'test'},request:new Request(`https://example.test/api/props?game_key=${encodeURIComponent(game_key)}`),waitUntil(){}})).json();
+ };
+ const first=await request(1);
+ assert.equal(first.source,'stale');assert.equal(first.markets[0].players[0].fanduel.stale,true);
+ assert.equal(first.markets[0].players[0].fanduel.updated,'2026-09-06T11:59:00Z');
+ assert.equal(verifiedMarkets(first)[0].players[0].fanduel,null);
+ t.mock.timers.tick(20000);
+ const second=await request(2);assert.equal(second.retained_at,first.retained_at);assert.equal(second.markets.length,1);
+ t.mock.timers.tick(31*60000);
+ const expired=await request(3);assert.deepEqual(expired.markets,[]);
+});

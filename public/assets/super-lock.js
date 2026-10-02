@@ -5,6 +5,7 @@ const superLockState = {
   gameKey: "",
   markets: null,
   loading: false,
+  feedDelayed: false,
   draft: { market: "", player: "", side: "", book: "", line: null },
   editing: false,
   photoIndex: null,
@@ -441,7 +442,7 @@ function slBoardPickerHtml() {
 function slBrowsePropsHtml() {
   const markets = superLockState.markets || [];
   if (!markets.length)
-    return `<p class="sl-hint">No player props available right now. Try game lines or refresh.</p><button id="sl-retry" class="sl-link">Refresh props</button>`;
+    return `<p class="sl-hint">${superLockState.feedDelayed ? "Props temporarily unavailable. Retrying automatically…" : "No player props available right now. Try game lines or refresh."}</p><button id="sl-retry" class="sl-link">Refresh props</button>`;
   const selectedMarket = superLockState.draft.market.startsWith("__")
     ? ""
     : superLockState.draft.market;
@@ -498,7 +499,7 @@ function slBrowsePropsHtml() {
   );
   const m = markets.find((x) => x.market === superLockState.draft.market),
     pl = m?.players.find((x) => x.player === superLockState.draft.player);
-  return `<label class="sl-search-label" for="sl-search">Find a player</label><input id="sl-search" class="pick-input" type="search" value="${escapeHtml(superLockState.search)}" placeholder="Search player name">
+  return `${superLockState.feedDelayed ? '<p class="sl-hint" role="status">Updates delayed. Showing recent props; prices must be verified before locking.</p>' : ""}<label class="sl-search-label" for="sl-search">Find a player</label><input id="sl-search" class="pick-input" type="search" value="${escapeHtml(superLockState.search)}" placeholder="Search player name">
     <div class="sl-filters"><button data-slmarket="" aria-pressed="${!selectedMarket}">All props</button>${markets.map((m) => `<button data-slmarket="${escapeHtml(m.market)}" aria-pressed="${selectedMarket === m.market}">${escapeHtml(m.label)}</button>`).join("")}</div>
     <div class="sl-prop-list">${rows.join("")}</div><p id="sl-no-results" hidden>No players match your search.</p>
     ${m && pl && slPropSel(m, pl) ? `<div class="sl-confirm"><small>YOUR SUPER LOCK</small><strong>${escapeHtml(pl.player)} · ${escapeHtml(m.label)}</strong>${slLockBtnHtml(m, pl)}<small>Auto-graded after the game</small></div>` : ""}`;
@@ -815,7 +816,7 @@ async function loadPropMenu(gameKey) {
   clearTimeout(propRefreshTimer);
   superLockState.loading = true;
   refreshSuperLockEditor();
-  let markets = [];
+  let markets = [], delayed = true;
   try {
     const r = await fetch(
       `/api/props?game_key=${encodeURIComponent(gameKey)}`,
@@ -823,16 +824,18 @@ async function loadPropMenu(gameKey) {
     );
     const j = await r.json();
     markets = j && Array.isArray(j.markets) ? j.markets : [];
+    delayed = !r.ok || !!j.stale || j.source === "unavailable";
   } catch {
     markets = [];
   }
   if (superLockState.gameKey !== gameKey) return; // selection moved on; drop the stale response
   superLockState.markets = markets;
+  superLockState.feedDelayed = delayed;
   superLockState.loading = false;
   refreshSuperLockEditor();
   propRefreshTimer = setTimeout(() => {
     if (!document.hidden && superLockState.open && superLockState.tab === "props" && !superLockState.saving && state.view === "thisweek" && superLockState.gameKey === gameKey && document.getElementById("mycard-sl-msg") && Date.parse(slCurrentGame()?.kickoff) > Date.now()) loadPropMenu(gameKey);
-  }, 60000);
+  }, delayed ? 20000 : 60000);
 }
 // Client mirror of the server's canonical prop text (functions/_shared/props.js).
 function propTextClient(prop, m) {

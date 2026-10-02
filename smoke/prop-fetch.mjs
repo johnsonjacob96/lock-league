@@ -39,7 +39,7 @@ const row = (book = 'fanduel', player = 'Cooper Kupp', side = 'over', price = -1
 const board = ids => ({ games: [{ id: 'espn-or-first-id', sharp_event_ids: ids,
   away: AWAY, home: HOME, kickoff: '2026-09-10T00:20Z' }] });
 
-test('per-game request filters all FD/DK IDs, drops unrelated events and reuses cached menu', async t => {
+test('event requests cover both FD/DK IDs, drop unrelated events and reuse cached menu', async t => {
   const h = await setup(t), providerUrls = [];
   t.mock.method(globalThis, 'fetch', async (input, init) => {
     const url = new URL(input);
@@ -53,12 +53,11 @@ test('per-game request filters all FD/DK IDs, drops unrelated events and reuses 
   assert.equal(first.markets[0].players.length, 1);
   assert.ok(first.markets[0].players[0].fanduel);
   assert.ok(first.markets[0].players[0].draftkings);
-  assert.equal(providerUrls.length, 1);
-  assert.equal(providerUrls[0].searchParams.get('event_id'), 'fd-123,dk-456');
-  assert.equal(providerUrls[0].searchParams.get('market'), 'props,anytime_touchdown_scorer');
-  assert.equal(providerUrls[0].searchParams.get('limit'), '200');
+  assert.equal(providerUrls.length, 2);
+  assert.deepEqual(providerUrls.map(u=>u.pathname), ['/api/v1/events/fd-123/odds','/api/v1/events/dk-456/odds']);
+  assert.ok(providerUrls.every(u=>!u.search));
   await h.request();
-  assert.equal(providerUrls.length, 1);
+  assert.equal(providerUrls.length, 2);
   await h.drain();
 });
 
@@ -93,7 +92,7 @@ test('missing Sharp IDs returns explicit unavailable without a league-wide scan'
   await h.drain();
 });
 
-test('partial pagination preserves missing same-game players and books, without replacing last-good', async t => {
+test('partial event coverage preserves missing same-game players and books, without replacing last-good', async t => {
   const h = await setup(t);
   let phase = 0, pages = 0;
   t.mock.method(globalThis, 'fetch', async input => {
@@ -117,7 +116,7 @@ test('partial pagination preserves missing same-game players and books, without 
   assert.equal(h.writes.filter(key => key.includes('/last/')).length, lastWrites);
 });
 
-test('pagination cap is explicit and does not exhaust the league request budget', async t => {
+test('unexpected truncation is explicit without spending extra pagination requests', async t => {
   const h = await setup(t);
   let pages = 0;
   t.mock.method(globalThis, 'fetch', async input => {
@@ -126,7 +125,7 @@ test('pagination cap is explicit and does not exhaust the league request budget'
     return json({ data: [row()], pagination: { has_more: true, next_cursor: `cursor-${pages}` } });
   });
   const result = await (await h.request()).json();
-  assert.equal(pages, 4);
+  assert.equal(pages, 1);
   assert.equal(result.complete, false);
   assert.equal(result.stale, true);
   await h.drain();
@@ -212,12 +211,12 @@ test('native scorer market includes both books and skips the paid backup entirel
     const u=new URL(input);
     if(u.pathname==='/api/odds')return json(board(['fd-123','dk-456']));
     assert.equal(u.hostname,'api.sharpapi.io'); // no event discovery or paid odds calls
-    assert.equal(u.searchParams.get('market'),'props,anytime_touchdown_scorer');
+    assert.match(u.pathname,/^\/api\/v1\/events\/(fd-123|dk-456)\/odds$/);
     calls++;return json({data:[scorer(),scorer('draftkings','Rashid Shaheed',550),row()],pagination:{has_more:false}});
   });
   const response=await h.request(KEY,{...env,ODDS_API_KEY:'exhausted-test-key'});
   const menu=await response.json(),td=menu.markets.find(m=>m.market==='anytime_td');
-  assert.equal(calls,1);assert.equal(td.players[0].player,'Rashid Shaheed');
+  assert.equal(calls,2);assert.equal(td.players[0].player,'Rashid Shaheed');
   assert.equal(td.players[0].fanduel.yes,600);assert.equal(td.players[0].draftkings.yes,550);
   assert.equal(td.players[0].line,null);assert.ok(td.players[0].fanduel.updated);
   await h.drain();
@@ -236,4 +235,36 @@ test('named scorers map to Yes without admitting defenses, first/last TDs or 2+ 
   assert.equal(fallback[0].player,'Rashid Shaheed');assert.equal(fallback[0].fanduel.yes,600);
   const ou=normalizeSharpProps([{...valid,selection_type:'over',line:0.5,selection:'Over'}]);
   assert.equal(ou[0].market,'anytime_td');assert.equal(ou[0].fanduel.yes,600);
+});
+
+
+test('retained menus preserve original age and reject another game, week, or expired history', async()=>{
+ const {retainedProps}=await import('../functions/api/props.js');
+ const now=Date.parse('2026-09-06T12:00:00Z');
+ const previous={game_key:KEY,season:2026,week:1,fetched_at:new Date(now-60000).toISOString(),markets:[{market:'receptions',kind:'ou',players:[{player:'Cooper Kupp',fanduel:{line:3.5,over:-110,updated:'2026-09-06T11:59:00Z'}}]}]};
+ const read=p=>retainedProps(p,AWAY,HOME,2026,1,now);
+ assert.equal(read(previous).props[0].fanduel.updated,'2026-09-06T11:59:00Z');
+ assert.equal(read(previous).props[0].market,'receptions');
+ for(const patch of [{game_key:'Other@Game'},{week:2},{season:2027},{retained_at:new Date(now-31*60000).toISOString()},{retained_at:new Date(now+1000).toISOString()}]) assert.equal(read({...previous,...patch}).props.length,0);
+ assert.equal(read({...previous,retained_at:new Date(now-29*60000).toISOString()}).ts,now-29*60000);
+});
+test('one event response supports a large menu and both books without a page cap', async t=>{
+ const h=await setup(t);let calls=0;
+ t.mock.method(globalThis,'fetch',async input=>{
+  const u=new URL(input);if(u.pathname==='/api/odds')return json(board(['shared-event']));
+  calls++;return json({data:Array.from({length:240},(_,i)=>['fanduel','draftkings'].flatMap(b=>['over','under'].map(side=>({...row(b,`Player ${i}`,side),event_id:'shared-event'})))).flat()});
+ });
+ const j=await (await h.request()).json();assert.equal(calls,1);assert.equal(j.complete,true);assert.equal(j.markets[0].players.length,240);assert.ok(j.markets[0].players.every(p=>p.fanduel&&p.draftkings));await h.drain();
+});
+test('provider throttling is explicit, skips paid fallback and retries after short cache expiry', async t=>{
+ const h=await setup(t);let attempts=0;
+ t.mock.method(globalThis,'fetch',async input=>{
+  const u=new URL(input);if(u.pathname==='/api/odds')return json(board(['fd-123']));
+  assert.equal(u.hostname,'api.sharpapi.io');attempts++;
+  return attempts===1?new Response('',{status:429}):json({data:[scorer(),row()]});
+ });
+ const settings={...env,ODDS_API_KEY:'test'};
+ const failed=await (await h.request(KEY,settings)).json();assert.equal(failed.reason,'rate-limited');assert.deepEqual(failed.markets,[]);assert.equal(failed.retry_after,20);
+ await h.drain();h.advance(11000);
+ const recovered=await (await h.request(KEY,settings)).json();assert.equal(recovered.stale,false);assert.equal(attempts,2);await h.drain();
 });
