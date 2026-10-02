@@ -54,19 +54,41 @@ function renderParlays() {
  <div class="parlay-layout"><div>${visible.length?visible.map(renderParlaySlip).join(''):'<div class="compact-panel"><h2>No slip yet</h2><p class="quiet-copy">Upload the screenshot, review the legs, then assign each pick to its member.</p></div>'}</div>
  <aside class="compact-panel parlay-leaders"><h2>LEG LEADERBOARD</h2><p class="quiet-copy">Season ${parlayState.season} · ${parlayState.night==='All'?'Both nights':parlayState.night}</p><div class="parlay-rank-head"><span>Member</span><span>Hit–Miss</span><span>Hit rate</span></div>${leaderboard.map(m=>`<div class="parlay-rank"><span>${escapeHtml(m.name)}<small>${m.W+m.L} settled${m.open?` · ${m.open} open`:''}${m.P?` · ${m.P} push`:''}${m.V?` · ${m.V} void`:''}</small></span><b>${m.W}–${m.L}</b><b>${m.pct==null?'—':(m.pct*100).toFixed(0)+'%'}</b></div>`).join('')}<p class="quiet-copy">Hit rate excludes pushes and voids. Separate from league standings.</p></aside></div></section>`;
 }
+// Short market names for the slip card, so a leg reads on one line on a phone.
+// The full label stays in the leg's title/aria text.
+const PARLAY_SHORT={pass_yds:'Pass yds',pass_tds:'Pass TDs',pass_cmp:'Completions',pass_att:'Pass att',pass_int:'INTs',rush_yds:'Rush yds',rush_att:'Rush att',rush_tds:'Rush TDs',rec_yds:'Rec yds',receptions:'Rec',rec_tds:'Rec TDs',rush_rec_yds:'Rush+rec yds'};
+function parlayLegShort(l) {
+ if(l.market==='spread')return `${l.player} ${l.line>0?'+':''}${l.line}`;
+ if(l.market==='moneyline')return `${l.player} ML`;
+ if(l.market==='game_total')return `Game total ${l.side==='under'?'U':'O'} ${l.line}`;
+ if(l.market==='manual')return l.player;
+ if(l.market==='anytime_td')return `${l.player} · Anytime TD`;
+ return `${l.player} · ${l.side==='atleast'?`${l.line}+`:`${l.side==='under'?'U':'O'} ${l.line}`} ${PARLAY_SHORT[l.market]||PARLAY_MARKETS[l.market]||l.market}`;
+}
 function renderParlaySlip(s) {
  const d=parlayState.data,g=d.games[s.game_key],open=s.legs.filter(l=>!l.result).length,hit=s.legs.filter(l=>l.result==='W').length;
  const status=s.legs.some(l=>l.result==='L')?'Missed':open?'Open':hit?'Hit':'Voided / pushed';
  const editable=d.me.admin||s.created_by===d.me.id;
- const score=g&&g.state!=='pre'?`${g.away_score??'–'}–${g.home_score??'–'} · ${g.detail||g.state}`:g?.kickoff?new Date(g.kickoff).toLocaleString('en-US',{timeZone:'America/Chicago',weekday:'short',hour:'numeric',minute:'2-digit'})+' CT':'Awaiting game data';
- return `<article class="parlay-slip compact-panel"><div class="parlay-heading"><div><p class="quiet-copy">${escapeHtml(s.night)} · Week ${s.week}${s.odds!=null?' · '+americanOdds(s.odds):''}</p><h2>${escapeHtml(s.title)}</h2></div><span class="parlay-status ${status==='Hit'?'hit':status==='Missed'?'miss':''}">${status}</span></div><p class="quiet-copy">${escapeHtml(s.game_key.replace('@',' @ '))}<br>${escapeHtml(score)}</p>${g?.state==='in'&&!g.stats_available?'<p class="quiet-copy">Live player stats are temporarily unavailable.</p>':''}<p>${hit}/${s.legs.length} legs hit${open?` · ${open} open`:''}</p>
- ${s.legs.map((saved,i)=>{
- const live=g?.progress?.[s.id]?.[i],l={...saved,actual:live&&['player','market','side','line'].every(k=>live[k]===saved[k])?live.actual:saved.actual},member=d.members.find(m=>m.id===l.member_id);
- const photo=!['manual','game_total','spread','moneyline'].includes(l.market)?slPlayerPhoto(l.player):null;
- const label={W:'HIT',L:'MISS',P:'PUSH',V:'VOID'}[l.result]|| (g?.state==='in'?'LIVE':g?.state==='post'?'NEEDS RESULT':'PENDING');
- const target=l.side==='yes'?1:l.line,progress=l.actual!=null&&target>0?Math.max(0,Math.min(100,l.actual/target*100)):null;
- return `<div class="parlay-leg"><div class="parlay-leg-top">${photo?`<img src="${escapeHtml(photo)}" alt="" width="44" height="48" onerror="this.hidden=true">`:''}<div><small>${escapeHtml(member?.name||'Unassigned')}</small><strong>${escapeHtml(parlayLegLabel(l))}</strong></div><span class="parlay-status ${l.result==='W'?'hit':l.result==='L'?'miss':''}">${label}</span></div>${l.actual!=null&&['spread','moneyline'].includes(l.market)?`<small class="quiet-copy">Team margin ${l.actual>0?'+':''}${l.actual} · ${l.market==='moneyline'?'Moneyline':`Spread ${l.line>0?'+':''}${l.line}`}</small>`:l.actual!=null?`<div class="parlay-progress" role="progressbar" aria-label="${escapeHtml(l.player)} progress" aria-valuemin="0" aria-valuemax="${target||1}" aria-valuenow="${Math.max(0,Math.min(target||1,l.actual))}"><span style="width:${progress??0}%"></span></div><small class="quiet-copy">${l.actual} ${escapeHtml(PARLAY_MARKETS[l.market]||'')} · Target ${target??'—'}${l.side==='under'?' (under)':''}</small>`:''}${editable?`<details><summary>Correct result</summary><label>Result<select data-parlay-grade="${s.id}" data-leg="${i}" data-version="${s.version}">${parlayOptions({'':'Automatic / pending',W:'Hit',L:'Miss',P:'Push',V:'Void'},l.manual?l.result:'')}</select></label></details>`:''}</div>`;
- }).join('')}<div class="parlay-actions">${s.has_image?`<a class="text-action" href="/api/parlays?image=${s.id}" target="_blank" rel="noopener">View original slip ↗</a>`:''}${editable?`<button class="text-action" data-parlay-edit="${s.id}">Edit / assign legs</button>`:''}</div></article>`;
+ const [away,home]=s.game_key.split('@'),abbr=t=>typeof teamShort==='function'?teamShort(t):t;
+ const score=g&&g.state!=='pre'?`${abbr(away)} ${g.away_score??'–'} – ${g.home_score??'–'} ${abbr(home)} · ${g.detail||g.state}`:`${abbr(away)} @ ${abbr(home)} · ${g?.kickoff?new Date(g.kickoff).toLocaleString('en-US',{timeZone:'America/Chicago',weekday:'short',hour:'numeric',minute:'2-digit'})+' CT':'Awaiting game data'}`;
+ const legs=s.legs.map((saved,i)=>{
+  const live=g?.progress?.[s.id]?.[i];
+  return {...saved,actual:live&&['player','market','side','line'].every(k=>live[k]===saved[k])?live.actual:saved.actual};
+ });
+ const rows=legs.map(l=>{
+  const member=d.members.find(m=>m.id===l.member_id);
+  const team=['spread','moneyline'].includes(l.market);
+  const photo=!['manual','game_total','spread','moneyline'].includes(l.market)?slPlayerPhoto(l.player):null;
+  const mark=photo?`<img src="${escapeHtml(photo)}" alt="" width="32" height="32" onerror="this.hidden=true">`:team&&typeof teamLogoMark==='function'?teamLogoMark(l.player,'parlay-leg-logo',''):'';
+  const label={W:'HIT',L:'MISS',P:'PUSH',V:'VOID'}[l.result]||(g?.state==='in'?'LIVE':g?.state==='post'?'CHECK':'PENDING');
+  const target=l.side==='yes'?1:l.line,progress=!team&&l.actual!=null&&target>0?Math.max(0,Math.min(100,l.actual/target*100)):null;
+  const now=l.actual==null?'':team?`margin ${l.actual>0?'+':''}${l.actual}`:`${l.actual} / ${target??'—'}${l.side==='under'?' (U)':''}`;
+  return `<div class="parlay-leg" title="${escapeHtml(parlayLegLabel(l))}"><span class="parlay-leg-mark">${mark}</span><div class="parlay-leg-main"><strong>${escapeHtml(parlayLegShort(l))}</strong><small>${escapeHtml(member?.name||'Unassigned')}${now?` · ${escapeHtml(now)}`:''}</small>${progress!=null?`<div class="parlay-progress" role="progressbar" aria-label="${escapeHtml(l.player)} progress" aria-valuemin="0" aria-valuemax="${target||1}" aria-valuenow="${Math.max(0,Math.min(target||1,l.actual))}"><span style="width:${progress}%"></span></div>`:''}</div><span class="parlay-status ${l.result==='W'?'hit':l.result==='L'?'miss':''}">${label}</span></div>`;
+ }).join('');
+ // One correction panel per slip instead of a toggle under every leg.
+ const corrections=editable?`<details class="parlay-correct"><summary>Correct a result</summary>${legs.map((l,i)=>`<label><span>${i+1}. ${escapeHtml(parlayLegShort(l))}</span><select data-parlay-grade="${s.id}" data-leg="${i}" data-version="${s.version}" aria-label="Result for leg ${i+1}">${parlayOptions({'':'Auto',W:'Hit',L:'Miss',P:'Push',V:'Void'},l.manual?l.result:'')}</select></label>`).join('')}<p class="parlay-slip-meta">Auto grades from the box score at the final.</p></details>`:'';
+ return `<article class="parlay-slip compact-panel"><div class="parlay-slip-head"><div><p class="parlay-slip-meta">${escapeHtml(s.night)} · Week ${s.week}${s.odds!=null?' · '+americanOdds(s.odds):''}</p><h2>${escapeHtml(s.title)}</h2></div><span class="parlay-status ${status==='Hit'?'hit':status==='Missed'?'miss':''}">${status}</span></div><p class="parlay-slip-meta">${escapeHtml(score)} · ${hit}/${s.legs.length} hit${open?` · ${open} open`:''}</p>${g?.state==='in'&&!g.stats_available?'<p class="parlay-slip-meta">Live player stats are temporarily unavailable.</p>':''}
+ <div class="parlay-legs">${rows}</div>${corrections}<div class="parlay-actions">${s.has_image?`<a class="text-action" href="/api/parlays?image=${s.id}" target="_blank" rel="noopener">View original slip ↗</a>`:''}${editable?`<button class="text-action" data-parlay-edit="${s.id}">Edit / assign legs</button>`:''}</div></article>`;
 }
 function renderParlayEvidence(s) {
  if(!s.image)return '';
