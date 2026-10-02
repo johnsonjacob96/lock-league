@@ -16,7 +16,7 @@ mock.module("../functions/_shared/db.js", {
           .then((r) => r.rows),
   },
 });
-const { sharedFeed, providerFetch } = await import(
+const { sharedFeed, providerFetch, readSharedFeed } = await import(
   "../functions/_shared/feed-cache.js"
 );
 const { freshQuote, verifiedGames, verifiedMarkets, quoteChanged } =
@@ -277,4 +277,28 @@ test('props survive a cold-isolate rate limit without refreshing old prices or r
  const second=await request(2);assert.equal(second.retained_at,first.retained_at);assert.equal(second.markets.length,1);
  t.mock.timers.tick(31*60000);
  const expired=await request(3);assert.deepEqual(expired.markets,[]);
+});
+
+
+test('bounded shared snapshots expire and prop discovery avoids the board HTTP hop',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-09-06T12:00:00Z')});
+ const game_key='Dallas Cowboys@Philadelphia Eagles',key='board-v4:2026:1';
+ const board={games:[{away:'Dallas Cowboys',home:'Philadelphia Eagles',sharp_event_ids:['shared-event']}]};
+ await sharedFeed(env,key,30000,async()=>board);
+ assert.deepEqual(await readSharedFeed(env,key,1800000),board);
+ assert.equal(await readSharedFeed(env,'board-v4:2026:2',1800000),null);
+ await db.exec("UPDATE feed_refresh SET expires_at=NOW()-INTERVAL '31 minutes' WHERE cache_key='board-v4:2026:1'");
+ assert.equal(await readSharedFeed(env,key,1800000),null);
+ await db.exec("UPDATE feed_refresh SET expires_at=NOW()-INTERVAL '5 minutes' WHERE cache_key='board-v4:2026:1'");
+ const oldCaches=globalThis.caches;globalThis.caches={default:{match:async()=>null,put:async()=>{}}};
+ t.after(()=>{if(oldCaches===undefined)delete globalThis.caches;else globalThis.caches=oldCaches;});
+ await db.exec("UPDATE feed_budget SET requests='{}',blocked_until='epoch' WHERE provider='sharp'");
+ let calls=0;
+ t.mock.method(globalThis,'fetch',async input=>{
+  assert.equal(new URL(input).pathname,'/api/v1/events/shared-event/odds');calls++;
+  return new Response(JSON.stringify({data:[]}));
+ });
+ const {onRequestGet}=await import('../functions/api/props.js?shared-board=1');
+ const result=await (await onRequestGet({env:{...env,SHARPAPI_KEY:'test'},request:new Request('https://example.test/api/props?game_key='+encodeURIComponent(game_key)),waitUntil(){}})).json();
+ assert.equal(calls,1);assert.equal(result.complete,true);assert.deepEqual(result.sharp_event_ids,['shared-event']);
 });

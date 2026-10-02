@@ -16,6 +16,16 @@ async function ensure(env) {
     });
   await ready;
 }
+// Read a bounded shared snapshot without refreshing its provider. Callers that
+// use stale snapshots must not present their quotes as fresh.
+export async function readSharedFeed(env, key, maxStaleMs = 0) {
+  if (!env?.DATABASE_URL) return null;
+  await ensure(env);
+  const db = sql(env);
+  const rows = await db`SELECT payload FROM feed_refresh WHERE cache_key=${key}
+    AND expires_at > NOW()-(${maxStaleMs} * INTERVAL '1 millisecond')`;
+  return rows[0]?.payload || null;
+}
 export async function sharedFeed(env, key, ttlMs, load) {
   if (!env?.DATABASE_URL) return load();
   await ensure(env);
