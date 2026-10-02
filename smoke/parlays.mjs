@@ -282,6 +282,30 @@ test('spread grading uses selected team margin, both signs, final status and pus
  assert.equal(legProgress({...leg,manual:true,result:'V'},null,true,game).result,'V');
 });
 
+test('team moneylines resolve the way each book prints the team and carry no line',()=>{
+ const ml={player:'CLE Browns',market:'moneyline',side:'moneyline',line:null};
+ const input={...body,game_key:'Cleveland Browns@Baltimore Ravens',legs:[ml]};
+ // DraftKings prefixes the abbreviation, FanDuel spells the team out.
+ for(const player of ['CLE Browns','Cleveland Browns','Browns','CLE'])assert.deepEqual(validateSlip({...input,legs:[{...ml,player}]},[1,2,3]).legs[0],{player:'Cleveland Browns',market:'moneyline',side:'moneyline',line:null,member_id:null,result:null});
+ // A stray number (the leg's odds) is dropped, never stored as a line.
+ assert.equal(validateSlip({...input,legs:[{...ml,line:150}]},[1,2,3]).legs[0].line,null);
+ for(const bad of [{player:'KC Chiefs'},{side:'spread'},{side:'over'},{market:'spread'},{market:'receptions'}])assert.throws(()=>validateSlip({...input,legs:[{...ml,...bad}]},[1,2,3]));
+ // The abbreviation also fixes DraftKings-style spreads for teams whose
+ // abbreviation is not their city's initials.
+ assert.equal(validateSlip({...input,legs:[{player:'BAL Ravens',market:'spread',side:'spread',line:-6.5}]},[1,2,3]).legs[0].player,'Baltimore Ravens');
+});
+test('moneyline grading: outright win, loss, tie push, and nothing before the final',()=>{
+ const game={away:'Cleveland Browns',home:'Baltimore Ravens',away_score:20,home_score:17,state:'post'};
+ const leg={player:'Cleveland Browns',market:'moneyline',side:'moneyline',line:null};
+ assert.deepEqual(legProgress(leg,null,true,game),{actual:3,result:'W'});
+ assert.deepEqual(legProgress({...leg,player:game.home},null,true,game),{actual:-3,result:'L'});
+ assert.equal(legProgress(leg,null,true,{...game,home_score:20}).result,'P');
+ assert.deepEqual(legProgress(leg,null,false,{...game,state:'in'}),{actual:3,result:null});
+ assert.equal(legProgress(leg,null,true,{...game,state:'pre'}).result,null);
+ assert.equal(legProgress({...leg,player:'Kansas City Chiefs'},null,true,game).result,null);
+ assert.equal(client.parlayLegLabel(leg),'Cleveland Browns · Moneyline');
+});
+
 test('draft schedule accepts earlier weeks and completed games, validates input, and reports outages',async()=>{
  const oldEvents=events,oldUser=user;
  try {

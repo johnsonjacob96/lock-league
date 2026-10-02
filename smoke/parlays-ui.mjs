@@ -100,6 +100,20 @@ try {
   await page.waitForSelector('#parlay-new');
   const total=await page.evaluate(()=>parlayWrites.at(-1).legs[0]);
   assert.equal(total.market,'game_total');assert.equal(total.side,'under');assert.equal(total.line,54.5);
+  // A team moneyline: pick the team, no threshold to fill in.
+  await page.locator('#parlay-new').click();
+  await page.locator('#parlay-add').click();
+  await page.locator('[data-field="line"]').fill('12.5');
+  await page.locator('[data-field="market"]').selectOption('moneyline');
+  assert.deepEqual(await page.locator('[data-field="side"] option').allTextContents(),['To win']);
+  assert.equal(await page.locator('[data-field="line"]').isDisabled(),true);
+  assert.equal(await page.locator('[data-field="line"]').inputValue(),'','a threshold left from another market is cleared');
+  await page.locator('[data-field="player"]').fill('KC Chiefs');
+  await page.locator('[name="game_key"]').selectOption('Denver Broncos@Kansas City Chiefs');
+  await page.locator('#parlay-form button[type=submit]').click();
+  await page.waitForSelector('#parlay-new');
+  const moneyline=await page.evaluate(()=>parlayWrites.at(-1).legs[0]);
+  assert.deepEqual([moneyline.player,moneyline.market,moneyline.side,moneyline.line],['KC Chiefs','moneyline','moneyline',null]);
   await page.locator('#parlay-new').click();
   const capture=JSON.parse(readFileSync(new URL('./assets/parlay-images/ocr.json',import.meta.url)))[0];
   const actualImage='data:image/jpeg;base64,'+readFileSync(new URL('./assets/parlay-images/draftkings-eight.jpg',import.meta.url)).toString('base64');

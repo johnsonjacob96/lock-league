@@ -1,4 +1,5 @@
 import { retainSchedule } from "./odds-schedule.js";
+import { NFL_TEAMS } from "./nfl-teams.js";
 import { providerFetch, sharedFeed } from "./feed-cache.js";
 // Provider adapters: request/normalization semantics are independent of cache policy.
 import {
@@ -206,40 +207,6 @@ async function fetchEspn(env) {
 // `selection` string, e.g. "Over 44.5"), so parsing is deliberately defensive
 // and team names are canonicalized to match the ESPN / Odds-API convention.
 // Hit /api/odds?debug=sharp (with SHARPAPI_KEY set) to inspect a raw sample.
-const NFL_TEAMS = [
-  ["ARI", "Arizona Cardinals"],
-  ["ATL", "Atlanta Falcons"],
-  ["BAL", "Baltimore Ravens"],
-  ["BUF", "Buffalo Bills"],
-  ["CAR", "Carolina Panthers"],
-  ["CHI", "Chicago Bears"],
-  ["CIN", "Cincinnati Bengals"],
-  ["CLE", "Cleveland Browns"],
-  ["DAL", "Dallas Cowboys"],
-  ["DEN", "Denver Broncos"],
-  ["DET", "Detroit Lions"],
-  ["GB", "Green Bay Packers"],
-  ["HOU", "Houston Texans"],
-  ["IND", "Indianapolis Colts"],
-  ["JAX", "Jacksonville Jaguars"],
-  ["KC", "Kansas City Chiefs"],
-  ["LV", "Las Vegas Raiders"],
-  ["LAC", "Los Angeles Chargers"],
-  ["LAR", "Los Angeles Rams"],
-  ["MIA", "Miami Dolphins"],
-  ["MIN", "Minnesota Vikings"],
-  ["NE", "New England Patriots"],
-  ["NO", "New Orleans Saints"],
-  ["NYG", "New York Giants"],
-  ["NYJ", "New York Jets"],
-  ["PHI", "Philadelphia Eagles"],
-  ["PIT", "Pittsburgh Steelers"],
-  ["SF", "San Francisco 49ers"],
-  ["SEA", "Seattle Seahawks"],
-  ["TB", "Tampa Bay Buccaneers"],
-  ["TEN", "Tennessee Titans"],
-  ["WAS", "Washington Commanders"],
-];
 const _normName = (s) =>
   String(s || "")
     .replace(/[^a-z0-9]/gi, "")

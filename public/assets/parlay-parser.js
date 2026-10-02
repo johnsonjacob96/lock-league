@@ -4,6 +4,7 @@ function parlayMarket(text) {
  const t=String(text).toLowerCase().replace(/[_–—]/g,' ');
  if(/\b(first|last|longest|shortest|quarter|half|1st|2nd|3rd|4th)\b/.test(t))return 'manual';
  if(/^(?:game )?total points$/.test(t.trim()))return 'game_total';
+ if(/\bmoney\s*line\b/.test(t))return 'moneyline';
  if(/any\s*time.*(?:touchdown|td)|touchdown scorer|to score (?:a |an? )?touchdown/.test(t))return 'anytime_td';
  if(/rush.*rec.*(?:yds|yards)/.test(t))return 'rush_rec_yds';
  if(/rush/.test(t))return /yds|yards/.test(t)?'rush_yds':/attempt|carr/.test(t)?'rush_att':/td|touchdown/.test(t)?'rush_tds':'manual';
