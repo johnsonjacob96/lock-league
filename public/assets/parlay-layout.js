@@ -33,6 +33,9 @@ function parlayLayoutMarket(text) {
  const s=parlayLayoutText(text);
  if(/^(?:game )?total(?: points)?$/i.test(s))return 'game_total';
  if(/^(?:point )?spread$/i.test(s))return 'spread';
+ // Both books label the bet "Moneyline", sometimes behind the team name
+ // ("CLEVELAND BROWNS - MONEYLINE"). Period moneylines stay manual above.
+ if(/\bmoney\s*line$/i.test(s)&&parlayMarket(s)!=='manual')return 'moneyline';
  return parlayMarket(s);
 }
 function parlayLayoutSelection(text) {
@@ -48,7 +51,7 @@ function parlayLayoutSelection(text) {
 function parlayLayoutDescriptor(text) {
  if(parlayLayoutMeta(text)||parlayLayoutSummary(text))return null;
  const market=parlayLayoutMarket(text);
- const marker=/\b(?:any\s*time|first|last|longest|shortest|quarter|half|total|alt(?:ernate)?|passing|rushing|receiving|receptions?|completions?|interceptions?|spread|moneyline)\b/i;
+ const marker=/\b(?:any\s*time|first|last|longest|shortest|quarter|half|total|alt(?:ernate)?|passing|rushing|receiving|receptions?|completions?|interceptions?|spread|money\s*line)\b/i;
  const found=marker.exec(text);
  if(!found)return null;
  const prefix=text.slice(0,found.index).replace(/\s*[-:|]\s*$/,'').trim();
@@ -66,11 +69,21 @@ function parlayLayoutPass(rawLines,pass) {
   let player=selection?.player||desc.player||parlayLayoutName(title?.text||'');
   const review=[];
   if(desc.player&&selection?.player){const pairing=parlaySubtitleMatch(desc.player,selection.player);if(!pairing.match||pairing.review)review.push('The name and market subtitle disagree. Check this selection.');}
-  const market=desc.market,side=market==='anytime_td'?'yes':selection?.side||'',value=market==='anytime_td'?null:selection?.line??null;
+  const market=desc.market;
+  // A moneyline row carries the team and, on DraftKings, the leg's price
+  // ("CLE Browns +150"). That price is not a spread: keep the team, drop the number.
+  const noLine=['anytime_td','moneyline'].includes(market);
+  // FanDuel repeats the team in an upper-case subtitle; show the title's
+  // spelling, and flag a subtitle that names a different team.
+  if(market==='moneyline'&&!selection&&title){
+   const titled=parlayLayoutName(title.text);
+   if(titled){if(desc.player&&!parlaySubtitleMatch(titled,desc.player).match)review.push('The team and market subtitle disagree. Check this selection.');player=titled;}
+  }
+  const side=market==='anytime_td'?'yes':market==='moneyline'?'moneyline':selection?.side||'',value=noLine?null:selection?.line??null;
   if(market==='game_total')player='Game total';
   if(!player)review.push('Subject was not read clearly.');
   if(!market)review.push('Market needs review.');
-  if(market!=='anytime_td'&&(!side||value==null))review.push('Selection was not read clearly.');
+  if(!noLine&&(!side||value==null))review.push('Selection was not read clearly.');
   if(market==='spread'&&side!=='spread'||market==='game_total'&&!['over','under'].includes(side))review.push('Direction does not match the market.');
   // Word confidence excludes neighboring jersey art and a low-confidence logo
   // cannot erase an otherwise clearly read number.
@@ -91,7 +104,7 @@ function parlayLayoutPass(rawLines,pass) {
   const title=titles[0];
   if(title)used.add(title.original);
   let following=null;
-  if(desc.market!=='anytime_td'&&!parlayLayoutSelection(title?.line.text||'')) {
+  if(!['anytime_td','moneyline'].includes(desc.market)&&!parlayLayoutSelection(title?.line.text||'')) {
    const subject=desc.player||parlayLayoutName(title?.line.text||'');
    following=lines.find(l=>{const selected=parlayLayoutSelection(l.text);return !used.has(l)&&l.bbox.y0>=anchor.bbox.y1&&l.bbox.y0-anchor.bbox.y1<anchor.height*3.5&&aligned(l,anchor)&&selected&&(!selected.player||parlayNameKey(selected.player)===parlayNameKey(subject))&&!parlayLayoutMeta(l.text)&&!parlayLayoutSummary(l.text);});
   }
@@ -122,7 +135,7 @@ function parseParlayLayout(passes,width,height) {
    if(values.size>1){best.review.push(`The image readings disagree on ${key}. Check the screenshot.`);if(key==='line')best.line=null;}
   }
   const corroborated=group.some(c=>c!==group[0]&&c.line===best.line&&c.side===best.side&&c.numericConfidence>=65);
-  if(best.numericConfidence<65&&!corroborated&&best.market!=='anytime_td'){best.line=null;best.review.push('The threshold needs review.');}
+  if(best.numericConfidence<65&&!corroborated&&!['anytime_td','moneyline'].includes(best.market)){best.line=null;best.review.push('The threshold needs review.');}
   if(best.confidence<65)best.review.push('Text needs review against the screenshot.');
   delete best.anchor;delete best.pass;delete best.confidence;delete best.numericConfidence;
   best.source_box={x:best.source_box.x0/width,y:best.source_box.y0/height,width:(best.source_box.x1-best.source_box.x0)/width,height:(best.source_box.y1-best.source_box.y0)/height};

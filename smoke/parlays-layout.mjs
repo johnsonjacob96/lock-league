@@ -33,6 +33,19 @@ test('missing subtitle preserves an unresolved selection and a missing printed l
  const doc=read([line('4 selections Parlay',20),line('Josh Allen Over 30.5',200),line('JOSH ALLEN - RUSHING YARDS',245),line('Sam LaPorta Over 4.5',320),line('Jahmyr Gibbs 30+',450),line('JAHMYR GIBBS - RECEIVING YARDS',495)]);
  assert.equal(doc.legs.length,3);assert.equal(doc.legs[1].market,'');assert.equal(doc.count_review,true);assert.equal(doc.declared_count,4);
 });
+test('a moneyline leg keeps its team and is not read as a spread of its price',()=>{
+ // DraftKings: team plus the leg's price on the title row, "Moneyline" beneath.
+ const dk=read([line('CLE Browns +150',200),line('Moneyline',245),line('LA Rams -6.5',350),line('Spread',395)]);
+ assert.deepEqual(dk.legs.map(l=>[l.player,l.market,l.side,l.line,l.review]),[['CLE Browns','moneyline','moneyline',null,[]],['LA Rams','spread','spread',-6.5,[]]]);
+ // FanDuel: full team name, subtitle repeats it before the market.
+ const fd=read([line('Cleveland Browns',200),line('CLEVELAND BROWNS - MONEYLINE',245)]);
+ assert.deepEqual(fd.legs.map(l=>[l.player,l.market,l.side,l.line,l.review]),[['Cleveland Browns','moneyline','moneyline',null,[]]]);
+ const crossed=read([line('Cleveland Browns',200),line('BALTIMORE RAVENS - MONEYLINE',245)]);
+ assert.match(crossed.legs[0].review.join(' '),/disagree/);
+ // A period moneyline can't be graded off the final score: it stays for review.
+ const half=read([line('Cleveland Browns',200),line('1st Half Moneyline',245)]);
+ assert.notEqual(half.legs[0].market,'moneyline');assert.ok(half.legs[0].review.length);
+});
 test('a cross-pass numeric disagreement requires correction',()=>{
  const rows=[line('Josh Allen Over 30.5',200),line('JOSH ALLEN - RUSHING YARDS',245)];
  const altered=[line('Josh Allen Over 80.5',200),line('JOSH ALLEN - RUSHING YARDS',245)];
