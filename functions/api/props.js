@@ -10,11 +10,11 @@ import { fetchAnytimeTdMarket } from "../_shared/oddsapi-props.js";
 
 const TTL_MS = 60 * 1000;
 const LASTGOOD_TTL_S = 30 * 60;
-const RETRY_MS = 60 * 1000;
+const RETRY_MS = 10 * 1000;
 const cache = new Map();
 const inFlight = new Map();
 const atdInFlight = new Map();
-const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v6/${kind}/${encodeURIComponent(key)}`);
+const propKey = (key, kind) => new Request(`https://lock-league.internal/cache/props-v7/${kind}/${encodeURIComponent(key)}`);
 
 // Optional Anytime-TD backup from The Odds API costs 1 credit per game; cache it
 // per game with a global daily credit budget. Last-good stays visible during
@@ -72,48 +72,61 @@ async function getJson(url, init, timeout, env = null) {
   } finally { clearTimeout(timer); }
 }
 
-// One overall budget covers board discovery and all pages. A partial response
-// is explicit, so it can retain missing last-good markets without pretending
-// the provider removed them. No independent global-week scan is ever needed.
+// Event odds returns every current row without pagination, available on the
+// existing tier. One request per distinct event ID instead of 2–4 pages/game.
+// https://docs.sharpapi.io/en/api-reference/events-odds/
 async function fetchGameProps(env, request, away, home, week) {
   const empty = { source: "unavailable", props: [], complete: false, ids: [], pages: 0 };
-  if (!env.SHARPAPI_KEY) return empty;
+  if (!env.SHARPAPI_KEY) return {...empty, reason:"provider-unavailable"};
   const deadline = Date.now() + 3500;
   let board;
   try { board = await getJson(new URL("/api/odds", request.url), {}, 1200); }
-  catch { return empty; }
+  catch { return {...empty, reason:"board-unavailable"}; }
   const game = board.games?.find(g => sameTeam(g.away, away) && sameTeam(g.home, home));
   const ids = [...new Set((game?.sharp_event_ids || []).map(String).filter(id => /^[A-Za-z0-9_-]+$/.test(id)))];
-  if (!ids.length) return empty; // ESPN event IDs are not SharpAPI IDs
+  if (!ids.length) return {...empty, reason:"event-unavailable"};
   const raw = [];
-  let cursor = null, complete = false, pages = 0;
-  for (let page = 0; page < 4; page++) {
+  let pages = 0, complete = true, reason = null;
+  for (const id of ids.slice(0,4)) {
     const remaining = deadline - Date.now();
-    if (remaining <= 0) break;
-    const url = new URL("https://api.sharpapi.io/api/v1/odds");
-    for (const [key, value] of Object.entries({ league: "nfl", sportsbook: "fanduel,draftkings",
-      market: [...new Set((env.SHARP_PROP_MARKET || "props").split(",").concat("anytime_touchdown_scorer"))].join(","), event_id: ids.join(","), limit: "200", ...(cursor ? { cursor } : {}) })) {
-      url.searchParams.set(key, value);
-    }
+    if (remaining <= 0) { complete = false; reason = "provider-unavailable"; break; }
     try {
+      const url = `https://api.sharpapi.io/api/v1/events/${encodeURIComponent(id)}/odds`;
       const data = await getJson(url, { headers: { "X-API-Key": env.SHARPAPI_KEY } }, remaining, env);
       pages++;
-      const rows = Array.isArray(data) ? data : (data.data ?? data.odds ?? data.results ?? []);
-      if (!Array.isArray(rows)) break;
-      // Reject unrelated rows even if a vendor ignores its filter.
-      raw.push(...rows.filter(row => ids.includes(String(row.event_id))));
-      if (!data.pagination?.has_more) { complete = true; break; }
-      if (!data.pagination.next_cursor || data.pagination.next_cursor === cursor) break;
-      cursor = data.pagination.next_cursor;
-    } catch { break; }
+      const rows = Array.isArray(data) ? data : data.data;
+      if (!Array.isArray(rows)) throw Error("invalid-event-response");
+      // The endpoint is unfiltered: normalization admits only supported props
+      // and FD/DK; validate event, matchup and week independently as well.
+      raw.push(...rows.filter(row => String(row.event_id) === id));
+      if (data.pagination?.has_more) { complete = false; reason = "provider-incomplete"; }
+    } catch (e) {
+      complete = false;
+      reason = /feed-budget-wait|HTTP 429/.test(String(e?.message)) ? "rate-limited" : "provider-unavailable";
+      if (reason === "rate-limited") break;
+    }
   }
+  if (pages < ids.length) complete = false;
   const window = weekWindow(week, env), from = Date.parse(window.from), to = Date.parse(window.to);
-  const props = normalizeSharpProps(raw).filter(p => {
+  const props = normalizeSharpProps(raw.filter(row =>
+    sameTeam(row.away_team ?? row.away?.name ?? row.away, away) &&
+    sameTeam(row.home_team ?? row.home?.name ?? row.home, home)
+  )).filter(p => {
     const t = Date.parse(p.kickoff);
-    return (!Number.isFinite(t) || (t >= from && t < to)) &&
-      sameTeam(p.away, away) && sameTeam(p.home, home);
+    return !Number.isFinite(t) || (t >= from && t < to);
   });
-  return { source: props.length ? "sharpapi" : "unavailable", props, complete, ids, pages };
+  return { source: props.length ? "sharpapi" : "unavailable", props, complete, ids, pages, reason };
+}
+
+// The shared database cache survives cold isolates and region changes, unlike
+// local memory/edge caches. Keep its original retention clock on failed retries.
+export function retainedProps(previous, away, home, season, week, now = Date.now()) {
+  const ts = Date.parse(previous?.retained_at || previous?.fetched_at);
+  if (previous?.game_key !== `${away}@${home}` || previous?.season !== season || previous?.week !== week ||
+      !Number.isFinite(ts) || now < ts || now-ts >= LASTGOOD_TTL_S*1000) return {props:[],ts:null};
+  return {ts,props:(previous.markets || []).flatMap(m => (m.players || []).map(p => ({
+    ...p,market:m.market,label:m.label,unit:m.unit,kind:m.kind,away,home,
+  })))};
 }
 
 // Retain omitted players/books/alternates only through an incomplete provider
@@ -162,7 +175,7 @@ async function bounded(promise, timeout) {
   finally { clearTimeout(timer); }
 }
 
-async function loadGame(context, key, away, home, season, week) {
+async function loadGame(context, key, away, home, season, week, previous = null) {
   const { request, env } = context;
   const waitUntil = context.waitUntil ? context.waitUntil.bind(context) : () => {};
   const edge = caches.default;
@@ -174,7 +187,11 @@ async function loadGame(context, key, away, home, season, week) {
     return stored.data;
   }
   const old = await edgeRead(edge, propKey(key, "last"));
-  const last = old?.key === key && Date.now() - old.ts < LASTGOOD_TTL_S * 1000 ? old.props : [];
+  const shared = retainedProps(previous,away,home,season,week);
+  const edgeLast = old?.key === key && Date.now() - old.ts < LASTGOOD_TTL_S * 1000 ? old : null;
+  const useShared = shared.props.length && (!edgeLast || shared.ts >= edgeLast.ts);
+  const last = useShared ? shared.props : edgeLast?.props || [];
+  const retainedAt = useShared ? shared.ts : edgeLast?.ts;
   // The primary request includes touchdown scorers. Spend backup credits only
   // when that market is missing, and keep the complete menu latency bounded.
   const deadline = Date.now() + 3500;
@@ -182,7 +199,7 @@ async function loadGame(context, key, away, home, season, week) {
   const stale = !result.complete || !result.props.length;
   const props = stale ? mergePartialProps(last || [], result.props) : result.props;
   const markets = menuForGame(props, away, home);
-  if (!result.props.some(p => p.market === "anytime_td" && (p.fanduel?.yes != null || p.draftkings?.yes != null))) {
+  if (result.complete && !result.props.some(p => p.market === "anytime_td" && (p.fanduel?.yes != null || p.draftkings?.yes != null))) {
     let atdJob = atdInFlight.get(key);
     if (!atdJob) {
       atdJob = sharedFeed(env, `atd-v4:${season}:${week}:${away}@${home}`, ATD_TTL_S*1000, ()=>fetchCachedAnytimeTd(env, `${season}:${week}`, away, home, edge, waitUntil)).catch(() => null)
@@ -200,7 +217,9 @@ async function loadGame(context, key, away, home, season, week) {
   const source = stale && props.length ? "stale" : result.source;
   const data = { game_key: `${away}@${home}`, away, home, season, week, source, stale,
     complete: result.complete, live: markets.length > 0, markets, fetched_at: new Date().toISOString(),
-    sharp_event_ids: result.ids, pages: result.pages };
+    sharp_event_ids: result.ids, pages: result.pages, fetch_mode:"event",
+    reason:result.reason, retry_after:stale ? 20 : 60,
+    retained_at: new Date(stale && last.length ? retainedAt : Date.now()).toISOString() };
   const entry = { key, ts: Date.now(), expires: Date.now() + (stale ? RETRY_MS : TTL_MS), data };
   cache.set(key, entry);
   persist(edge, propKey(key, "fresh"), entry, stale ? RETRY_MS / 1000 : TTL_MS / 1000, waitUntil);
@@ -250,7 +269,7 @@ export async function onRequestGet(context) {
   const key = `${season}:${week}:${away}@${home}`;
   let job = inFlight.get(key);
   if (!job) {
-    job = sharedFeed(env, `props-v6:${key}`, TTL_MS, ()=>loadGame(context, key, away, home, season, week)).finally(() => inFlight.delete(key));
+    job = sharedFeed(env, `props-v6:${key}`, TTL_MS, (previous)=>loadGame(context, key, away, home, season, week, previous)).finally(() => inFlight.delete(key));
     inFlight.set(key, job);
   }
   const data = await job.catch(()=>({game_key:gameKey,markets:[],source:"unavailable",stale:true}));

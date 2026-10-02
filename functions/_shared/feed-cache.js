@@ -42,7 +42,7 @@ export async function sharedFeed(env, key, ttlMs, load) {
     throw Error("feed-refresh-in-progress");
   }
   try {
-    const payload = await load();
+    const payload = await load(old?.payload);
     const ttl = payload?.stale ? Math.min(ttlMs, 10000) : ttlMs;
     await db`UPDATE feed_refresh SET payload=${JSON.stringify(payload)}::jsonb,
       expires_at=NOW()+(${ttl} * INTERVAL '1 millisecond'),lease_until='epoch',owner=NULL

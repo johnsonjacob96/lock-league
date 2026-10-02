@@ -14,7 +14,7 @@ const browser=await chromium.launch();let checks=0;
 try {
 for(const width of [375,390,844,1440]) {
  const page=await browser.newPage({viewport:{width,height:920}}),errors=[],writes=[];
- page.on('pageerror',e=>errors.push(e.message));let rejectSave=false;
+ page.on('pageerror',e=>errors.push(e.message));let rejectSave=false,propsResponse={markets};
  const acceptReplacement=async()=>{if(await page.locator('.pick-change-dialog').count())await page.locator('.pick-change-dialog [data-change]').click();};
  // Real, checked-in portraits keep image/identity assertions independent of ESPN availability.
  await page.route('**/i/headshots/nfl/players/full/*.png',route=>{
@@ -24,7 +24,7 @@ for(const width of [375,390,844,1440]) {
  });
  await page.clock.setFixedTime(new Date('2026-09-09T15:00Z'));
  await page.route('**/api/**',async route=>{
-  if(route.request().url().includes('/api/props'))return route.fulfill({json:{markets}});
+  if(route.request().url().includes('/api/props'))return route.fulfill({json:propsResponse});
   if(route.request().method()==='POST'&&route.request().url().includes('/api/picks')){
    writes.push(route.request().postDataJSON());return route.fulfill({status:rejectSave?409:200,json:rejectSave?(rejectSave==='taken'?{error:'super-lock-taken',detail:'That Super Lock is already claimed. Choose a different bet. Your saved picks are unchanged.'}:{error:'prop-not-offered'}):{}});
   }
@@ -67,6 +67,15 @@ for(const width of [375,390,844,1440]) {
  await snapshot(page,{path:`${output}/games-${width}.png`});
  await page.locator('[data-slgame="Dallas Cowboys@Philadelphia Eagles"]').click();
  await page.waitForSelector('[data-slmarket="pass_int"]');
+ propsResponse={markets,stale:true};await page.evaluate(()=>loadPropMenu(superLockState.gameKey));
+ assert.match(await page.locator('#sl-dialog').innerText(),/Updates delayed/);checks++;
+ assert.ok(await page.locator('[data-slchoose]').count()>0);checks++;
+ await snapshot(page,{path:`${output}/delayed-${width}.png`});
+ propsResponse={markets:[],stale:true,reason:'rate-limited'};await page.evaluate(()=>loadPropMenu(superLockState.gameKey));
+ assert.match(await page.locator('#sl-dialog').innerText(),/Props temporarily unavailable.*Retrying automatically/);checks++;
+ propsResponse={markets};await page.locator('#sl-retry').click();await page.waitForSelector('[data-slmarket="pass_int"]');
+ assert.equal(await page.locator('#sl-dialog').getByText('Updates delayed.',{exact:false}).count(),0);checks++;
+
  await page.waitForFunction(()=>!!superLockState.photoIndex);
  const photo=page.locator('[data-slportrait="Jalen Hurts"] img').first();
  assert.match(await photo.getAttribute('src'),/4040715\.png/);checks++;
