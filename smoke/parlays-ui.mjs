@@ -19,8 +19,17 @@ try {
    window.fetch=async(url,options)=>{if(options?.method==='POST'){window.parlayWrites.push(JSON.parse(options.body));return Response.json({ok:true});}return Response.json(parlayState.data);};window.parlayWrites=[];
    paintParlays();
   });
-  assert.match(await page.locator('.parlay-slip').innerText(),/Emmett Johnson · 15\+ Rushing yards/);
+  assert.match(await page.locator('.parlay-slip').innerText(),/Emmett Johnson · 15\+ Rush yds/);
+  assert.equal(await page.locator('.parlay-leg').first().getAttribute('title'),'Emmett Johnson · 15+ Rushing yards','full label stays available');
   assert.equal(await page.locator('.parlay-leg .hit').count(),1);
+  // Corrections live in one panel per slip, not a toggle under every leg.
+  assert.equal(await page.locator('.parlay-slip details.parlay-correct').count(),1);
+  assert.equal(await page.locator('.parlay-slip [data-parlay-grade]').count(),3);
+  // An eight-leg slip fits between the mobile header and bottom nav.
+  if(width===390){
+   const h=await page.evaluate(()=>{const saved=structuredClone(parlayState.data);const s=parlayState.data.slips[0];s.legs=[...s.legs,...s.legs,...s.legs].slice(0,8);paintParlays();const h=document.querySelector('.parlay-slip').getBoundingClientRect().height;parlayState.data=saved;paintParlays();return h;});
+   assert.ok(h<=page.viewportSize().height-160,`8-leg slip is ${h}px; must fit between mobile header and nav`);
+  }
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:join(tmpdir(),`parlays-${width}.png`),fullPage:true});
   assert.equal(await page.locator('.parlay-shame').count(),0,'no blame while another leg is open');
