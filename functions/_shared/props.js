@@ -396,11 +396,15 @@ function statTotal(map, market) {
 // Grade a structured prop against a final box score.
 // prop = { market, player, line, side }  where side ∈ 'over'|'under'|'yes'.
 // Returns 'W' | 'L' | 'P', or null if it can't be resolved (leave for manual).
-export function gradeProp(prop, boxscore) {
+export function gradeProp(prop, boxscore, confirmedStats = null) {
   const def = PROP_DEFS[prop?.market];
   if (!def) return null;
-  const map = playerStatMap(boxscore, prop.player);
-  if (!map) return null; // player didn't appear / name didn't match -> manual
+  let map = playerStatMap(boxscore, prop.player);
+  if (!map) {
+    // Fallback must contain every required explicit stat, including zeros.
+    if (!confirmedStats || !def.stat.every(k=>Number.isFinite(confirmedStats[k]))) return null;
+    map = confirmedStats;
+  }
   const actual = statTotal(map, prop.market);
   if (actual == null || !Number.isFinite(actual)) return null;
   if (def.kind === "yes") {

@@ -853,28 +853,32 @@
   .wr-chip.expandable:focus-visible { outline: 2px solid #46e08a; outline-offset: 1px; }
   .wr-chev { margin-left: 5px; color: #6b7472; font-size: 9px; display: inline-block; transition: transform 0.15s; }
   .wr-chip[aria-expanded="true"] .wr-chev { transform: rotate(180deg); color: #9aa4a2; }
-  .wr-detail { margin: -2px 0 8px; padding: 12px 14px; background: #0b0d0e; border: 1px solid #23292a; border-radius: 10px; }
-  .wrg-loading { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #868f8c; letter-spacing: 0.04em; padding: 4px 0; }
-  .wrg-empty { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #868f8c; }
-  .wrg-score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
-  .wrg-team { display: flex; align-items: center; gap: 9px; }
-  .wrg-team.home { justify-content: flex-end; }
-  .wrg-abbr { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.04em; color: #cfd4d3; }
-  .wrg-pts { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 22px; color: #f2f4f3; font-variant-numeric: tabular-nums; }
-  .wrg-status { text-align: center; }
-  .wrg-pill { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
-  .wrg-pill.live { color: #46e08a; background: rgba(70,224,138,0.12); }
-  .wrg-pill.final { color: #9aa4a2; background: rgba(255,255,255,0.05); }
-  .wrg-pill.pre { color: #9aa4a2; background: rgba(255,255,255,0.04); }
-  .wrg-sit { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #868f8c; margin-top: 5px; }
-  .wrg-track { margin-top: 10px; padding-top: 9px; border-top: 1px solid #1a1f20; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #c7cdcb; letter-spacing: 0.02em; }
-  .wrg-leaders { margin-top: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; }
-  .wrg-lteam { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: #6b7472; text-transform: uppercase; margin-bottom: 5px; }
-  .wrg-lrow { display: grid; grid-template-columns: 32px 1fr auto; align-items: baseline; gap: 8px; padding: 2px 0; }
-  .wrg-cat { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; letter-spacing: 0.06em; color: #6b7472; }
-  .wrg-name { font-family: 'Inter', sans-serif; font-size: 11px; color: #e6e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .wrg-line { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #9aa4a2; white-space: nowrap; }
-  @media (max-width: 640px) { .wrg-leaders { grid-template-columns: 1fr; gap: 8px; } }
+  .wr-detail { margin: -2px 0 8px; padding: 18px; background: #101615; border: 1px solid #2b3833; border-radius: 14px; }
+  .wrg-loading, .wrg-empty { font-size: 12px; color: #a4b0aa; padding: 8px 0; }
+  .wrg-score { display: grid; grid-template-columns: minmax(0,1fr) minmax(70px,1fr) minmax(0,1fr); align-items: center; gap: 8px; padding: 4px 0 18px; }
+  .wrg-team { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+  .wrg-logo { width: 42px; height: 34px; object-fit: contain; }
+  .wrg-abbr { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .08em; color: #bccbc2; }
+  .wrg-pts { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 36px; line-height: 1.15; color: #f2f6f3; font-variant-numeric: tabular-nums; }
+  .wrg-status { text-align: center; min-width: 0; }
+  .wrg-pill { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; line-height: 1.6; text-transform: uppercase; padding: 4px 9px; border-radius: 6px; }
+  .wrg-pill.live { color: #77e9a7; background: #1b3528; }
+  .wrg-pill.final, .wrg-pill.pre { color: #c1cbc6; background: #222d28; }
+  .wrg-sit { font-size: 11px; color: #a4b0aa; margin-top: 8px; }
+  .wrg-pick { padding: 12px 14px; border: 1px solid #35483e; border-radius: 9px; background: #18231d; }
+  .wrg-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; letter-spacing: .1em; color: #a8b9ae; text-transform: uppercase; }
+  .wrg-pick-title { margin-top: 5px; font-size: 13px; font-weight: 600; color: #edf3ef; overflow-wrap: anywhere; }
+  .wrg-track { margin-top: 5px; font-size: 12px; color: #b9c9bf; }
+  .wrg-leaders { margin-top: 16px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+  .wrg-lcol { min-width: 0; border: 1px solid #2a3730; border-radius: 9px; overflow: hidden; }
+  .wrg-lteam { padding: 10px 12px; background: #1b2520; font-family: 'Oswald', sans-serif; font-size: 14px; font-weight: 600; letter-spacing: .06em; color: #d5e1d9; }
+  .wrg-lrow { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid #25312b; }
+  .wrg-player { min-width: 0; }
+  .wrg-cat { display: block; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: .04em; color: #99aca0; margin-bottom: 3px; }
+  .wrg-name { font-size: 12px; font-weight: 500; color: #e6eee9; overflow-wrap: anywhere; }
+  .wrg-line { max-width: 150px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.6; color: #c6d7cb; font-variant-numeric: tabular-nums; }
+  .wrg-freshness { margin-top: 12px; font-size: 10px; color: #99aca0; line-height: 1.6; }
+  @media (max-width: 640px) { .wr-detail { padding: 14px; } .wrg-leaders { grid-template-columns: 1fr; gap: 10px; } }
   /* Picks tab: week navigator + past-week history */
   .pk-weeknav { display: inline-flex; align-items: center; gap: 8px; background: #14171a; border: 1px solid #29302f; border-radius: 10px; padding: 4px; }
   .pk-wk-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 7px; background: transparent; border: none; color: #c7cdcb; cursor: pointer; transition: all .12s; }
@@ -4841,22 +4845,21 @@ function wrGamePanel(p) {
   const trackEl = track ? `<div class="wrg-track">${escapeHtml(track)}</div>` : "";
   const cols = (d.leaders || []).slice(0, 2).map((g) => `
       <div class="wrg-lcol">
-        <div class="wrg-lteam">${escapeHtml(g.team || "")}</div>
-        ${(g.rows || []).map((r) => `<div class="wrg-lrow"><span class="wrg-cat">${escapeHtml(r.cat)}</span><span class="wrg-name">${escapeHtml(r.name)}</span><span class="wrg-line">${escapeHtml(r.line)}</span></div>`).join("")}
+        <div class="wrg-lteam">${escapeHtml(g.team || "")} <span class="wrg-label"> · Leaders</span></div>
+        ${(g.rows || []).map((r) => `<div class="wrg-lrow"><div class="wrg-player"><span class="wrg-cat">${escapeHtml(({PASS:"Passing",RUSH:"Rushing",REC:"Receiving"})[r.cat] || r.cat)}</span><span class="wrg-name">${escapeHtml(r.name)}</span></div><span class="wrg-line">${escapeHtml(r.line)}</span></div>`).join("")}
       </div>`).join("");
   const leadersEl = cols
     ? `<div class="wrg-leaders">${cols}</div>`
     : ((live || post) && !d.players?.length ? `<div class="wrg-empty" style="margin-top:10px">Player stats not posted yet.</div>` : "");
   return `<div class="wr-detail">
-    <div class="wrg-track">${escapeHtml(p.pick_text || "")}</div>
-    <div class="wr-freshness">Scores: ${escapeHtml(sourceAgeLabel(d.source_updated_at, d.stale))}${p.prop?.market ? " · Stats: " + escapeHtml(sourceAgeLabel(d.stats_updated_at, d.stale)) : ""}</div>
     <div class="wrg-score" role="status" aria-atomic="true" aria-label="${escapeHtml(atom)}">
-      <div class="wrg-team away"><span class="wrg-abbr">${escapeHtml(aAbbr)}</span><span class="wrg-pts">${aS}</span></div>
+      <div class="wrg-team away">${teamLogoMark(d.away.name,"wrg-logo","wrg-abbr")}<span class="wrg-abbr">${escapeHtml(aAbbr)}</span><span class="wrg-pts">${escapeHtml(String(aS))}</span></div>
       <div class="wrg-status">${pill}${sit}</div>
-      <div class="wrg-team home"><span class="wrg-pts">${hS}</span><span class="wrg-abbr">${escapeHtml(hAbbr)}</span></div>
+      <div class="wrg-team home">${teamLogoMark(d.home.name,"wrg-logo","wrg-abbr")}<span class="wrg-abbr">${escapeHtml(hAbbr)}</span><span class="wrg-pts">${escapeHtml(String(hS))}</span></div>
     </div>
-    ${trackEl}
+    <div class="wrg-pick"><div class="wrg-label">Following this pick</div><div class="wrg-pick-title">${escapeHtml(p.pick_text || "")}</div>${trackEl}</div>
     ${leadersEl}
+    <div class="wrg-freshness">Scores: ${escapeHtml(sourceAgeLabel(d.source_updated_at, d.stale))}${p.prop?.market ? " · Stats: " + escapeHtml(sourceAgeLabel(d.stats_updated_at, d.stale)) : ""}</div>
   </div>`;
 }
 function renderRecapCard(wr) {
