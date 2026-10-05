@@ -31,6 +31,28 @@ try {
    check('pregame',{...base,state:'pre'},d,'neutral','UPCOMING');
    for(const [status,tone,label] of [['win','win','WON'],['lose','lose','LOST'],['push','push','PUSH']]) check('settled '+status,{...base,final:true,status},null,tone,label);
    for(const [bet_type,pick_text,tone,label] of [['Over','BUF / DET O34.5','win','TARGET REACHED · LIVE'],['Under','BUF / DET U34.5','lose','OVER LIMIT · LIVE'],['Under','BUF / DET U54.5','neutral','LIVE · IN PROGRESS'],['Favorite','Buffalo Bills -3.5','neutral','LIVE · IN PROGRESS']]) check(bet_type+pick_text,{...base,bet_type,pick_text,prop:null},d,tone,label);
+   const sfGame={state:'in',away:{name:'Denver Broncos',score:24},home:{name:'San Francisco 49ers',score:23}};
+   const sfPick={bet_type:'Over',pick_text:'Denver Broncos / San Francisco 49ers O46.5',state:'in'};
+   for(const [name,pick,target] of [
+    ['legacy 49ers total',sfPick,46.5],
+    ['saved total wins over display text',{...sfPick,line:'45.5',side:'over'},45.5],
+    ['saved zero',{...sfPick,line:0,side:'over'},0],
+    ['49ers under',{...sfPick,bet_type:'Under',pick_text:'Denver Broncos / San Francisco 49ers U46.5'},46.5],
+    ['game total Super Lock',{...sfPick,bet_type:'Super Lock',prop:{kind:'total',line:46.5,side:'over'}},46.5],
+    ['49ers listed first',{...sfPick,pick_text:'San Francisco 49ers / Denver Broncos O46.5'},46.5],
+    ['abbreviated legacy total',{...sfPick,pick_text:'DEN / SF O 46.5'},46.5],
+   ]) {
+    const data=liveProgressData(pick,sfGame);
+    results.push([name,data.target===target,JSON.stringify(data)]);
+    results.push([name+' dropdown',wrPickTrack(pick,sfGame).includes(String(target))]);
+   }
+   results.push(['47 points reaches saved 46.5',liveResultPresentation(sfPick,sfGame).tone==='win']);
+   results.push(['47 exceeds under 46.5',liveResultPresentation({...sfPick,bet_type:'Under',pick_text:'DEN / San Francisco 49ers U46.5'},sfGame).tone==='lose']);
+   results.push(['total bar uses 46.5',liveProgressBar(sfPick,sfGame).includes('Over 46.5')]);
+   for(const pick of [{...sfPick,pick_text:'Denver Broncos / San Francisco 49ers'},{...sfPick,line:''},{...sfPick,line:'bad'}]) results.push(['invalid line is not guessed',!liveProgressData(pick,sfGame)]);
+   const spread={bet_type:'Favorite',pick_text:'San Francisco 49ers -3.5'};
+   results.push(['49ers spread target',liveProgressData(spread,sfGame).target===3.5]);
+   results.push(['49ers spread dropdown',wrPickTrack(spread,sfGame).includes('short by 4.5')]);
    state.user={id:5,name:'Jacob'};state.wrMemberId=5;
    const picks=[
     {...base,bet_type:'Favorite',pick_text:'Buffalo Bills -3.5',prop:null,final:true,status:'win',state:'post'},

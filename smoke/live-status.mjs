@@ -42,3 +42,10 @@ test('final results still resolve wins, losses and pushes; ungraded props stay m
  }
  assert.equal(livePickStatus({bet_type:'Super Lock',prop_meta:{market:'passing_yards'}},final).status,'manual');
 });
+
+test('49ers total grades against saved 46.5, never the team name or current market', async()=>{
+ const p={bet_type:'Over',side:'over',line:'46.5',pick_text:'Denver Broncos / San Francisco 49ers O46.5'};
+ const ev={state:'post',home:'San Francisco 49ers',away:'Denver Broncos',home_score:23,away_score:24};
+ assert.equal(await resolvePickResult(p,ev),'W');
+ assert.equal(livePickStatus(p,ev).status,'win');
+});

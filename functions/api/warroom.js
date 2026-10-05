@@ -137,6 +137,7 @@ export async function onRequest({ request, env, waitUntil }) {
         const gameLive = !!ev && (ev.state === "in" || ev.state === "post");
         m.picks.push({
           bet_type: bt, kind: "pick", pick_text: p.pick_text,
+          line: p.line ?? null, side: p.side ?? null, // original locked total, never the current market
           prop: safeJson(p.prop_meta),
           price: p.price ?? null, book: p.book ?? null, // odds shown on the Super Lock chip
           game_key: p.game_key || null, // lets the client open the live game drill-down

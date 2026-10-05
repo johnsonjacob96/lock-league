@@ -2156,6 +2156,15 @@ function liveMemberSummary(m, season) {
   }
   return {units,unpriced,live:m.picks.filter(p => p.state === "in" && !p.final).length};
 }
+// Prefer the saved quote. Legacy text must end with a distinct O/U token;
+// an unbounded match mistakes the end of "San Francisco 49ers" for O49.
+function lockedTotal(p) {
+  const match = String(p.pick_text || "").match(/(?:^|\s)([OU])\s*(\d+(?:\.\d+)?)\s*$/i);
+  const saved = p.line ?? p.prop?.line;
+  const line = saved != null ? (String(saved).trim() ? Number(saved) : NaN) : match ? Number(match[2]) : NaN;
+  const side = p.side || p.prop?.side || (p.bet_type === "Over" ? "over" : p.bet_type === "Under" ? "under" : match?.[1].toUpperCase() === "O" ? "over" : match ? "under" : null);
+  return Number.isFinite(line) && ["over","under"].includes(side) ? {line,side} : null;
+}
 // Shared measured progress for the bar and its presentation; never grades a pick.
 function liveProgressData(p, d) {
   if (!d) return "";
@@ -2174,12 +2183,12 @@ function liveProgressData(p, d) {
     if (d.away?.score == null || d.home?.score == null) return "";
     const a = Number(d.away.score), h = Number(d.home.score);
     if (p.bet_type === "Over" || p.bet_type === "Under" || p.prop?.kind === "total") {
-      const match = (p.pick_text || "").match(/([OU])\s*([\d.]+)/i);
-      if (!match) return "";
-      actual = a + h; target = Number(match[2]); label = "Total points";
-      side = match[1].toUpperCase() === "U" ? "under" : "over"; threshold = true; targetLabel = side === "under" ? "Under" : "Over";
+      const total = lockedTotal(p);
+      if (!total) return "";
+      actual = a + h; target = total.line; label = "Total points";
+      side = total.side; threshold = true; targetLabel = side === "under" ? "Under" : "Over";
     } else if (p.bet_type === "Favorite" || p.bet_type === "Dog" || p.prop?.kind === "spread") {
-      const match = (p.pick_text || "").match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?)/);
+      const match = (p.pick_text || "").match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?)\s*$/);
       if (!match) return "";
       const home = sameTeamName(match[1],d.home.name), away = sameTeamName(match[1],d.away.name);
       if (home === away) return "";
@@ -4801,18 +4810,18 @@ function wrPickTrack(p, d) {
   if (!d || !d.away || d.away.score == null || d.home.score == null) return "";
   const a = d.away.score, h = d.home.score, txt = p.pick_text || "", bt = p.bet_type;
   try {
-    if (bt === "Over" || bt === "Under") {
-      const m = txt.match(/([OU])\s*([\d.]+)/i);
-      const line = m ? parseFloat(m[2]) : NaN;
-      const total = a + h;
-      if (Number.isNaN(line)) return `${total} total points`;
+    if (bt === "Over" || bt === "Under" || p.prop?.kind === "total") {
+      const locked = lockedTotal(p);
+      const total = Number(a) + Number(h);
+      if (!locked) return `${total} total points`;
+      const line = locked.line, direction = locked.side === "over" ? "Over" : "Under";
       const diff = Math.round((total - line) * 10) / 10;
-      if (diff === 0) return `${total} pts — ${bt} ${line} · ${d.state === "post" ? "push" : "on the number"}`;
-      if (bt === "Over") return diff > 0 ? `${total} pts — Over ${line} ${d.state === "post" ? "won" : "ahead"} (+${diff})` : `${total} pts — Over ${line} ${d.state === "post" ? "lost" : "needs " + Math.abs(diff) + " more"}`;
+      if (diff === 0) return `${total} pts — ${direction} ${line} · ${d.state === "post" ? "push" : "on the number"}`;
+      if (locked.side === "over") return diff > 0 ? `${total} pts — Over ${line} ${d.state === "post" ? "won" : "ahead"} (+${diff})` : `${total} pts — Over ${line} ${d.state === "post" ? "lost" : "needs " + Math.abs(diff) + " more"}`;
       return diff < 0 ? `${total} pts — Under ${line} ${d.state === "post" ? "won" : "ahead"} by ${Math.abs(diff)}` : `${total} pts — Under ${line} ${d.state === "post" ? "lost" : "down by " + diff}`;
     }
     if (bt === "Favorite" || bt === "Dog") {
-      const m = txt.match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?)/);
+      const m = txt.match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?)\s*$/);
       if (!m) return "";
       const team = m[1].trim(), line = parseFloat(m[2]);
       const pickedHome = sameTeamName(team, d.home.name), pickedAway = sameTeamName(team, d.away.name);
