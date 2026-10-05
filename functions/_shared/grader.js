@@ -4,7 +4,8 @@ import { refreshParlays } from './parlays.js';
 import { sql } from "./db.js";
 import { weeksToGrade, currentNflWeek, pickCutoff, seasonTypeFor, testConfig } from "./nfl.js";
 import { pushPersonalized, claimSend } from "./push-notify.js";
-import { gradeProp } from "./props.js";
+import { gradeProp, playerStatMap } from "./props.js";
+import { missingPlayerStats } from "./espn-player-stats.js";
 import { espnScoreboardEvents, espnBoxscore } from "./espn.js";
 import { loadScoreboardSeed } from "./scoreseed.js";
 import { weeklyContext } from './tiebreak-context.js';
@@ -125,7 +126,7 @@ export function resolveSpreadResult(p, ev) {
 // injected `(eventId) -> boxscore` so it runs without ESPN) so the exact routing
 // is smoke-tested. Returns 'W'|'L'|'P', or null when the pick can't be auto-graded
 // (missing scores, an unmatched player, or a free-text Super Lock -> manual).
-export async function resolvePickResult(p, ev, getBox) {
+export async function resolvePickResult(p, ev, getBox, getPlayerStats) {
   const haveScore = ev && ev.home_score != null && ev.away_score != null;
   const total = () => ev.home_score + ev.away_score;
   if (p.bet_type === "Favorite" || p.bet_type === "Dog") return haveScore ? resolveSpreadResult(p, ev) : null;
@@ -135,7 +136,14 @@ export async function resolvePickResult(p, ev, getBox) {
     if (!meta) return null;                                                    // free-text -> manual
     if (meta.kind === "spread") return haveScore ? resolveSpreadResult(p, ev) : null; // game-line SL (spread)
     if (meta.kind === "total") return haveScore ? gradeTotal(p.side, p.line, total()) : null; // game-line SL (total)
-    if (meta.market) { const box = getBox ? await getBox(ev.id) : null; return box ? gradeProp(meta, box) : null; } // player prop
+    if (meta.market) {
+      const box = getBox ? await getBox(ev.id) : null;
+      const result = box ? gradeProp(meta,box) : null;
+      if (result || !box || !getPlayerStats || playerStatMap(box,meta.player) ||
+          !(ev.status === "final" || ev.state === "post")) return result;
+      const stats = await getPlayerStats(ev.id,meta.player,box);
+      return gradeProp(meta,box,stats);
+    }
     return null;
   }
   return null;
@@ -156,6 +164,7 @@ export async function gradeWeek(env, season, week) {
   }
   const picks = await s`
     SELECT * FROM picks WHERE season = ${season} AND week = ${week} AND result IS NULL`;
+  const playerCache = new Map();
   const boxCache = new Map(); // eventId -> boxscore (fetched at most once per run)
   for (const p of picks) {
     if (!p.game_key) continue; // free-text picks (incl. free-text Super Lock) need manual mark
@@ -167,6 +176,10 @@ export async function gradeWeek(env, season, week) {
       let box = boxCache.get(id);
       if (box === undefined) { box = await fetchBoxscore(id, env); boxCache.set(id, box); }
       return box; // fetched at most once per event per run; null on failure -> skip (retry next run)
+    }, async (id,player,box) => {
+      const key=`${id}:${player}`;
+      if (!playerCache.has(key)) playerCache.set(key,await missingPlayerStats(id,player,box));
+      return playerCache.get(key);
     });
     if (result) {
       await s`UPDATE picks SET result = ${result}, graded_at = NOW() WHERE id = ${p.id}`;
