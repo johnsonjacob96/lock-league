@@ -4,6 +4,7 @@ let rows=[],messages=[],claims=0;
 mock.module('../functions/_shared/db.js',{namedExports:{ignoringConcurrentCreate:p=>p,sql:()=> (strings)=>Promise.resolve(strings.join('').includes('FROM members') ? [{id:1,name:'Jacob'},{id:2,name:'Jared'}] : rows)}});
 mock.module('../functions/_shared/push-notify.js',{namedExports:{
  claimSend:async()=>{claims++;return true;},
+ ensurePushTables:async()=>{},
  pushPersonalized:async(_env,recipients)=>{messages.push(recipients);return {sent:2};},
 }});
 const {pushWeekResults}=await import('../functions/_shared/grader.js');

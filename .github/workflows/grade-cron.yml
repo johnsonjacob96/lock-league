@@ -1,7 +1,10 @@
 name: Grade Picks (cron)
 
-# Replaces the 4 Netlify scheduled functions. Fires curl at /api/grade
-# at the same UTC times as the originals.
+# Backup only. Grading and the Tuesday week close run on the Cloudflare
+# scheduler: every 15-minute /api/notify tick calls scheduledGrade(). GitHub
+# delivers scheduled runs late or not at all (week 4's Tuesday 09:00 UTC run
+# had not fired by 14:00 UTC), so nothing may depend on these times. Still
+# useful as a manual "grade now" button from the Actions tab.
 on:
   schedule:
     - cron: "30 5 * * 4"   # Thu 05:30 UTC — Wednesday season opener

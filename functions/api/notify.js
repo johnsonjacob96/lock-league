@@ -5,7 +5,7 @@
 import { sql } from "../_shared/db.js";
 import { currentNflWeek, pickCutoff } from "../_shared/nfl.js";
 import { pushPersonalized, ensurePushTables, claimSend } from "../_shared/push-notify.js";
-import { pushWeekResults, sameTeam } from "../_shared/grader.js";
+import { pushWeekResults, sameTeam, scheduledGrade } from "../_shared/grader.js";
 import { ensureExtras } from "../_shared/migrations.js";
 import { makeVapidJwt, encryptPayload } from "../_shared/webpush.js";
 
@@ -114,7 +114,7 @@ async function pushHealth(env) {
       new Set(rows.filter(r => r.notif_prefs?.[kind] !== false).map(r => r.member_id)).size])) };
 }
 
-export async function onRequest({ request, env }) {
+export async function onRequest({ request, env, waitUntil }) {
   const secret = request.headers.get("x-cron-secret");
   if (!env.CRON_SECRET || secret !== env.CRON_SECRET) {
     return json({ error: "unauthorized" }, { status: 401 });
@@ -122,6 +122,13 @@ export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const type = url.searchParams.get("type") || "reminder";
   const dryrun = url.searchParams.get("dryrun") === "1";
+  // The Cloudflare scheduler calls this every 15 minutes and, unlike GitHub's
+  // cron, arrives on time. Ride along to grade finished games and close a
+  // finished week (crown the winner, push results) -- see gradingDue().
+  if (!dryrun) {
+    const graded = scheduledGrade(env).catch(e => console.log(`[scheduled-grade] ${e.message}`));
+    if (waitUntil) waitUntil(graded);
+  }
   if (type === "health") {
     if (!dryrun) return json({ error: "dryrun-required" }, { status: 400 });
     return json(await pushHealth(env), { headers: { "Cache-Control": "no-store" } });

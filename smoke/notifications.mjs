@@ -1,6 +1,6 @@
 import {test,mock} from 'node:test';
 import assert from 'node:assert/strict';
-let queries=[],sendCalls=[],claims=new Set(),rowsFor=()=>[],pushResult=null;
+let gradeTicks=0,queries=[],sendCalls=[],claims=new Set(),rowsFor=()=>[],pushResult=null;
 mock.module('../functions/_shared/db.js',{namedExports:{sql:()=> (strings,...params)=>{
  const query=strings.join('?');queries.push(query);return Promise.resolve(rowsFor(query,params));
 }}});
@@ -11,6 +11,7 @@ mock.module('../functions/_shared/push-notify.js',{namedExports:{
 }});
 mock.module('../functions/_shared/grader.js',{namedExports:{
  sameTeam:(a,b)=>a===b,pushWeekResults:async()=>{sendCalls.push('results');return {};},
+ scheduledGrade:async()=>{gradeTicks++;return {skipped:'nothing-due'};},
 }});
 mock.module('../functions/_shared/migrations.js',{namedExports:{ensureExtras:async()=>{queries.push('DDL ensureExtras');}}});
 const {onRequest}=await import('../functions/api/notify.js');
@@ -95,4 +96,16 @@ test('failed line alerts remain retryable; only accepted members consume their a
  queries=[];pushResult={sent:1,failed:1,acceptedMemberIds:[2]};
  r=await call('line-moves','');assert.equal(r.body.alerted,1);assert.equal(r.body.picks,1);
  const updates=queries.filter(q=>q.includes('UPDATE picks'));assert.equal(updates.length,1);assert.match(updates[0],/AND line =.*AND game_key =.*AND side =/);
+});
+
+test('every scheduler tick also grades and closes weeks, but a dry run never does',async t=>{
+ setup(t,'2026-10-06T09:00:00Z');gradeTicks=0;
+ const pending=[];
+ await onRequest({env,waitUntil:p=>pending.push(p),request:new Request('https://test.invalid/api/notify?type=line-moves',{headers:{'X-Cron-Secret':'test'}})});
+ await Promise.all(pending);
+ assert.equal(gradeTicks,1);assert.equal(pending.length,1,'grading rides on waitUntil so the tick returns promptly');
+ await call('line-moves');
+ assert.equal(gradeTicks,1);
+ const denied=await onRequest({env,request:new Request('https://test.invalid/api/notify?type=line-moves',{headers:{'X-Cron-Secret':'wrong'}})});
+ assert.equal(denied.status,401);assert.equal(gradeTicks,1);
 });
