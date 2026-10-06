@@ -3,7 +3,7 @@ import { refreshParlays } from './parlays.js';
 // Mirrors lib/grader.js (kept in sync for Cloudflare Pages Functions runtime).
 import { sql } from "./db.js";
 import { weeksToGrade, currentNflWeek, pickCutoff, seasonTypeFor, testConfig } from "./nfl.js";
-import { pushPersonalized, claimSend } from "./push-notify.js";
+import { pushPersonalized, claimSend, ensurePushTables } from "./push-notify.js";
 import { gradeProp, playerStatMap } from "./props.js";
 import { missingPlayerStats } from "./espn-player-stats.js";
 import { espnScoreboardEvents, espnBoxscore } from "./espn.js";
@@ -214,26 +214,59 @@ export async function gradeCurrentWeeks(env, now = new Date()) {
   return { ran: weeks.length, results, notified, pushed };
 }
 
+// Is there grading work for a scheduled or opportunistic run to do? Two cases:
+//  - a game-linked pick in the current or previous week is still ungraded, or
+//  - the previous week is over (the season rolled past it Tuesday 08:00 UTC)
+//    with every pick graded, but it hasn't been closed yet -- winner crowned
+//    and results pushed. League picks never sit on Monday night, so a week's
+//    picks are usually all graded by Sunday night and only this close remains.
+// The second case used to wait for the Tuesday GitHub cron, which GitHub
+// delivers late or not at all.
+export async function gradingDue(env, now = new Date()) {
+  const weeks = weeksToGrade(now, env);
+  if (!weeks.length) return false;
+  const open = await sql(env)`
+    SELECT 1 FROM picks
+    WHERE season = 2026 AND week = ANY(${weeks})
+      AND result IS NULL AND game_key IS NOT NULL
+    LIMIT 1`;
+  if (open.length) return true;
+  const finished = weeks.filter(w => !testConfig(env) && isWeekComplete(2026, w, now));
+  if (!finished.length) return false;
+  await ensurePushTables(env);
+  // Picks with no result (free-text Super Locks awaiting a manual mark) keep a
+  // week open; closing then waits for that mark rather than re-running.
+  const unclosed = await sql(env)`
+    SELECT p.week FROM picks p
+    WHERE p.season = 2026 AND p.week = ANY(${finished})
+      AND NOT EXISTS (SELECT 1 FROM week_notifications n
+                      WHERE n.season = 2026 AND n.week = p.week AND n.kind = 'winner')
+    GROUP BY p.week
+    HAVING COUNT(*) FILTER (WHERE p.result IS NULL) = 0
+    LIMIT 1`;
+  return unclosed.length > 0;
+}
+
+// Called on every Cloudflare scheduler tick (/api/notify, every 15 minutes) --
+// the only clock this app has that fires on time. Cheap when there is nothing
+// to do: one or two small queries, no scoreboard fetch.
+export async function scheduledGrade(env, now = new Date()) {
+  if (!(await gradingDue(env, now))) return { skipped: "nothing-due" };
+  return gradeCurrentWeeks(env, now);
+}
+
 // Opportunistic grading: called best-effort (and throttled) from read paths so
 // picks grade within ~a minute of a game finishing, instead of waiting for the
-// sparse cron. Safe to call often — grading only touches ungraded picks, and the
-// winner push is guarded to once per week. Returns quickly when there's nothing
-// to do so it can run inside waitUntil() without slowing responses.
+// next scheduler tick. Safe to call often — grading only touches ungraded
+// picks, and the winner push is guarded to once per week. Returns quickly when
+// there's nothing to do so it can run inside waitUntil() without slowing
+// responses.
 let lastOpportunisticGrade = 0;
 export async function maybeGrade(env, now = Date.now()) {
   if (now - lastOpportunisticGrade < 60000) return { skipped: "throttled" };
   lastOpportunisticGrade = now;
-  const cur = currentNflWeek(new Date(now), env);
-  if (!cur.week) return { skipped: "no-week" };
   try {
-    // Only fetch scores + grade if some game-linked pick this week is still open.
-    const pending = await sql(env)`
-      SELECT 1 FROM picks
-      WHERE season = ${cur.season} AND week = ${cur.week}
-        AND result IS NULL AND game_key IS NOT NULL
-      LIMIT 1`;
-    if (!pending.length) return { skipped: "nothing-ungraded" };
-    return await gradeCurrentWeeks(env, new Date(now));
+    return await scheduledGrade(env, new Date(now));
   } catch (e) {
     return { error: e.message };
   }
