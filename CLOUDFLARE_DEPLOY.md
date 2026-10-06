@@ -83,16 +83,47 @@ The response carries the code; redeem it on the reset screen. Any successful
 reset or password change also signs that member out everywhere else (it bumps
 `members.session_epoch`, which every session cookie is stamped with).
 
-## 5. Set up GitHub Actions cron
+## 5. Scheduling: the Cloudflare cron Worker is the only clock
 
-In the GitHub repo: **Settings → Secrets and variables → Actions** → add:
+GitHub Actions' `schedule:` trigger is best-effort and, for this repo, delivered
+a fraction of its runs (October 2026: the hourly monitor ran 6 times in a day; a
+Tuesday grade run never fired). Nothing relies on it. The `lock-league-cron`
+Worker in `cron/` fires every 15 minutes, on time, and:
+
+- calls `/api/notify` — pick reminders, line-move alerts, kickoff reminders,
+  and (on every call) grading plus the Tuesday week close;
+- dispatches the GitHub workflows that must run on a GitHub runner:
+  `regular-season-seed.yml` (every 15 min during games, hourly otherwise),
+  `site-monitor.yml` (hourly; browser checks daily) and
+  `daily-improvement.yml` (daily). A `workflow_dispatch` starts right away.
+
+**GitHub repo secrets** (Settings → Secrets and variables → Actions), used by
+the dispatched workflows:
 
 - `SITE_URL` → `https://lock-league.pages.dev` (or your custom domain)
 - `CRON_SECRET` → same value as the Cloudflare env var
 
-The workflow at `.github/workflows/grade-cron.yml` will then fire 4x/week at the same UTC times as the old Netlify scheduled functions.
+**Worker secrets and deploy** (from `cron/`):
 
-To test the workflow manually: **Actions tab → Grade Picks (cron) → Run workflow**.
+```bash
+npx wrangler secret put CRON_SECRET        # same value as the Pages env var
+npx wrangler secret put GH_DISPATCH_TOKEN  # see below
+npx wrangler deploy
+```
+
+`GH_DISPATCH_TOKEN` is a fine-grained personal access token
+(GitHub → Settings → Developer settings → Fine-grained tokens) limited to
+**only** the `lock-league` repository with one permission: **Actions: Read and
+write**. Without it the Worker skips dispatching and logs
+`GH_DISPATCH_TOKEN not set`. Fine-grained tokens expire — set a reminder to
+rotate it (`wrangler secret put GH_DISPATCH_TOKEN` again).
+
+To check it's working: **Actions tab** — `regular-season-seed` and
+`site-monitor` runs should appear with event `workflow_dispatch` every hour.
+`site-monitor` keeps one daily GitHub schedule as a dead-man check, so if the
+Worker stops dispatching the monitor still runs once a day.
+
+To grade by hand: **Actions tab → Grade Picks (manual) → Run workflow**.
 
 ## 6. Point the domain (optional)
 

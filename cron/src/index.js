@@ -12,7 +12,9 @@
 // Legacy expressions remain recognized during schedule propagation.
 //
 // This Worker holds NO business logic — it exists purely because Cloudflare cron
-// triggers are a reliable scheduler and GitHub Actions cron is not.
+// triggers are a reliable scheduler and GitHub Actions cron is not. It is also
+// the clock for the GitHub workflows that must run on a GitHub runner (see
+// githubJobsDue below); none of them rely on GitHub's own `schedule:` trigger.
 
 const CRON_TYPES = {
   "0 16 * * *": ["reminder", "line-moves"],
@@ -32,6 +34,66 @@ async function fireNotify(env, type, { dryrun = false } = {}) {
   console.log(`[${type}] dryrun=${dryrun} status=${res.status} ${body}`);
   if (!res.ok) throw new Error(`Notification endpoint failed (${res.status})`);
   return { status: res.status, body };
+}
+
+// ── GitHub jobs, on this clock ──────────────────────────────────────────────
+// Some jobs must run on a GitHub runner: the scoreboard seed needs a network
+// ESPN doesn't block, the site monitor drives a real browser, the improvement
+// agent works on the repo. GitHub's own `schedule:` trigger is not a clock we
+// can use: in October 2026 it delivered a fraction of this repo's runs (the
+// hourly monitor ran 6 times in a day; a Tuesday grade run never fired), and
+// GitHub documents scheduled runs as best-effort under load. A
+// workflow_dispatch, by contrast, starts right away. So this Worker decides
+// when each job is due and dispatches it.
+//
+// Needs GH_DISPATCH_TOKEN: a fine-grained token for this repository with
+// "Actions: Read and write". Without it, dispatching is skipped and logged.
+const GITHUB_REPO = "johnsonjacob96/lock-league";
+
+// Which GitHub workflows a quarter-hour tick should start. Pure, for tests.
+// Times are UTC.
+export function githubJobsDue(scheduledTime) {
+  const t = new Date(scheduledTime);
+  const month = t.getUTCMonth(), day = t.getUTCDay(), hour = t.getUTCHours(), minute = t.getUTCMinutes();
+  const jobs = [];
+  // Scoreboard seed, NFL season (Sep-Feb): every tick while games are on --
+  // Wed/Thu night and Mon night (Thu/Fri/Tue 00-05 UTC), Sunday afternoon and
+  // night (Sun 17-24, Mon 00-05 UTC) -- and hourly otherwise.
+  const season = month >= 8 || month <= 1;
+  const gameWindow = ([1, 2, 4, 5].includes(day) && hour < 5) || (day === 0 && hour >= 17);
+  if (season && (gameWindow || minute === 0)) jobs.push({ workflow: "regular-season-seed.yml" });
+  // Site monitor: hourly API probes; the daily run at 11:30 UTC (~6:30am CT)
+  // adds the mobile and desktop browser checks.
+  if (minute === 0) jobs.push({ workflow: "site-monitor.yml", inputs: { browser: "false" } });
+  if (hour === 11 && minute === 30) jobs.push({ workflow: "site-monitor.yml", inputs: { browser: "true" } });
+  // Improvement agent: once a day, 12:15 UTC (~7:15am CT).
+  if (hour === 12 && minute === 15) jobs.push({ workflow: "daily-improvement.yml" });
+  return jobs;
+}
+
+async function dispatchWorkflow(env, { workflow, inputs }) {
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${workflow}/dispatches`, {
+    method: "POST",
+    signal: AbortSignal.timeout(15000),
+    headers: {
+      Authorization: `Bearer ${env.GH_DISPATCH_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "lock-league-cron",
+    },
+    body: JSON.stringify({ ref: "main", ...(inputs ? { inputs } : {}) }),
+  });
+  if (res.status !== 204) throw new Error(`${workflow}: GitHub dispatch failed (${res.status}) ${await res.text()}`);
+  console.log(`[dispatch] ${workflow} ${inputs ? JSON.stringify(inputs) : ""}`);
+}
+
+// One failed dispatch must not stop the others, or the notifications.
+async function dispatchDue(env, scheduledTime) {
+  const jobs = githubJobsDue(scheduledTime);
+  if (!jobs.length) return;
+  if (!env.GH_DISPATCH_TOKEN) { console.log(`[dispatch] skipped ${jobs.length} job(s): GH_DISPATCH_TOKEN not set`); return; }
+  const results = await Promise.allSettled(jobs.map(job => dispatchWorkflow(env, job)));
+  for (const r of results) if (r.status === "rejected") console.error(`[dispatch] ${r.reason?.message || r.reason}`);
 }
 
 export default {
@@ -55,6 +117,7 @@ export default {
       }
     }
     if (!types) { console.log(`[scheduled] unrecognized cron: ${event.cron}`); return; }
+    if (event.cron === "*/15 * * * *" && !dryrun) ctx.waitUntil(dispatchDue(env, event.scheduledTime));
     ctx.waitUntil(Promise.all(types.map((type) => fireNotify(env, type, { dryrun }))));
   },
 

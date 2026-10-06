@@ -27,4 +27,7 @@ enabled = true
 
 [vars]
 SITE_URL = "https://lock-league.pages.dev"
-# CRON_SECRET is set as an encrypted secret: `wrangler secret put CRON_SECRET`.
+# Encrypted secrets: `wrangler secret put CRON_SECRET` and
+# `wrangler secret put GH_DISPATCH_TOKEN` (fine-grained token, this repo only,
+# Actions: Read and write) so the Worker can start the GitHub workflows that
+# must run on a GitHub runner. See CLOUDFLARE_DEPLOY.md section 5.

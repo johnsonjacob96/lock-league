@@ -26,7 +26,7 @@ Cloudflare Pages maps each file under `functions/api/` to `/api/<name>`.
 | `/api/warroom` | `warroom.js` | Sunday War Room: locked picks + live scores + consensus |
 | `/api/auth?action=login\|logout\|me\|change-pass` | `auth.js` | Passphrase login, signed cookie, passphrase change |
 | `/api/picks` | `picks.js` | GET season picks (others' hidden until the week locks); POST your week (locks Sun 12pm CT; a game locks at its kickoff) |
-| `/api/grade` | `grade.js` | Manual fire (CRON_SECRET); grades current + previous week. Scheduled via GitHub Actions (`grade-cron.yml`): Thu/Sun/Mon/Tue windows |
+| `/api/grade` | `grade.js` | Manual fire (CRON_SECRET); grades current + previous week. Runs on every Cloudflare scheduler tick via `/api/notify`; `grade-cron.yml` is a manual button |
 | `/api/notify`, `/api/push`, `/api/settlement`, `/api/config` | resp. `.js` | Reminders/web-push, weekly settlement ledger, client bootstrap |
 
 ## History vs. live
