@@ -6,8 +6,7 @@
 # GitHub runner CAN reach ESPN, so this job fetches the current + previous week's
 # scoreboard and POSTs it to /api/odds?action=seed, which stores it in the
 # scoreboard_snapshot table; fetchScoreboard falls back to it when the live fetch
-# fails. Same pattern as preseason-seed.yml, but self-tracking the current week
-# through the whole regular season.
+# fails. Self-tracks the current week through the whole regular season.
 #
 # The week number is computed the SAME way the app's currentNflWeek() does
 # (WEEK1_START_MS + 7-day buckets), so the seed is always stored under exactly
@@ -16,15 +15,10 @@
 name: regular-season-seed
 
 on:
-  # Times are UTC; GitHub cron is best-effort (can slip 15-30 min). Frequent
-  # during live game windows for scores/War Room, hourly otherwise to keep finals
-  # and the schedule fresh. Months limited to the NFL season (Sep-Feb).
-  schedule:
-    - cron: "*/10 0-4 * 9,10,11,12,1,2 4,5"   # Wednesday opener + Thursday games (Thu/Fri UTC)
-    - cron: "*/10 17-23 * 9,10,11,12,1,2 0"  # Sunday afternoon/evening
-    - cron: "*/10 0-4 * 9,10,11,12,1,2 1"    # Sunday night -> Mon 00-05 UTC
-    - cron: "*/10 0-4 * 9,10,11,12,1,2 2"    # Monday-night games (Tue 00-05 UTC)
-    - cron: "0 * * 9,10,11,12,1,2 *"         # hourly heartbeat, every day
+  # Started by the Cloudflare scheduler Worker (cron/src/index.js,
+  # githubJobsDue): every 15 minutes while games are on, hourly otherwise,
+  # September-February. GitHub's own schedule trigger delivered only a fraction
+  # of these runs, so it is not used.
   workflow_dispatch: {}
 
 permissions:

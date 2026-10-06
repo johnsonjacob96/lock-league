@@ -1,18 +1,11 @@
-name: Grade Picks (cron)
+name: Grade Picks (manual)
 
-# Backup only. Grading and the Tuesday week close run on the Cloudflare
-# scheduler: every 15-minute /api/notify tick calls scheduledGrade(). GitHub
-# delivers scheduled runs late or not at all (week 4's Tuesday 09:00 UTC run
-# had not fired by 14:00 UTC), so nothing may depend on these times. Still
-# useful as a manual "grade now" button from the Actions tab.
+# Manual "grade now" button (Actions tab -> Run workflow). Grading and the
+# Tuesday week close run on the Cloudflare scheduler: every 15-minute
+# /api/notify tick calls scheduledGrade(). The GitHub schedule this used to
+# have delivered runs late or not at all (week 4's Tuesday 09:00 UTC run had
+# not fired by 14:00 UTC), so it is gone.
 on:
-  schedule:
-    - cron: "30 5 * * 4"   # Thu 05:30 UTC — Wednesday season opener
-    - cron: "30 5 * * 5"   # Fri 05:30 UTC — catch Thursday Night Football
-    - cron: "0 22 * * 0"   # Sun 22:00 UTC — catch Sun early slate
-    - cron: "30 1 * * 1"   # Mon 01:30 UTC — catch Sun late slate
-    - cron: "30 5 * * 1"   # Mon 05:30 UTC — catch Sunday Night Football
-    - cron: "0 9 * * 2"    # Tue 09:00 UTC — catch Monday Night Football
   workflow_dispatch: {}    # allow manual fire from the Actions tab
 
 jobs:
