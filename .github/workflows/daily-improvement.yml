@@ -1,7 +1,8 @@
 name: Daily improvement agent
 on:
-  # Started daily at 12:15 UTC by the Cloudflare scheduler Worker
-  # (cron/src/index.js, githubJobsDue), not GitHub's schedule trigger.
+  schedule:
+    - cron: '17 7 * * *'
+      timezone: America/Chicago
   workflow_dispatch:
 env:
   TZ: America/Chicago

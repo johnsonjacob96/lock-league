@@ -1,11 +1,8 @@
 name: Site monitor
 on:
-  # Started hourly (and daily at 11:30 UTC with browser checks) by the
-  # Cloudflare scheduler Worker -- see cron/src/index.js, githubJobsDue.
-  # The one GitHub schedule left is a once-a-day dead-man check: if the Worker
-  # or its token stops dispatching, the monitor still runs (when GitHub
-  # delivers it) instead of going silent.
   schedule:
+    - cron: '7 * * * *'
+      timezone: America/Chicago
     - cron: '33 6 * * *'
       timezone: America/Chicago
   workflow_dispatch:

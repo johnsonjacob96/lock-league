@@ -12,7 +12,8 @@ NFL pick-league site for an 8-member group: historical browse (2023–25) + live
 - Deployed on **Cloudflare Pages** (`lock-league.pages.dev`); a push to `main` triggers the build
 - Neon Postgres (`DATABASE_URL`) for live-season picks + games
 - **SharpAPI** (FanDuel + DraftKings) for spreads/totals AND player props (`ODDS_PROVIDER=sharpapi`); The Odds API is the alternate provider
-- ESPN scoreboard for final scores → auto-grading. ESPN 403s the CF colo IP, so the scoreboard is **seeded from a GitHub Actions runner** (`.github/workflows/*-seed.yml`)
+- ESPN live scores and final stats → auto-grading. The Cloudflare scheduler refreshes scoreboard/boxscore snapshots directly; GitHub retains an independent-network fallback for intermittent ESPN blocking.
+- App scheduling uses the existing Worker + Wrangler OAuth; no new platform token. Browser monitoring and the daily coding agent retain GitHub schedules. See [scheduler deployment](CLOUDFLARE_DEPLOY.md#5-scheduling-without-a-new-platform-token).
 
 ## Routes
 
