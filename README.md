@@ -12,7 +12,8 @@ NFL pick-league site for an 8-member group: historical browse (2023–25) + live
 - Deployed on **Cloudflare Pages** (`lock-league.pages.dev`); a push to `main` triggers the build
 - Neon Postgres (`DATABASE_URL`) for live-season picks + games
 - **SharpAPI** (FanDuel + DraftKings) for spreads/totals AND player props (`ODDS_PROVIDER=sharpapi`); The Odds API is the alternate provider
-- ESPN scoreboard for final scores → auto-grading. ESPN 403s the CF colo IP, so the scoreboard is **seeded from a GitHub Actions runner** (`.github/workflows/*-seed.yml`)
+- ESPN live scores and final stats → auto-grading. The Cloudflare scheduler refreshes scoreboard/boxscore snapshots directly; GitHub retains an independent-network fallback for intermittent ESPN blocking.
+- App scheduling uses the existing Worker + Wrangler OAuth; no new platform token. Browser monitoring and the daily coding agent retain GitHub schedules. See [scheduler deployment](CLOUDFLARE_DEPLOY.md#5-scheduling-without-a-new-platform-token).
 
 ## Routes
 
@@ -26,7 +27,7 @@ Cloudflare Pages maps each file under `functions/api/` to `/api/<name>`.
 | `/api/warroom` | `warroom.js` | Sunday War Room: locked picks + live scores + consensus |
 | `/api/auth?action=login\|logout\|me\|change-pass` | `auth.js` | Passphrase login, signed cookie, passphrase change |
 | `/api/picks` | `picks.js` | GET season picks (others' hidden until the week locks); POST your week (locks Sun 12pm CT; a game locks at its kickoff) |
-| `/api/grade` | `grade.js` | Manual fire (CRON_SECRET); grades current + previous week. Scheduled via GitHub Actions (`grade-cron.yml`): Thu/Sun/Mon/Tue windows |
+| `/api/grade` | `grade.js` | Manual fire (CRON_SECRET); grades current + previous week. Runs on every Cloudflare scheduler tick via `/api/notify`; `grade-cron.yml` is a manual button |
 | `/api/notify`, `/api/push`, `/api/settlement`, `/api/config` | resp. `.js` | Reminders/web-push, weekly settlement ledger, client bootstrap |
 
 ## History vs. live

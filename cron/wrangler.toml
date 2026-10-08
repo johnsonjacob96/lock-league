@@ -4,8 +4,9 @@
 # timed notifications (observed 15-30 min late on every run, and a full drop
 # of the pick reminder on 2026-08-13). Cloudflare cron triggers run on the same
 # edge platform as the app and fire on schedule, so these can be trusted. This
-# Worker only *triggers*; all logic (window guards, DST handling, recipient
-# selection, Web Push) stays in the app at /api/notify.
+# Worker triggers notifications and grading through /api/notify, refreshes
+# public ESPN snapshots, and performs lightweight health checks. Notification
+# window guards, DST handling, recipient selection and Web Push stay in Pages.
 #
 # Reminder: two UTC times bracket the DST-aware noon-CT lock (17:00 UTC in
 # CDT, 18:00 in CST). The /api/notify window guard sends only the one ~1h
@@ -27,4 +28,5 @@ enabled = true
 
 [vars]
 SITE_URL = "https://lock-league.pages.dev"
-# CRON_SECRET is set as an encrypted secret: `wrangler secret put CRON_SECRET`.
+# Existing encrypted CRON_SECRET authenticates app calls. Deploy with Wrangler OAuth.
+# No Cloudflare API token or GitHub dispatch token is required.

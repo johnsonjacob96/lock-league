@@ -1,3 +1,5 @@
+import {seedWeeks, seedRegularSeason} from "../../functions/_shared/scoreboard-refresh.js";
+import {checkSite} from "./health.js";
 // Lock League notification scheduler (Cloudflare cron trigger).
 //
 // Each cron in wrangler.toml maps to one or more notification types below;
@@ -12,7 +14,8 @@
 // Legacy expressions remain recognized during schedule propagation.
 //
 // This Worker holds NO business logic — it exists purely because Cloudflare cron
-// triggers are a reliable scheduler and GitHub Actions cron is not.
+// triggers provide the app clock. Runner-only jobs and a separate-network
+// ESPN fallback retain GitHub schedules; this Worker needs no GitHub token.
 
 const CRON_TYPES = {
   "0 16 * * *": ["reminder", "line-moves"],
@@ -32,6 +35,38 @@ async function fireNotify(env, type, { dryrun = false } = {}) {
   console.log(`[${type}] dryrun=${dryrun} status=${res.status} ${body}`);
   if (!res.ok) throw new Error(`Notification endpoint failed (${res.status})`);
   return { status: res.status, body };
+}
+
+// Native jobs use public ESPN and the existing app secret, never GitHub auth.
+export function nativeJobsDue(scheduledTime) {
+  const t = new Date(scheduledTime);
+  if (!Number.isFinite(t.getTime()) || t.getUTCMinutes() % 15 !== 0) return [];
+  const season = seedWeeks(t.getTime()).length > 0;
+  const day = t.getUTCDay(), hour = t.getUTCHours(), minute = t.getUTCMinutes();
+  // Include international Sunday and late-season Saturday games. Hourly
+  // outside these windows; existing app requests still fetch live data.
+  const gameWindow = ([1,2,4,5].includes(day) && hour < 6) || ([0,6].includes(day) && hour >= 12);
+  return [ ...(season && (gameWindow || minute === 0) ? ["scoreboard"] : []), ...(minute === 0 ? ["health"] : []) ];
+}
+
+export async function runNativeJob(env, job, {dryrun = false, now = Date.now()} = {}) {
+  if (job === "scoreboard") return seedRegularSeason({siteUrl:env.SITE_URL,cronSecret:env.CRON_SECRET,now,dryrun});
+  if (job === "health") return checkSite(env.SITE_URL);
+  throw new Error("Unknown job");
+}
+
+async function runScheduled(env, types, jobs, dryrun, now) {
+  // Finish every handler even if another fails. Surface failures to Cloudflare
+  // after all jobs settle, rather than logging a misleading successful tick.
+  const results = await Promise.allSettled([
+    ...types.map(type => fireNotify(env,type,{dryrun})),
+    ...jobs.map(async job => {
+      const result=await runNativeJob(env,job,{dryrun,now});
+      console.log(`[${job}] ${JSON.stringify(result)}`);return result;
+    }),
+  ]);
+  const failed=results.filter(r=>r.status==="rejected");
+  if(failed.length) throw new AggregateError(failed.map(r=>r.reason),"Scheduler job failed: " + failed.map(r=>r.reason?.message || r.reason).join("; "));
 }
 
 export default {
@@ -55,7 +90,8 @@ export default {
       }
     }
     if (!types) { console.log(`[scheduled] unrecognized cron: ${event.cron}`); return; }
-    ctx.waitUntil(Promise.all(types.map((type) => fireNotify(env, type, { dryrun }))));
+    const jobs = event.cron === "*/15 * * * *" && !dryrun ? nativeJobsDue(event.scheduledTime) : [];
+    ctx.waitUntil(runScheduled(env,types,jobs,dryrun,event.scheduledTime));
   },
 
   // On-demand verification only (not the production path). Requires the shared
@@ -66,6 +102,14 @@ export default {
       return new Response("unauthorized", { status: 401 });
     }
     const url = new URL(request.url);
+    const job = url.searchParams.get("job");
+    if (job) {
+      if (!["scoreboard","health"].includes(job)) return new Response("Unknown job",{status:400});
+      try {
+        const result=await runNativeJob(env,job,{dryrun:url.searchParams.get("dryrun")==="1"});
+        return Response.json({ok:true,job,result});
+      } catch(e) {return Response.json({ok:false,job,error:e.message},{status:502});}
+    }
     const type = url.searchParams.get("type") || "reminder";
     const dryrun = url.searchParams.get("dryrun") === "1";
     const r = await fireNotify(env, type, { dryrun });

@@ -83,16 +83,56 @@ The response carries the code; redeem it on the reset screen. Any successful
 reset or password change also signs that member out everywhere else (it bumps
 `members.session_epoch`, which every session cookie is stamped with).
 
-## 5. Set up GitHub Actions cron
+## 5. Scheduling without a new platform token
 
-In the GitHub repo: **Settings → Secrets and variables → Actions** → add:
+The `lock-league-cron` Worker in `cron/` runs the app's quarter-hour clock:
 
-- `SITE_URL` → `https://lock-league.pages.dev` (or your custom domain)
-- `CRON_SECRET` → same value as the Cloudflare env var
+- `/api/notify`: existing line-move, pick and kickoff reminder windows, plus
+  grading and the Tuesday week close. Recipient, dedupe and time guards stay
+  in the app.
+- Direct ESPN scoreboard/boxscore refresh: quarter-hour during game windows,
+  hourly otherwise, for the current and previous regular-season weeks. Tries
+  ESPN's Cloudflare-reachable web host first; preserves final-stat checks.
+- Hourly read-only homepage, config and scores health checks. Failures appear
+  as failed Worker invocations and do not prevent other handlers from running.
 
-The workflow at `.github/workflows/grade-cron.yml` will then fire 4x/week at the same UTC times as the old Netlify scheduled functions.
+**No new Cloudflare API token or GitHub personal access token is needed.**
+Deploy using the existing Wrangler OAuth login and the existing encrypted
+`CRON_SECRET`:
 
-To test the workflow manually: **Actions tab → Grade Picks (cron) → Run workflow**.
+```bash
+wrangler whoami
+wrangler deploy --config cron/wrangler.toml
+```
+
+The Pages deployment and scheduler deployment are separate. Pushes to `main`
+update Pages; they do **not** deploy the scheduler Worker. Existing Worker
+secrets are preserved by `wrangler deploy`.
+
+GitHub retains its runner-only daily coding agent and full browser/asset
+monitor, plus `regular-season-seed.yml` as an independent-network ESPN
+fallback. GitHub schedules are best-effort; the app no longer depends on
+those schedules for its primary refresh, grading or reminder clock. Do not
+remove the fallback unless its replacement has been verified from production.
+The fallback runner still uses the existing `SITE_URL` and `CRON_SECRET`
+Actions secrets. `grade-cron.yml` remains a manual "grade now" button.
+
+Authenticated Worker diagnostics (send `X-Cron-Secret`, never put it in URLs):
+
+- `?job=scoreboard&dryrun=1`: fetch/validate real ESPN data without writing.
+- `?job=scoreboard`: refresh and verify snapshot persistence; no notification call.
+- `?job=health`: read-only health checks.
+- `?type=line-moves&dryrun=1`: existing notification eligibility check without sends.
+
+Deploy and verify the Worker before merging changes that remove old schedules.
+Four expired preseason workflows have been removed, including the annual
+August `wipe-test` trigger that could have deleted real season-2026 Week 2 data.
+
+An external Worker dispatching GitHub Actions would need separate runtime
+GitHub authorization. A local `gh` OAuth login is not an identity installed in
+Cloudflare; copying its broad token into a Worker is not our deployment model.
+If runner jobs later need Cloudflare dispatch, use a repository-scoped GitHub
+App rather than a personal token, and verify it before disabling any schedules.
 
 ## 6. Point the domain (optional)
 

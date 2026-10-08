@@ -1,18 +1,7 @@
-# Seed the regular-season ESPN scoreboard from a GitHub runner.
-#
-# The Cloudflare Worker can't reliably reach ESPN (site.api 403s the colo IP, cdn
-# intermittently returns an empty body), which breaks every ESPN-backed read:
-# live scores (/api/scores), the War Room live records, and auto-grading. A
-# GitHub runner CAN reach ESPN, so this job fetches the current + previous week's
-# scoreboard and POSTs it to /api/odds?action=seed, which stores it in the
-# scoreboard_snapshot table; fetchScoreboard falls back to it when the live fetch
-# fails. Same pattern as preseason-seed.yml, but self-tracking the current week
-# through the whole regular season.
-#
-# The week number is computed the SAME way the app's currentNflWeek() does
-# (WEEK1_START_MS + 7-day buckets), so the seed is always stored under exactly
-# the (season, week, seasontype) the app looks up. Previous week is seeded too so
-# a late Sunday/Monday final is captured for grading before the app rolls over.
+# Independent-network backup for the primary Cloudflare scoreboard refresh.
+# Both runtimes share functions/_shared/scoreboard-refresh.js. Keep this
+# schedule: ESPN can block one network while remaining reachable from another.
+# GitHub timing is best-effort; app grading/notifications use Cloudflare.
 name: regular-season-seed
 
 on:
