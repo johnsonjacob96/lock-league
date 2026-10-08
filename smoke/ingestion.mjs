@@ -411,6 +411,29 @@ function recoveryPair(book, type, line, alternate=true, id='main') {
     line:type==='spread'?(i?line:-line):line,odds_american:i?-120:-102,
     is_alternate_line:alternate,is_main_line:!alternate}));
 }
+test('board pulls main lines only, and recovers a mislabeled market from that one event',async t=>{
+  // Alternates were ~98% of the unfiltered rows and starved the prop menus of
+  // SharpAPI requests. The recovery path for a main line SharpAPI labels as
+  // alternate must still work: one event request, not the whole slate.
+  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-09-09T12:00:00Z')});
+  const {fetchSharpApi}=await import('../functions/_shared/odds-providers.js');
+  const requests=[];
+  const main=[...recoveryPair('fanduel','total',47.5,false),...recoveryPair('fanduel','spread',3,false),...recoveryPair('draftkings','spread',3,false)];
+  const eventRows=[...recoveryPair('draftkings','total',47.5,true),{...recoveryBase,sportsbook:'draftkings',market_type:'player_receptions',is_player_prop:true,line:4.5,selection_type:'over',odds_american:-110}];
+  t.mock.method(globalThis,'fetch',async input=>{
+    const u=new URL(input);requests.push(u);
+    if(u.hostname==='api.sharpapi.io'&&u.pathname==='/api/v1/odds')return json({data:main,pagination:{has_more:false}});
+    if(u.pathname==='/api/v1/events/opener/odds')return json({data:eventRows});
+    return new Response('',{status:404});
+  });
+  const board=await fetchSharpApi({SHARPAPI_KEY:'test'});
+  const pulls=requests.filter(u=>u.pathname==='/api/v1/odds');
+  assert.ok(pulls.length>=1&&pulls.every(u=>u.searchParams.get('is_main_line')==='true'),'every board pull asks for main lines only');
+  assert.equal(requests.filter(u=>u.pathname==='/api/v1/events/opener/odds').length,1);
+  assert.equal(board.games[0].books.draftkings.total.point,47.5,'mislabeled DK total recovered');
+  assert.equal(board.games[0].books.fanduel.total.point,47.5);
+  assert.deepEqual(board.sharp.recovery,{events:1,rows:2},'only the full-game rows of that event are kept');
+});
 test('mislabeled FD spread recovers from nearby main DK spread with its own prices',()=>{
   const g=normalizeSharp([...recoveryPair('fanduel','spread',3.5),...recoveryPair('draftkings','spread',3,false)])[0];
   assert.deepEqual(g.books.fanduel.spread,{fav:'Seattle Seahawks',line:-3.5,favPrice:-102,dogPrice:-120,updated:'2026-09-09T19:36Z'});

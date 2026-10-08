@@ -608,6 +608,25 @@ export async function fetchSharpRaw(env, maxPages = 8, overrides = null, priorit
   Object.defineProperty(all, "stats", { value: stats, enumerable: false });
   return all;
 }
+// One event's complete odds (main and alternate, every market) in a single
+// request. Only full-game spread/total rows are kept. Fail-soft per event.
+async function fetchSharpEventRows(env, ids) {
+  const rows = [];
+  for (const id of ids) {
+    try {
+      const r = await providerFetch(env, "sharp", `https://api.sharpapi.io/api/v1/events/${encodeURIComponent(id)}/odds`, {
+        headers: { "X-API-Key": env.SHARPAPI_KEY }, signal: AbortSignal.timeout(3000),
+      });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const data = Array.isArray(j) ? j : j.data;
+      if (Array.isArray(data)) rows.push(...data.filter(row => String(row.event_id) === id && row.is_player_prop !== true &&
+        /spread|handicap|total/i.test(String(row.market_type ?? row.market ?? ""))));
+    } catch { /* budget or provider failure: keep what the main pull has */ }
+  }
+  return rows;
+}
+
 // Bookmaker event times can differ by a few minutes. Match the current week's
 // persisted ESPN schedule so the board countdown agrees with the pick guard.
 export function alignSharpKickoffs(games, events) {
@@ -716,18 +735,35 @@ async function fetchSharpApi(env) {
   if (Date.now() >= pickCutoff(curPeriod.season, curPeriod.week, env).getTime())
     return {source:"sharpapi",live:false,locked:true,games:[],fetched_at:new Date().toISOString()};
   const window = weekWindow(curPeriod.week,env);
-  const catalog = await sharedFeed(env,`sharp-catalog:${curPeriod.season}:${curPeriod.week}`,10*60*1000,async()=>{
-    const rows = await fetchSharpRaw(env);
+  // Main lines only. Alternate lines were ~98% of the rows (391 of 400 in a
+  // measured pull on Oct 8): the unfiltered pull spent the whole SharpAPI
+  // minute and still stopped after a couple of games, leaving most of the
+  // board without FanDuel and seven games without an event ID for their prop
+  // menus. Main lines for the whole week fit in about two pages.
+  const MAIN = { is_main_line: "true" };
+  const catalog = await sharedFeed(env,`sharp-catalog-v2:${curPeriod.season}:${curPeriod.week}`,10*60*1000,async()=>{
+    const rows = await fetchSharpRaw(env, 8, MAIN);
     const current = rows.filter(r=>Date.parse(r.event_start_time)>=Date.parse(window.from) && Date.parse(r.event_start_time)<Date.parse(window.to));
     return { rows:current,ids:[...new Set(current.map(r=>r.event_id).filter(Boolean))],fetched_at:new Date().toISOString(),
       stats:{ ...(rows.stats||{}), rows: rows.length, week_rows: current.length } };
   });
   const eligibleIds = [...new Set(catalog.rows.filter(r => Date.parse(r.event_start_time) > Date.now()).map(r => r.event_id).filter(Boolean))];
   const raw = Date.now()-Date.parse(catalog.fetched_at)<10000 ? catalog.rows
-    : eligibleIds.length ? await fetchSharpRaw(env,8,{event_id:eligibleIds.join(',')}) : [];
+    : eligibleIds.length ? await fetchSharpRaw(env,8,{...MAIN,event_id:eligibleIds.join(',')}) : [];
   const sharpStats = { catalog: catalog.stats || null, catalog_events: catalog.ids?.length ?? null,
     pull: raw.stats ? { ...raw.stats, rows: raw.length, events: eligibleIds.length } : "catalog" };
-  const all = normalizeSharp(raw);
+  let all = normalizeSharp(raw);
+  // The main-line filter hides a market SharpAPI mislabeled as alternate, which
+  // recoverFlaggedMarkets exists to repair. For a game still missing a book's
+  // spread or total, fetch that one event's full odds (one request) and
+  // normalize again with them. Bounded: two events per refresh.
+  const incomplete = all.filter(g => Date.parse(g.kickoff) > Date.now() && ["fanduel","draftkings"].some(b => !g.books?.[b]?.spread || !g.books?.[b]?.total))
+    .flatMap(g => g.sharp_event_ids || []).filter(id => /^[A-Za-z0-9_-]+$/.test(id)).slice(0, 2);
+  if (incomplete.length) {
+    const extra = await fetchSharpEventRows(env, incomplete);
+    sharpStats.recovery = { events: incomplete.length, rows: extra.length };
+    if (extra.length) all = normalizeSharp([...raw, ...extra]);
+  }
   // SharpAPI returns the whole season; scope to the current pick week's
   // kickoff window, exactly like the The-Odds-API path.
   const win = weekWindow(currentSeasonWeek(env).week, env);
