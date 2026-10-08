@@ -38,11 +38,11 @@ jobs:
           curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?debug=budget" | jq . || echo "debug-budget-failed"
           echo "----- BOARD SHARPAPI COST (public board diagnostics) -----"
           curl -sS -m 30 "$S/api/odds" | jq '{source, fetched_at, sharp}' || echo "board-failed"
-          echo "----- SHARP MEASUREMENTS (from the prop share, 2 pages each, a minute apart) -----"
-          for q in "debug=sharp&priority=props&pages=2" "debug=sharp&priority=props&pages=2&f_is_main_line=true" "debug=sharpevents"; do
+          echo "----- SHARP MEASUREMENTS (from the prop share, a minute apart; summaries only) -----"
+          for q in "debug=sharp&priority=props&pages=2" "debug=sharp&priority=props&pages=2&f_is_main_line=true" "debug=sharpevents&f_event_type=game&f_limit=100"; do
             echo ">> $q"
             curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?$q" \
-              | jq 'del(.sample[]?.odds?) | {status, url, filters, count, error, stats, byBook, alternates, mainLine, events, pagination, keys, raw, sample: (.sample // [])[:6]}' || echo "measurement-failed"
+              | jq -c '{status, url, filters, count, error, stats, byBook, alternates, mainLine, events, total: .pagination.total, has_more: .pagination.has_more, games: [(.sample // [])[] | select(.away_team != "" and .away_team != null) | {id, away_team, home_team, start_time, event_type}][:4], types: ([(.sample // [])[] | .event_type] | unique)}' || echo "measurement-failed"
             sleep 61
           done
           echo "----- PROPS (public) -----"
