@@ -10,6 +10,13 @@ async function ensure(env) {
       lease_until TIMESTAMPTZ NOT NULL DEFAULT 'epoch', owner TEXT)`);
       await ignoringConcurrentCreate(db`CREATE TABLE IF NOT EXISTS feed_budget (
       provider TEXT PRIMARY KEY, requests DOUBLE PRECISION[] NOT NULL DEFAULT '{}', blocked_until TIMESTAMPTZ NOT NULL DEFAULT 'epoch')`);
+      // What the provider said the last time it throttled us, for diagnosis.
+      await ignoringConcurrentCreate(db`ALTER TABLE feed_budget ADD COLUMN IF NOT EXISTS last_limit JSONB`);
+      // A block set before MAX_BLOCK_S existed can run for hours on one bad
+      // Retry-After; bring it down to the cap once.
+      for (const [provider, { maxBlockS }] of Object.entries(LIMITS))
+        if (maxBlockS) await db`UPDATE feed_budget SET blocked_until=NOW()+(${maxBlockS} * INTERVAL '1 second')
+          WHERE provider=${provider} AND blocked_until>NOW()+(${maxBlockS} * INTERVAL '1 second')`;
     })().catch((e) => {
       ready = null;
       throw e;
@@ -64,10 +71,24 @@ export async function sharedFeed(env, key, ttlMs, load) {
     throw e;
   }
 }
+// maxBlockS bounds how long one throttled response can stop every request
+// to a provider. SharpAPI's Retry-After is taken as given otherwise, and a
+// long or misread value (or a quota that has since reset) would silently take
+// the board and every prop menu offline for hours. After the cap, one request
+// tries again; if the provider is still throttling, the block is re-set. The
+// Odds API keeps its exact monthly-quota block (no cap).
 const LIMITS = {
-  sharp: { window: 60, limit: 10, hour: 10 },
+  sharp: { window: 60, limit: 10, hour: 10, maxBlockS: 600 },
   oddsapi: { window: 86400, limit: 12, hour: 12 },
 };
+// Read-only view for the admin diagnostic (/api/odds?debug=budget).
+export async function feedBudgetState(env) {
+  if (!env?.DATABASE_URL) return [];
+  await ensure(env);
+  return sql(env)`SELECT provider, blocked_until, blocked_until > NOW() AS blocked,
+    (SELECT count(*) FROM unnest(requests) t WHERE t>EXTRACT(EPOCH FROM NOW())-60)::int AS used_last_minute,
+    last_limit FROM feed_budget ORDER BY provider`;
+}
 export async function providerFetch(
   env,
   provider,
@@ -103,6 +124,7 @@ export async function providerFetch(
         ? Math.max(0, (Date.parse(retry) - Date.now()) / 1000)
         : 60;
     if (!Number.isFinite(seconds)) seconds = 60;
+    if (limit.maxBlockS) seconds = Math.min(seconds, limit.maxBlockS);
     if (
       provider === "oddsapi" &&
       response.headers.get("x-requests-remaining") === "0"
@@ -113,7 +135,14 @@ export async function providerFetch(
           Date.now()) /
         1000;
     }
-    await db`UPDATE feed_budget SET blocked_until=GREATEST(blocked_until,NOW()+(${Math.max(1, seconds)} * INTERVAL '1 second')) WHERE provider=${provider}`;
+    const headers = Object.fromEntries([...response.headers].filter(([k]) => /retry|ratelimit|rate-limit|requests|quota/i.test(k)));
+    const body = await response.clone().text().then((t) => t.slice(0, 300)).catch(() => "");
+    const lastLimit = { at: new Date().toISOString(), status: response.status, headers, body, blocked_s: Math.max(1, seconds) };
+    const cap = limit.maxBlockS ?? 10 * 365 * 86400;
+    await db`UPDATE feed_budget SET last_limit=${JSON.stringify(lastLimit)}::jsonb,
+      blocked_until=LEAST(GREATEST(blocked_until,NOW()+(${Math.max(1, seconds)} * INTERVAL '1 second')),
+                          NOW()+(${cap} * INTERVAL '1 second'))
+      WHERE provider=${provider}`;
   }
   return response;
 }

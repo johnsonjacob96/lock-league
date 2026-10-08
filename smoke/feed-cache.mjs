@@ -16,7 +16,7 @@ mock.module("../functions/_shared/db.js", {
           .then((r) => r.rows),
   },
 });
-const { sharedFeed, providerFetch, readSharedFeed } = await import(
+const { sharedFeed, providerFetch, readSharedFeed, feedBudgetState } = await import(
   "../functions/_shared/feed-cache.js"
 );
 const { freshQuote, verifiedGames, verifiedMarkets, quoteChanged } =
@@ -132,6 +132,28 @@ test("429 backoff is shared even when request budget remains", async (t) => {
     /feed-budget-wait/,
   );
   assert.equal(calls, 1);
+});
+test("one SharpAPI 429 blocks at most ten minutes and records what the provider said", async (t) => {
+  await db.exec("UPDATE feed_budget SET requests='{}',blocked_until='epoch',last_limit=NULL");
+  t.mock.method(globalThis, "fetch", async () =>
+    new Response('{"error":"rate limit exceeded"}', { status: 429, headers: {
+      "Retry-After": "86400", "X-RateLimit-Limit": "1000", "X-RateLimit-Remaining": "0", "Content-Type": "application/json" } }));
+  const response = await providerFetch(env, "sharp", "https://vendor.invalid");
+  assert.equal(await response.text(), '{"error":"rate limit exceeded"}', "caller can still read the body");
+  const [sharp] = (await feedBudgetState(env)).filter((p) => p.provider === "sharp");
+  const blockedFor = (Date.parse(sharp.blocked_until) - Date.now()) / 1000;
+  assert.ok(sharp.blocked && blockedFor > 590 && blockedFor <= 600, `blocked for ${blockedFor}s`);
+  assert.equal(sharp.last_limit.status, 429);
+  assert.equal(sharp.last_limit.headers["retry-after"], "86400");
+  assert.equal(sharp.last_limit.headers["x-ratelimit-remaining"], "0");
+  assert.match(sharp.last_limit.body, /rate limit exceeded/);
+  assert.equal(sharp.last_limit.blocked_s, 600);
+  // A later, shorter 429 cannot extend past the cap either.
+  await db.exec("UPDATE feed_budget SET blocked_until='epoch' WHERE provider='sharp'");
+  await providerFetch(env, "sharp", "https://vendor.invalid");
+  const [again] = (await feedBudgetState(env)).filter((p) => p.provider === "sharp");
+  assert.ok((Date.parse(again.blocked_until) - Date.now()) / 1000 <= 600);
+  await db.exec("UPDATE feed_budget SET requests='{}',blocked_until='epoch' WHERE provider='sharp'");
 });
 test("paid fallback counts credits and honors exhausted monthly quota", async (t) => {
   let calls = 0;

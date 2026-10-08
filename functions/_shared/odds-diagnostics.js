@@ -8,10 +8,21 @@ import {
   fetchSharpRaw,
   normalizeSharp,
 } from "./odds-providers.js";
+import { feedBudgetState } from "./feed-cache.js";
 export async function oddsDiagnostics(env, url) {
   // Debug: why is the board not showing the expected week's games? Dumps the
   // decision inputs + each live source's outcome, so we can see (in the real CF
   // env) whether the ESPN preseason fallback is throwing.
+  // Debug: provider quota state -- is a provider blocked, until when, how much
+  // of the per-minute budget is in use, and what the provider last said when
+  // it throttled us. Read-only: spends no provider request.
+  if (url.searchParams.get("debug") === "budget") {
+    try {
+      return json({ now: new Date().toISOString(), providers: await feedBudgetState(env) }, { headers: { "Cache-Control": "no-store" } });
+    } catch (e) {
+      return json({ error: String((e && e.message) || e) }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    }
+  }
   if (url.searchParams.get("debug") === "why") {
     const out = { now: new Date().toISOString() };
     try {

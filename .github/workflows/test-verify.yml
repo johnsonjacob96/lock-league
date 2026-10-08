@@ -34,6 +34,8 @@ jobs:
         run: |
           S="${SITE_URL:-https://lock-league.pages.dev}"
           if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET not set; skipping"; exit 0; fi
+          echo "----- PROVIDER BUDGET (read-only) -----"
+          curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?debug=budget" | jq . || echo "debug-budget-failed"
           echo "----- SHARP CATALOG (full league, up to 8 pages of 200) -----"
           curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?debug=sharp" \
             | jq '{count, error, books: ([.sample[]?.sportsbook] | group_by(.) | map({(.[0]): length}) | add), first_event: .sample[0].event_id, last_event: .sample[-1].event_id}' \
