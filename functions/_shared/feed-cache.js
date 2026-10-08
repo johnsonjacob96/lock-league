@@ -81,6 +81,15 @@ const LIMITS = {
   sharp: { window: 60, limit: 10, hour: 10, maxBlockS: 600 },
   oddsapi: { window: 86400, limit: 12, hour: 12 },
 };
+// SharpAPI's per-minute budget is shared by the board and prop menus. The
+// board's paginated pull can take every request in a minute, and did: on Oct 8
+// it held 8-10 of 10 continuously while anyone had the app open, so no prop
+// menu ever got a request. Cap the board at 6 so prop menus always keep 4;
+// props may use the whole budget when the board leaves it free.
+const BOARD_SHARE = 6;
+function share(provider, priority, limit) {
+  return provider === "sharp" && priority !== "props" ? Math.min(BOARD_SHARE, limit.limit) : limit.limit;
+}
 // Read-only view for the admin diagnostic (/api/odds?debug=budget).
 export async function feedBudgetState(env) {
   if (!env?.DATABASE_URL) return [];
@@ -107,7 +116,7 @@ export async function providerFetch(
     ARRAY(SELECT t FROM unnest(requests) t WHERE t>EXTRACT(EPOCH FROM NOW())-${limit.window}) ||
     array_fill(EXTRACT(EPOCH FROM NOW())::double precision,ARRAY[${cost}::int])
     WHERE provider=${provider} AND blocked_until<=NOW()
-      AND (SELECT count(*) FROM unnest(requests) t WHERE t>EXTRACT(EPOCH FROM NOW())-${limit.window})+${cost}<=${provider === "sharp" && priority === "props" ? 8 : limit.limit}
+      AND (SELECT count(*) FROM unnest(requests) t WHERE t>EXTRACT(EPOCH FROM NOW())-${limit.window})+${cost}<=${share(provider, priority, limit)}
       AND (SELECT count(*) FROM unnest(requests) t WHERE t>EXTRACT(EPOCH FROM NOW())-3600)+${cost}<=${provider === "sharp" ? 100000 : limit.hour}
     RETURNING provider`;
   if (!claim.length) throw Error("feed-budget-wait");

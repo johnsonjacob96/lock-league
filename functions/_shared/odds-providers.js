@@ -560,25 +560,37 @@ export async function fetchSharpRaw(env, maxPages = 8, overrides = null) {
     ...(overrides || {}),
   };
   const all = [];
+  // How the pull went, for the board's diagnostics: pages spent and why it
+  // stopped early, if it did.
+  const stats = { pages: 0, truncated: null };
   const deadline = Date.now() + 6000;
   let cursor = null;
   for (let page = 0; page < maxPages; page++) {
-    if (Date.now() >= deadline) break;
+    if (Date.now() >= deadline) { stats.truncated = "deadline"; break; }
     const url = new URL(base);
     for (const [k, v] of Object.entries(q))
       if (v !== undefined && v !== null) url.searchParams.set(k, v);
     if (cursor) url.searchParams.set("cursor", cursor);
-    const r = await providerFetch(env, "sharp", url, {
-      headers: { "X-API-Key": env.SHARPAPI_KEY },
-      signal: AbortSignal.timeout(3000),
-    });
+    let r;
+    try {
+      r = await providerFetch(env, "sharp", url, {
+        headers: { "X-API-Key": env.SHARPAPI_KEY },
+        signal: AbortSignal.timeout(3000),
+      });
+    } catch (e) {
+      // Our own per-minute budget ran out mid-pull: keep the pages already
+      // in, like a 429 below, rather than discarding the whole board.
+      if (all.length && /feed-budget-wait/.test(String(e?.message))) { stats.truncated = "budget"; break; }
+      throw e;
+    }
+    stats.pages++;
     if (!r.ok) {
       // SharpAPI's free tier caps at ~12 requests/min; a paginated pull can trip
       // that mid-stream (429). Keep whatever we've already paged in rather than
       // discarding the entire fetch — a partial slate beats a blank one. Only
       // surface the error when page 0 itself failed (nothing to salvage), so the
       // caller can fall back or serve stale.
-      if (all.length) break;
+      if (all.length) { stats.truncated = `http-${r.status}`; break; }
       throw new Error(
         `sharpapi ${r.status}: ${(await r.text()).slice(0, 200)}`,
       );
@@ -590,8 +602,10 @@ export async function fetchSharpRaw(env, maxPages = 8, overrides = null) {
     all.push(...rows);
     const pg = j && j.pagination;
     if (!pg || !pg.has_more || !pg.next_cursor) break;
+    if (page === maxPages - 1) stats.truncated = "max-pages";
     cursor = pg.next_cursor;
   }
+  Object.defineProperty(all, "stats", { value: stats, enumerable: false });
   return all;
 }
 // Bookmaker event times can differ by a few minutes. Match the current week's
@@ -705,11 +719,14 @@ async function fetchSharpApi(env) {
   const catalog = await sharedFeed(env,`sharp-catalog:${curPeriod.season}:${curPeriod.week}`,10*60*1000,async()=>{
     const rows = await fetchSharpRaw(env);
     const current = rows.filter(r=>Date.parse(r.event_start_time)>=Date.parse(window.from) && Date.parse(r.event_start_time)<Date.parse(window.to));
-    return { rows:current,ids:[...new Set(current.map(r=>r.event_id).filter(Boolean))],fetched_at:new Date().toISOString() };
+    return { rows:current,ids:[...new Set(current.map(r=>r.event_id).filter(Boolean))],fetched_at:new Date().toISOString(),
+      stats:{ ...(rows.stats||{}), rows: rows.length, week_rows: current.length } };
   });
   const eligibleIds = [...new Set(catalog.rows.filter(r => Date.parse(r.event_start_time) > Date.now()).map(r => r.event_id).filter(Boolean))];
   const raw = Date.now()-Date.parse(catalog.fetched_at)<10000 ? catalog.rows
     : eligibleIds.length ? await fetchSharpRaw(env,8,{event_id:eligibleIds.join(',')}) : [];
+  const sharpStats = { catalog: catalog.stats || null, catalog_events: catalog.ids?.length ?? null,
+    pull: raw.stats ? { ...raw.stats, rows: raw.length, events: eligibleIds.length } : "catalog" };
   const all = normalizeSharp(raw);
   // SharpAPI returns the whole season; scope to the current pick week's
   // kickoff window, exactly like the The-Odds-API path.
@@ -767,6 +784,7 @@ async function fetchSharpApi(env) {
     source: "sharpapi",
     live: true,
     fetched_at: new Date().toISOString(),
+    sharp: sharpStats,
     games,
   };
 }

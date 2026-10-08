@@ -36,10 +36,14 @@ jobs:
           if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET not set; skipping"; exit 0; fi
           echo "----- PROVIDER BUDGET (read-only) -----"
           curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?debug=budget" | jq . || echo "debug-budget-failed"
-          echo "----- SHARP CATALOG (full league, up to 8 pages of 200) -----"
-          curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?debug=sharp" \
-            | jq '{count, error, books: ([.sample[]?.sportsbook] | group_by(.) | map({(.[0]): length}) | add), first_event: .sample[0].event_id, last_event: .sample[-1].event_id}' \
-            || echo "debug-sharp-failed"
+          echo "----- BOARD SHARPAPI COST (public board diagnostics) -----"
+          curl -sS -m 30 "$S/api/odds" | jq '{source, fetched_at, sharp}' || echo "board-failed"
+          echo "----- SHARP CATALOG: as the board requests it, then main lines only -----"
+          for f in "" "&f_is_main_line=true"; do
+            curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?debug=sharp$f" \
+              | jq '{filters, count, error, stats, byBook, alternates, mainLine, events}' || echo "debug-sharp-failed"
+            sleep 20
+          done
           echo "----- PROPS (public) -----"
           curl -sS -m 30 "$S/api/props?game_key=Tampa%20Bay%20Buccaneers%40Dallas%20Cowboys" \
             | jq '{source, reason, stale, complete, markets: (.markets|length), ids: .sharp_event_ids, pages}' || echo "props-failed"
