@@ -8,6 +8,7 @@ const j=async url=>{const r=await fetch(url,{signal:AbortSignal.timeout(15000)})
 export async function run(base='https://lock-league.pages.dev') {
  const s=suite(`live — Week 1 readiness (${base})`);
  const odds=await j(`${base}/api/odds`);const games=odds.body?.games||[];
+ console.log(`   odds source=${odds.body?.source} stale=${!!odds.body?.stale} games=${games.length} fetched_at=${odds.body?.fetched_at}`);
  s.ok('odds is real JSON with a live provider',odds.status===200&&odds.body?.source!=='mock'&&games.length>0);
  const eligible=schedule.filter(g=>new Date(g.kickoff).toLocaleDateString('en-US',{weekday:'short',timeZone:'America/Chicago'})!=='Mon'&&Date.parse(g.kickoff)>Date.now());
  const missing=eligible.filter(e=>!games.some(g=>key(g)===key(e)));
@@ -17,9 +18,12 @@ export async function run(base='https://lock-league.pages.dev') {
   s.ok(`${key(g)} has both FanDuel and DraftKings`,["fanduel","draftkings"].every(k=>Number.isFinite(g.books?.[k]?.spread?.line)&&Number.isFinite(g.books?.[k]?.total?.point)));
   s.ok(`${key(g)} has spread and game-total lines`,books.some(b=>Number.isFinite(b.spread?.line))&&books.some(b=>Number.isFinite(b.total?.point)&&b.total.point>=30));
   const pr=await j(`${base}/api/props?game_key=${encodeURIComponent(key(g))}`);
-  s.ok(`${key(g)} prop endpoint is JSON`,pr.status===200&&Array.isArray(pr.body?.markets));
+  // Say why, not just whether: source/reason/completeness name the failing stage.
+  const why=pr.body?`source=${pr.body.source} reason=${pr.body.reason??'-'} stale=${!!pr.body.stale} complete=${pr.body.complete} markets=${pr.body.markets?.length??0} ids=${(pr.body.sharp_event_ids||[]).length} pages=${pr.body.pages??'-'}`:`status=${pr.status}`;
+  s.ok(`${key(g)} prop endpoint is JSON`,pr.status===200&&Array.isArray(pr.body?.markets),why);
   if(Date.parse(g.kickoff)>Date.now()&&Date.parse(g.kickoff)-Date.now()<48*3600000)
-   s.ok(`${key(g)} near-kickoff props available`,pr.body?.markets?.length>0);
+   s.ok(`${key(g)} near-kickoff props available`,pr.body?.markets?.length>0&&!pr.body?.stale,why);
+  console.log(`   props ${key(g)} kickoff=${g.kickoff} ${why} event_ids=${JSON.stringify(g.sharp_event_ids||[])}`);
   for(const m of pr.body?.markets||[])s.ok(`${key(g)} ${m.market} valid players`,m.players?.length>0&&m.players.every(p=>p.player&&!/^over$|^under$/i.test(p.player)&&Array.isArray(p.alts)));
  }
  for(const [name,path,status] of [['config','/api/config',200],['auth','/api/auth?action=me',200],['picks','/api/picks?season=2026&week=1',200],['warroom','/api/warroom',401],['settlement','/api/settlement',401],['pot','/api/pot',401],['scores','/api/scores',200]]) {
