@@ -549,7 +549,7 @@ export function normalizeSharp(rows) {
 
 // SharpAPI is cursor-paginated (~50 rows/page); a full FD+DK spread+total week
 // is ~3 pages. Follow pagination.has_more, capped so a runaway can't loop.
-export async function fetchSharpRaw(env, maxPages = 8, overrides = null) {
+export async function fetchSharpRaw(env, maxPages = 8, overrides = null, priority = "board") {
   // exported for tests
   const base = "https://api.sharpapi.io/api/v1/odds";
   const q = {
@@ -576,7 +576,7 @@ export async function fetchSharpRaw(env, maxPages = 8, overrides = null) {
       r = await providerFetch(env, "sharp", url, {
         headers: { "X-API-Key": env.SHARPAPI_KEY },
         signal: AbortSignal.timeout(3000),
-      });
+      }, 1, priority);
     } catch (e) {
       // Our own per-minute budget ran out mid-pull: keep the pages already
       // in, like a 429 below, rather than discarding the whole board.
