@@ -153,7 +153,10 @@ export async function oddsDiagnostics(env, url) {
         { status: 400, headers: { "Cache-Control": "no-store" } },
       );
     try {
-      const raw = await fetchSharpRaw(env);
+      // f_<name>=<value> adds a SharpAPI query filter, to measure what a
+      // narrower board request would cost (e.g. f_is_main_line=true).
+      const filters = Object.fromEntries([...url.searchParams].filter(([k, v]) => /^f_[a-z_]{1,40}$/.test(k) && /^[A-Za-z0-9_,.:-]{1,200}$/.test(v)).map(([k, v]) => [k.slice(2), v]));
+      const raw = await fetchSharpRaw(env, 8, Object.keys(filters).length ? filters : null);
       const team = url.searchParams.get("team")?.toLowerCase();
       const selected = team
         ? raw.filter((r) =>
@@ -163,6 +166,12 @@ export async function oddsDiagnostics(env, url) {
       return json(
         {
           count: raw.length,
+          filters,
+          stats: raw.stats || null,
+          byBook: Object.fromEntries(["fanduel", "draftkings"].map(b => [b, raw.filter(r => r.sportsbook === b).length])),
+          alternates: raw.filter(r => r.is_alternate_line === true).length,
+          mainLine: raw.filter(r => r.is_main_line === true).length,
+          events: new Set(raw.map(r => r.event_id)).size,
           sample: selected.slice(0, team ? 40 : 8),
           parsedGames: normalizeSharp(selected).slice(0, 2),
         },

@@ -92,32 +92,46 @@ test("expired lease can be reclaimed after an isolate dies", async () => {
     true,
   );
 });
-test("atomic quota reserves board capacity and caps concurrent requests", async (t) => {
+test("the board can never take the prop menus' share of the SharpAPI minute", async (t) => {
+  await db.exec("UPDATE feed_budget SET requests='{}',blocked_until='epoch' WHERE provider='sharp'");
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => {
     calls++;
     return new Response("{}");
   });
-  const props = await Promise.allSettled(
-    Array.from({ length: 12 }, () =>
-      providerFetch(env, "sharp", "https://vendor.invalid", {}, 1, "props"),
-    ),
-  );
-  assert.equal(props.filter((r) => r.status === "fulfilled").length, 8);
-  await Promise.all([
-    providerFetch(env, "sharp", "https://vendor.invalid"),
-    providerFetch(env, "sharp", "https://vendor.invalid"),
-  ]);
-  await assert.rejects(
-    providerFetch(env, "sharp", "https://vendor.invalid"),
-    /feed-budget-wait/,
-  );
+  // A board pull alone stops at 6 of 10, atomically, however many race.
+  const board = await Promise.allSettled(Array.from({ length: 12 }, () => providerFetch(env, "sharp", "https://vendor.invalid")));
+  assert.equal(board.filter((r) => r.status === "fulfilled").length, 6);
+  // Prop menus still get the remaining 4.
+  const props = await Promise.allSettled(Array.from({ length: 6 }, () => providerFetch(env, "sharp", "https://vendor.invalid", {}, 1, "props")));
+  assert.equal(props.filter((r) => r.status === "fulfilled").length, 4);
+  await assert.rejects(providerFetch(env, "sharp", "https://vendor.invalid", {}, 1, "props"), /feed-budget-wait/);
   assert.equal(calls, 10);
-  await db.exec(
-    "UPDATE feed_budget SET requests=ARRAY[EXTRACT(EPOCH FROM NOW())::double precision-61] WHERE provider='sharp'",
-  );
+  // With the board idle, props may use the whole minute.
+  await db.exec("UPDATE feed_budget SET requests='{}' WHERE provider='sharp'");
+  const alone = await Promise.allSettled(Array.from({ length: 12 }, () => providerFetch(env, "sharp", "https://vendor.invalid", {}, 1, "props")));
+  assert.equal(alone.filter((r) => r.status === "fulfilled").length, 10);
+  // The window slides.
+  await db.exec("UPDATE feed_budget SET requests=ARRAY[EXTRACT(EPOCH FROM NOW())::double precision-61] WHERE provider='sharp'");
   await providerFetch(env, "sharp", "https://vendor.invalid");
-  assert.equal(calls, 11);
+  assert.equal(calls, 21);
+  await db.exec("UPDATE feed_budget SET requests='{}' WHERE provider='sharp'");
+});
+test("a board pull that runs out of budget keeps the pages it already has", async (t) => {
+  const { fetchSharpRaw } = await import("../functions/_shared/odds-providers.js");
+  // Four requests already spent this minute: the board has two left.
+  await db.exec("UPDATE feed_budget SET blocked_until='epoch',requests=array_fill(EXTRACT(EPOCH FROM NOW())::double precision,ARRAY[4]) WHERE provider='sharp'");
+  let page = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    page++;
+    return Response.json({ data: [{ event_id: `e${page}`, sportsbook: "fanduel" }], pagination: { has_more: true, next_cursor: `c${page}` } });
+  });
+  const rows = await fetchSharpRaw({ ...env, SHARPAPI_KEY: "test" });
+  assert.deepEqual(rows.map((r) => r.event_id), ["e1", "e2"]);
+  assert.deepEqual(rows.stats, { pages: 2, truncated: "budget" });
+  // Nothing to keep: the budget refusal still surfaces.
+  await assert.rejects(fetchSharpRaw({ ...env, SHARPAPI_KEY: "test" }), /feed-budget-wait/);
+  await db.exec("UPDATE feed_budget SET requests='{}' WHERE provider='sharp'");
 });
 test("429 backoff is shared even when request budget remains", async (t) => {
   await db.exec("UPDATE feed_budget SET requests='{}',blocked_until='epoch'");
