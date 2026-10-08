@@ -88,4 +88,3 @@ export async function seedRegularSeason({ siteUrl, cronSecret, now = Date.now(),
   if (!weeks.length) log("outside regular-season seed window");
   return results;
 }
-
