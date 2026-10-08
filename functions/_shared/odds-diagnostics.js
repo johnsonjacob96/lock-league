@@ -8,7 +8,7 @@ import {
   fetchSharpRaw,
   normalizeSharp,
 } from "./odds-providers.js";
-import { feedBudgetState } from "./feed-cache.js";
+import { feedBudgetState, providerFetch } from "./feed-cache.js";
 export async function oddsDiagnostics(env, url) {
   // Debug: why is the board not showing the expected week's games? Dumps the
   // decision inputs + each live source's outcome, so we can see (in the real CF
@@ -145,6 +145,26 @@ export async function oddsDiagnostics(env, url) {
     }
   }
 
+  // Debug: SharpAPI's event list -- one request for every event ID, if the
+  // endpoint exists on our tier. Measures whether the board can find this
+  // week's events without paging through every odds row.
+  if (url.searchParams.get("debug") === "sharpevents") {
+    if (!env.SHARPAPI_KEY) return json({ error: "no-sharpapi-key" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    try {
+      const target = new URL("https://api.sharpapi.io/api/v1/events");
+      target.searchParams.set("league", "nfl");
+      for (const [k, v] of url.searchParams) if (/^f_[a-z_]{1,40}$/.test(k) && /^[A-Za-z0-9_,.:-]{1,200}$/.test(v)) target.searchParams.set(k.slice(2), v);
+      const r = await providerFetch(env, "sharp", target, { headers: { "X-API-Key": env.SHARPAPI_KEY }, signal: AbortSignal.timeout(5000) }, 1, "props");
+      const text = await r.text();
+      let body = null; try { body = JSON.parse(text); } catch { /* not JSON */ }
+      const rows = Array.isArray(body) ? body : body?.data ?? body?.events ?? [];
+      return json({ status: r.status, url: target.pathname + target.search, count: Array.isArray(rows) ? rows.length : null,
+        pagination: body?.pagination ?? null, keys: rows[0] ? Object.keys(rows[0]) : null, sample: Array.isArray(rows) ? rows.slice(0, 20) : null,
+        raw: body ? undefined : text.slice(0, 300) }, { headers: { "Cache-Control": "no-store" } });
+    } catch (e) {
+      return json({ error: String((e && e.message) || e) }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    }
+  }
   // Debug: inspect a raw SharpAPI sample to finalize the field mapping.
   if (url.searchParams.get("debug") === "sharp") {
     if (!env.SHARPAPI_KEY)
@@ -156,7 +176,10 @@ export async function oddsDiagnostics(env, url) {
       // f_<name>=<value> adds a SharpAPI query filter, to measure what a
       // narrower board request would cost (e.g. f_is_main_line=true).
       const filters = Object.fromEntries([...url.searchParams].filter(([k, v]) => /^f_[a-z_]{1,40}$/.test(k) && /^[A-Za-z0-9_,.:-]{1,200}$/.test(v)).map(([k, v]) => [k.slice(2), v]));
-      const raw = await fetchSharpRaw(env, 8, Object.keys(filters).length ? filters : null);
+      // priority=props measures from the prop menus' share, so a measurement
+      // can run while the board is using its own.
+      const priority = url.searchParams.get("priority") === "props" ? "props" : "board";
+      const raw = await fetchSharpRaw(env, Number(url.searchParams.get("pages")) || 8, Object.keys(filters).length ? filters : null, priority);
       const team = url.searchParams.get("team")?.toLowerCase();
       const selected = team
         ? raw.filter((r) =>
