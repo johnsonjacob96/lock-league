@@ -27,3 +27,20 @@ jobs:
             | jq -r '"count=\(.games|length) week=\(.week) test=\(.test)", (.games[:16][] | "\(.away) @ \(.home) | \(.state) | \(.detail)")' \
             || echo "scores-request-failed"
           echo "----- END -----"
+      - name: SharpAPI feed diagnostics (admin debug; spends a few SharpAPI requests)
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          S="${SITE_URL:-https://lock-league.pages.dev}"
+          if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET not set; skipping"; exit 0; fi
+          echo "----- PROVIDER BUDGET (read-only) -----"
+          curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?debug=budget" | jq . || echo "debug-budget-failed"
+          echo "----- SHARP CATALOG (full league, up to 8 pages of 200) -----"
+          curl -sS -m 30 -H "X-Cron-Secret: $CRON_SECRET" "$S/api/odds?debug=sharp" \
+            | jq '{count, error, books: ([.sample[]?.sportsbook] | group_by(.) | map({(.[0]): length}) | add), first_event: .sample[0].event_id, last_event: .sample[-1].event_id}' \
+            || echo "debug-sharp-failed"
+          echo "----- PROPS (public) -----"
+          curl -sS -m 30 "$S/api/props?game_key=Tampa%20Bay%20Buccaneers%40Dallas%20Cowboys" \
+            | jq '{source, reason, stale, complete, markets: (.markets|length), ids: .sharp_event_ids, pages}' || echo "props-failed"
+          echo "----- END -----"

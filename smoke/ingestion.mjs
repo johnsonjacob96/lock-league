@@ -5,6 +5,7 @@ import { neonConfig } from '@neondatabase/serverless';
 mock.module('../functions/_shared/feed-cache.js', { namedExports: {
   sharedFeed: async (_env, _key, _ttl, load) => load(),
   providerFetch: async (_env, _provider, url, init) => fetch(url, init),
+  feedBudgetState: async () => [],
 } });
 const { getUnshared: onRequestGet, onRequestPost, scopedPayload, fetchSharpRaw, normalizeSharp } = await import('../functions/api/odds.js');
 import { espnBoxscore, espnSummary, espnScoreboardEvents } from '../functions/_shared/espn.js';

@@ -5,6 +5,7 @@ let cached;
 mock.module('../functions/_shared/feed-cache.js', { namedExports: {
   sharedFeed: async () => structuredClone(cached),
   providerFetch: async () => { throw Error('network forbidden'); },
+  feedBudgetState: async () => [],
 } });
 const { normalizeSharp } = await import('../functions/_shared/odds-providers.js');
 const { onRequestGet } = await import('../functions/api/odds.js');
