@@ -33,6 +33,10 @@ jobs:
       - run: git diff --exit-code -- public/assets/nfl-teams.js
       - run: npm run smoke
       - run: npm test
+      - name: Local Messages importer guardrails (synthetic data only)
+        run: |
+          python3 -m unittest discover -s scripts/messages-parlays -p 'test_*.py'
+          node --test scripts/messages-parlays/test_publish.mjs
       - name: Live prod probe (manual dispatch only)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.live }}
         run: npm run smoke:live
