@@ -14,7 +14,7 @@ const browser=await chromium.launch();let checks=0;
 try {
 for(const width of [375,390,844,1440]) {
  const page=await browser.newPage({viewport:{width,height:920}}),errors=[],writes=[];
- page.on('pageerror',e=>errors.push(e.message));let rejectSave=false,propsResponse={markets};
+ page.on('pageerror',e=>errors.push(e.message));let rejectSave=false,propsResponse={markets},freshOdds=null;
  const acceptReplacement=async()=>{if(await page.locator('.pick-change-dialog').count())await page.locator('.pick-change-dialog [data-change]').click();};
  // Real, checked-in portraits keep image/identity assertions independent of ESPN availability.
  await page.route('**/i/headshots/nfl/players/full/*.png',route=>{
@@ -25,7 +25,9 @@ for(const width of [375,390,844,1440]) {
  await page.clock.setFixedTime(new Date('2026-09-09T15:00Z'));
  await page.route('**/api/**',async route=>{
   if(route.request().url().includes('/api/props'))return route.fulfill({json:propsResponse});
+  if(route.request().url().includes('/api/odds')&&freshOdds)return route.fulfill({json:freshOdds});
   if(route.request().method()==='POST'&&route.request().url().includes('/api/picks')){
+   if(rejectSave==='quote'){writes.push(route.request().postDataJSON());return route.fulfill({status:409,json:{error:'quote-changed',detail:'The line or price changed. Review the current quote and lock again.'}});}
    writes.push(route.request().postDataJSON());return route.fulfill({status:rejectSave?409:200,json:rejectSave?(rejectSave==='taken'?{error:'super-lock-taken',detail:'That Super Lock is already claimed. Choose a different bet. Your saved picks are unchanged.'}:{error:'prop-not-offered'}):{}});
   }
   return route.fulfill({json:{}});
@@ -148,6 +150,39 @@ for(const width of [375,390,844,1440]) {
  assert.equal(writes.at(-1).picks[0].prop.line,50.5);checks++;
  await page.locator('#sl-repick').click();await page.locator('[data-sltab="lines"]').click();await page.locator('[data-slmarket="__total__"]').click();await page.locator('[data-slside="over"]').click();await page.locator('#sl-lock-line').click();await acceptReplacement();await page.waitForSelector('#sl-dialog',{state:'detached'});
  assert.equal(writes.at(-1).picks[0].line_pick.bet,'Over');checks++;
+ // Moneyline: best FD/DK price, explicit too-short feedback, saved quote and no fabricated threshold.
+ await page.evaluate(()=>{
+  const g=state.thisWeekData.games[0];
+  g.books.fanduel.moneyline={homePrice:-145,awayPrice:125,updated:new Date().toISOString()};
+  g.books.draftkings={moneyline:{homePrice:-140,awayPrice:130,updated:new Date().toISOString()}};
+ });
+ await page.locator('#sl-repick').click();await page.locator('[data-sltab="lines"]').click();
+ await page.locator('[data-slmarket="__moneyline__"]').click();
+ assert.equal(await page.locator('[data-slmarket="__moneyline__"]').getAttribute('aria-pressed'),'true');checks++;
+ await page.locator('[data-slside="home"]').click();assert.equal(await page.locator('#sl-lock-line').isDisabled(),true);checks++;
+ assert.match(await page.locator('.sl-hint.warn').textContent(),/shorter than -120/);checks++;
+ await page.locator('[data-slside="away"]').click();
+ assert.match(await page.locator('#sl-lock-line').textContent(),/\+130/);checks++;
+ assert.match(await page.locator('[data-slside="away"]').textContent(),/DK/);checks++;
+ await snapshot(page,{path:`${output}/moneyline-${width}.png`});
+ // A background data update cannot silently replace the price the member saw.
+ freshOdds=await page.evaluate(()=>{state.thisWeekData.games[0].books.draftkings.moneyline.awayPrice=135;return state.thisWeekData;});rejectSave='quote';
+ await page.locator('#sl-lock-line').click();await acceptReplacement();
+ await page.waitForFunction(()=>document.getElementById('sl-lock-line')?.textContent.includes('+135'));
+ const ml=writes.at(-1).picks[0];
+ assert.deepEqual([ml.line_pick.bet,ml.line_pick.side,ml.line_pick.book,ml.line_pick.line,ml.expected_quote.price],['Moneyline','away','draftkings',null,130]);checks++;
+ assert.match(await page.locator('#mycard-sl-msg').textContent(),/price changed/);checks++;
+ rejectSave=false;await page.locator('#sl-lock-line').click();await acceptReplacement();await page.waitForSelector('#sl-dialog',{state:'detached'});
+ assert.equal(writes.at(-1).picks[0].expected_quote.price,135);checks++;
+ assert.equal(await page.evaluate(()=>currentMyPicks['Super Lock'].prop.kind),'moneyline');checks++;
+ assert.equal(await page.evaluate(()=>slClaimKey('Cowboys moneyline +130 DK')===slClaimKey('Dallas Cowboys ML')),true);checks++;
+ await page.locator('#sl-repick').click();await page.locator('[data-sltab="lines"]').click();await page.locator('[data-slmarket="__moneyline__"]').click();
+ await page.evaluate(()=>{slMarkTaken('Dallas Cowboys ML');superLockState.draft.side='away';refreshSuperLockEditor();});
+ assert.equal(await page.locator('#sl-lock-line').isDisabled(),true);checks++;
+ assert.match(await page.locator('#sl-lock-line').textContent(),/Already picked/);checks++;
+ await page.evaluate(()=>{superLockState.takenKeys.clear();delete state.thisWeekData.games[0].books.fanduel.moneyline;delete state.thisWeekData.games[0].books.draftkings;refreshSuperLockEditor();});
+ assert.match(await page.locator('#sl-dialog').textContent(),/Moneyline prices are unavailable/);checks++;
+ await page.keyboard.press('Escape');
  await page.locator('#sl-repick').click();await page.locator('[data-slmode="custom"]').click();await page.locator('#mycard-superlock').fill('Custom pick');await page.locator('#mycard-sl-price').fill('-130');await page.locator('#mycard-sl-save').click();assert.equal(await page.locator('#sl-dialog').evaluate(d=>d.open),true);checks++;
  await page.locator('#mycard-sl-price').fill('150');await page.evaluate(()=>refreshSuperLockEditor());assert.equal(await page.locator('#mycard-superlock').inputValue(),'Custom pick');assert.equal(await page.locator('#mycard-sl-price').inputValue(),'150');checks+=2;await page.locator('#mycard-sl-save').click();await acceptReplacement();await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(writes.at(-1).picks[0].price,150);checks++;
  await page.locator('#sl-repick').click();await page.keyboard.press('Escape');await page.waitForSelector('#sl-dialog',{state:'detached'});assert.equal(await page.locator('#sl-repick').evaluate(e=>e===document.activeElement),true);checks++;

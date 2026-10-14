@@ -1,4 +1,5 @@
 import { retainSchedule } from "../_shared/odds-schedule.js";
+import { validMoneyline } from '../_shared/moneyline.js';
 export { retainSchedule } from "../_shared/odds-schedule.js";
 import { sharedFeed } from "../_shared/feed-cache.js";
 import { loadScoreboardSeed } from "../_shared/scoreseed.js";
@@ -48,7 +49,7 @@ const completeMarket = (m, type) => !!m && (type === "spread"
 // on read instead of serving the bad number until it expires.
 export function quarantineImplausibleMarkets(payload) {
   if (!Array.isArray(payload?.games)) return payload;
-  const bad = (b) => (b?.total && !plausibleTotalPoint(b.total.point)) || (b?.spread && !plausibleSpreadLine(b.spread.line));
+  const bad = (b) => (b?.moneyline && !validMoneyline(b.moneyline)) || (b?.total && !plausibleTotalPoint(b.total.point)) || (b?.spread && !plausibleSpreadLine(b.spread.line));
   if (!payload.games.some(g => Object.values(g.books || {}).some(bad))) return payload;
   return { ...payload, games: payload.games.map(g => {
     const entries = Object.entries(g.books || {});
@@ -56,6 +57,7 @@ export function quarantineImplausibleMarkets(payload) {
     return { ...g, books: Object.fromEntries(entries.map(([key, book]) => {
       if (!bad(book)) return [key, book];
       const out = { ...book };
+      if (book.moneyline && !validMoneyline(book.moneyline)) { out.moneyline = null; out.moneyline_unavailable_reason = 'invalid-price'; }
       if (book.total && !plausibleTotalPoint(book.total.point)) { out.total = null; out.total_unavailable_reason = "implausible-line"; }
       if (book.spread && !plausibleSpreadLine(book.spread.line)) { out.spread = null; out.spread_unavailable_reason = "implausible-line"; }
       return [key, out];

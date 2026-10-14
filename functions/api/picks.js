@@ -1,4 +1,5 @@
 import { ensureSuperLockClaims, isSuperLockClaimConflict, superLockTaken } from "../_shared/super-lock-claims.js";
+import { validMoneyline, canonicalMoneylineText } from '../_shared/moneyline.js';
 import { verifiedGames, verifiedMarkets, quoteChanged } from "../_shared/quote-freshness.js";
 // /api/picks  GET (read) / POST (submit) / POST ?action=mark-super-lock
 import { sql } from "../_shared/db.js";
@@ -69,7 +70,7 @@ export function findGame(games, gameKey) { // exported for smoke tests; CF ignor
 // offers the market, else the first book that does (FD, then DK, then any).
 function pickBookFor(game, side, preferred) {
   const books = game.books || {};
-  const offers = (b) => !!b && (side === "fav" || side === "dog" ? !!b.spread : !!b.total);
+  const offers = (b) => !!b && (side === "home" || side === "away" ? validMoneyline(b.moneyline) : side === "fav" || side === "dog" ? !!b.spread : !!b.total);
   if (preferred) return offers(books[preferred]) ? { book: preferred, data: books[preferred] } : null;
   for (const key of ["fanduel", "draftkings", ...Object.keys(books)]) {
     if (offers(books[key])) return { book: key, data: books[key] };
@@ -83,6 +84,10 @@ export function deriveGradable(game, betType, side, preferredBook) { // exported
   const chosen = pickBookFor(game, side, preferredBook);
   if (!chosen) return null;
   const { book, data } = chosen;
+  if (betType === 'Moneyline') {
+    if (!['home','away'].includes(side) || !validMoneyline(data.moneyline) || !['fanduel','draftkings'].includes(book)) return null;
+    return {line:null,price:data.moneyline[side+'Price'],book,pick_text:`${game[side]} ML`};
+  }
   if (betType === "Favorite" || betType === "Dog") {
     const s = data.spread;
     if (!hasNumber(s.line) || ![game.home, game.away].includes(s.fav)) return null;
@@ -457,13 +462,14 @@ export async function onRequest({ request, env }) {
         } else if (p.line_pick) {
           // Game-line Super Lock: a spread/total off the live board (auto-grades
           // just like a Favorite/Dog/Over/Under, only filed under Super Lock).
-          if (!SIDE_FOR[p.line_pick.bet]) return json({ error: "bad-line-bet", bet: p.line_pick.bet }, { status: 400 });
-          if (SIDE_FOR[p.line_pick.bet] !== p.line_pick.side) return json({ error: "bad-side", bet_type: p.bet_type, side: p.line_pick.side, expected: SIDE_FOR[p.line_pick.bet] }, { status: 400 });
+          if (!SIDE_FOR[p.line_pick.bet] && p.line_pick.bet !== 'Moneyline') return json({ error: "bad-line-bet", bet: p.line_pick.bet }, { status: 400 });
+          if (p.line_pick.bet === 'Moneyline' ? !['home','away'].includes(p.line_pick.side) : SIDE_FOR[p.line_pick.bet] !== p.line_pick.side) return json({ error: "bad-side", bet_type: p.bet_type, side: p.line_pick.side, expected: SIDE_FOR[p.line_pick.bet] }, { status: 400 });
           if (!p.line_pick.game_key || typeof p.line_pick.game_key !== "string") return json({ error: "missing-game", bet_type: p.bet_type }, { status: 400 });
           p.game_key = p.line_pick.game_key; // ties it to the game (started-game guard + auto-grade)
         } else {
           // Free-text Super Lock (manual Hit/Miss/Push, honor system on price).
           if (!p.pick_text || typeof p.pick_text !== "string") return json({ error: "missing-pick-text", bet_type: p.bet_type }, { status: 400 });
+          p.pick_text = canonicalMoneylineText(p.pick_text) || p.pick_text;
           if (!hasNumber(p.price) || !Number.isInteger(Number(p.price)) || Math.abs(Number(p.price)) < 100 || !(Number(p.price) >= -120)) {
             return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: p.price }, { status: 400 });
           }
@@ -538,7 +544,7 @@ export async function onRequest({ request, env }) {
         if (!(Number(p.price) >= -120)) {
           return json({ error: "super-lock-price", detail: "Super Lock odds must be -120 or longer (no shorter than -120); plus-money is fine", price: p.price }, { status: 400 });
         }
-        p.prop = { kind: (lp.bet === "Over" || lp.bet === "Under") ? "total" : "spread", bet: lp.bet, side: p.side, line: p.line, book: p.book, price: p.price, game_key: p.game_key };
+        p.prop = { kind: lp.bet === 'Moneyline' ? 'moneyline' : (lp.bet === "Over" || lp.bet === "Under") ? "total" : "spread", bet: lp.bet, side: p.side, line: p.line, book: p.book, price: p.price, game_key: p.game_key };
       }
     }
     // A game that has kicked off can no longer be picked (TNF after kickoff,

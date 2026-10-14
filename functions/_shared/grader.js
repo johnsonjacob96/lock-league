@@ -1,4 +1,5 @@
 import { refreshParlays } from './parlays.js';
+import { resolveMoneylineResult } from './moneyline.js';
 // Shared grading logic for /api/grade (manual + GitHub Actions cron).
 // Mirrors lib/grader.js (kept in sync for Cloudflare Pages Functions runtime).
 import { sql } from "./db.js";
@@ -134,6 +135,7 @@ export async function resolvePickResult(p, ev, getBox, getPlayerStats) {
   if (p.bet_type === "Super Lock") {
     const meta = typeof p.prop_meta === "string" ? safeJson(p.prop_meta) : p.prop_meta;
     if (!meta) return null;                                                    // free-text -> manual
+    if (meta.kind === "moneyline") return resolveMoneylineResult(p, ev);
     if (meta.kind === "spread") return haveScore ? resolveSpreadResult(p, ev) : null; // game-line SL (spread)
     if (meta.kind === "total") return haveScore ? gradeTotal(p.side, p.line, total()) : null; // game-line SL (total)
     if (meta.market) {

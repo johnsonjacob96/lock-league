@@ -1300,7 +1300,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="assets/nfl-teams.js?v=20260918a"></script>
-<script src="assets/super-lock.js?v=20261002a"></script>
+<script src="assets/super-lock.js?v=20261014a"></script>
 <script src="assets/tiebreaks.js?v=20260918a"></script>
 <script src="assets/standings-rules.js?v=20260918a"></script>
 <script src="assets/standings-week.js?v=20260918a"></script>
@@ -2187,6 +2187,12 @@ function liveProgressData(p, d) {
       if (!total) return "";
       actual = a + h; target = total.line; label = "Total points";
       side = total.side; threshold = true; targetLabel = side === "under" ? "Under" : "Over";
+    } else if (p.prop?.kind === "moneyline") {
+      const pickedSide = p.side || p.prop.side;
+      if (!["home","away"].includes(pickedSide)) return "";
+      actual = pickedSide === "home" ? h-a : a-h; target = 0;
+      min = -Math.max(14,Math.abs(actual)); max = -min;
+      label = "Team margin"; targetLabel = "Win above";
     } else if (p.bet_type === "Favorite" || p.bet_type === "Dog" || p.prop?.kind === "spread") {
       const match = (p.pick_text || "").match(/^(.+?)\s+([-+]?\d+(?:\.\d+)?)\s*$/);
       if (!match) return "";

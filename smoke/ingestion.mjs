@@ -271,7 +271,7 @@ test('game board requests exact full-game markets and preserves both books event
  let url;
  t.mock.method(globalThis,'fetch',async input=>{url=new URL(input);return json({data:[],pagination:{has_more:false}});});
  await fetchSharpRaw({SHARPAPI_KEY:'test'});
- assert.equal(url.searchParams.get('market'),'point_spread,total_points');assert.equal(url.searchParams.get('limit'),'200');
+ assert.equal(url.searchParams.get('market'),'point_spread,total_points,moneyline');assert.equal(url.searchParams.get('limit'),'200');
  const row={away_team:'New England Patriots',home_team:'Seattle Seahawks',market_type:'point_spread',selection_type:'home',line:-3.5,odds_american:-110,event_start_time:'2026-09-10T00:20Z'};
  const games=normalizeSharp([{...row,event_id:'fd-event',sportsbook:'fanduel'},{...row,event_id:'dk-event',sportsbook:'draftkings'}]);
  assert.deepEqual(games[0].sharp_event_ids,['fd-event','dk-event']);

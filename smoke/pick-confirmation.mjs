@@ -81,6 +81,8 @@ try {
   await page.evaluate(()=>{
    state.thisWeekData={games:[{away:'New England Patriots',home:'Seattle Seahawks',books:{fanduel:{spread:{fav:'Seattle Seahawks',line:-3.5,favPrice:-110,dogPrice:-110}}}}]};
    superLockState.draft={side:'dog',book:'fanduel'};
+   // The lock submits the displayed quote, not a fresh price looked up at click time.
+   slGameLineSubHtml(state.thisWeekData.games[0],'spread');
    window.pendingSl=lockGameLine();
   });
   await page.locator('dialog[open]').waitFor();

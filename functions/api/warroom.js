@@ -2,6 +2,7 @@
 // with the live ESPN scoreboard. Records include settled results only. Login required; picks stay hidden until
 // the weekly lock (noon CT Sunday), same as everywhere else.
 import { verifyCookie, json } from "../_shared/auth.js";
+import { resolveMoneylineResult } from '../_shared/moneyline.js';
 import { currentNflWeek, pickCutoff, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, resolveSpreadResult, gradeTotal, sameTeam, maybeGrade } from "../_shared/grader.js";
 import { weeklyContext } from '../_shared/tiebreak-context.js';
@@ -35,6 +36,7 @@ export function livePickStatus(p, ev) {
     // score / a manual mark, so they stay "manual" here.
     const meta = safeJson(p.prop_meta);
     if (meta && meta.kind === "spread") result = resolveSpreadResult(p, ev);
+    else if (meta && meta.kind === "moneyline") result = resolveMoneylineResult(p, ev);
     else if (meta && meta.kind === "total") result = gradeTotal(p.side, p.line, ev.home_score + ev.away_score);
     else return { status: "manual", state: st, detail: ev.detail, final: st === "post" };
   }
