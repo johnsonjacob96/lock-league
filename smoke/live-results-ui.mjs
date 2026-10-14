@@ -19,6 +19,11 @@ try {
    check('zero line',{...base,prop:{...base.prop,line:0}},d,'win','TARGET REACHED · LIVE');
    check('total Super Lock',{...base,prop:{kind:'total',side:'over',line:34.5},pick_text:'Buffalo Bills / Detroit Lions O34.5'},d,'win','TARGET REACHED · LIVE');
    check('spread Super Lock',{...base,prop:{kind:'spread'},pick_text:'Buffalo Bills -3.5'},d,'neutral','LIVE · IN PROGRESS');
+   const ml={...base,prop:{kind:'moneyline',side:'away'},side:'away',pick_text:'Buffalo Bills ML'};
+   check('leading moneyline stays neutral',ml,d,'neutral','LIVE · IN PROGRESS');
+   check('trailing moneyline stays neutral',{...ml,side:'home',pick_text:'Detroit Lions ML'},d,'neutral','LIVE · IN PROGRESS');
+   const mlProgress=liveProgressData(ml,d);
+   results.push(['moneyline actual margin',mlProgress.actual===7&&mlProgress.target===0&&!mlProgress.threshold,JSON.stringify(mlProgress)]);
    check('under crossed',{...base,prop:{...base.prop,side:'under'}},d,'lose','OVER LIMIT · LIVE');
    check('under still open',{...base,prop:{...base.prop,side:'under',line:40}},d,'neutral','LIVE · IN PROGRESS');
    check('over not reached',{...base,prop:{...base.prop,line:40}},d,'neutral','LIVE · IN PROGRESS');

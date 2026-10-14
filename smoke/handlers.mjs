@@ -424,6 +424,41 @@ test('game-line Super Lock persists correct grading metadata',async()=>{
  const r=await request({season:2026,week:1,picks:[{bet_type:'Super Lock',line_pick:{bet:'Over',side:'over',game_key:key(1),book:'fanduel'}}]});
  assert.equal(r.status,200);assert.equal(r.body.picks[0].prop.kind,'total');assert.equal(Number((await db.query('SELECT line FROM picks')).rows[0].line),44.5);
 });
+test('moneyline Super Lock saves the real team/price and rejects forged side, price and stale quotes',async t=>{
+ const g=liveGames[1];
+ g.books.fanduel.moneyline={homePrice:-115,awayPrice:105,updated:new Date().toISOString()};
+ t.after(()=>delete g.books.fanduel.moneyline);
+ const input={season:2026,week:1,picks:[{bet_type:'Super Lock',line_pick:{bet:'Moneyline',side:'away',game_key:key(1),book:'fanduel',price:999,pick_text:'Fake team',line:900},expected_quote:{book:'fanduel',price:105,line:null}}]};
+ const accepted=await request(input);
+ assert.equal(accepted.status,200);
+ const saved=(await db.query('SELECT * FROM picks')).rows[0];
+ assert.equal(saved.pick_text,'Dallas Cowboys ML');assert.equal(saved.price,105);assert.equal(saved.line,null);
+ assert.equal(saved.game_key,key(1));assert.equal(saved.prop_meta.kind,'moneyline');assert.equal(saved.side,'away');
+ input.picks[0].line_pick.side='dog';assert.equal((await request(input)).body.error,'bad-side');
+ input.picks[0].line_pick.side='away';input.picks[0].expected_quote.price=110;
+ assert.equal((await request(input)).body.error,'quote-changed');
+ input.picks[0].expected_quote.price=105;
+ g.books.fanduel.moneyline.updated='2026-09-10T12:00:00Z';
+ assert.equal((await request(input)).body.error,'line-not-offered');
+ assert.equal((await db.query('SELECT price FROM picks')).rows[0].price,105);
+});
+test('moneylines enforce -120, kickoff and first-owner across books and custom aliases',async t=>{
+ const g=liveGames[1];g.books.fanduel.moneyline={homePrice:-130,awayPrice:120,updated:new Date().toISOString()};
+ g.books.draftkings={moneyline:{homePrice:-125,awayPrice:130,updated:new Date().toISOString()}};
+ t.after(()=>{delete g.books.fanduel.moneyline;delete g.books.draftkings;});
+ const body={season:2026,week:1,picks:[{bet_type:'Super Lock',line_pick:{bet:'Moneyline',side:'home',game_key:key(1),book:'fanduel'}}]};
+ assert.equal((await request(body)).body.error,'super-lock-price');
+ body.picks[0].line_pick.side='away';
+ assert.equal((await request(body)).status,200);
+ cookie=await cookieFor(2);body.picks[0].line_pick.book='draftkings';
+ assert.equal((await request(body)).body.error,'super-lock-taken');
+ assert.equal((await request({season:2026,week:1,picks:[{bet_type:'Super Lock',pick_text:'Cowboys Moneyline +130 DK',price:130}]})).body.error,'super-lock-taken');
+ const started=liveGames[0];started.books.fanduel.moneyline={homePrice:-115,awayPrice:105,updated:new Date().toISOString()};
+ t.after(()=>delete started.books.fanduel.moneyline);
+ body.picks[0].line_pick={bet:'Moneyline',side:'home',game_key:key(0),book:'fanduel'};
+ assert.equal((await request(body)).body.error,'game-started');
+ assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM picks')).rows[0].n,1);
+});
 test('repeated valid edits preserve full timestamp precision',async()=>{
  for(let i=0;i<3;i++)assert.equal((await request({season:2026,week:1,picks:[pick()]})).status,200);
  assert.equal((await db.query('SELECT count(*)::int AS n FROM picks')).rows[0].n,1);

@@ -22,6 +22,7 @@ export function verifiedGames(payload, now = Date.now()) {
           ...b,
           spread: freshQuote(b.spread, b, now) ? b.spread : null,
           total: freshQuote(b.total, b, now) ? b.total : null,
+          moneyline: freshQuote(b.moneyline, null, now) ? b.moneyline : null,
         },
       ]),
     ),

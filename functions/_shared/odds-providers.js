@@ -1,5 +1,6 @@
 import { retainSchedule } from "./odds-schedule.js";
 import { NFL_TEAMS } from "./nfl-teams.js";
+import { validMoneylinePrice, resolveMoneylineRows } from './moneyline.js';
 import { providerFetch, sharedFeed } from "./feed-cache.js";
 // Provider adapters: request/normalization semantics are independent of cache policy.
 import {
@@ -433,7 +434,8 @@ export function normalizeSharp(rows) {
       .replace(/[\s/-]+/g, "_");
     const isSpread = /^(?:point_spread|spread|spreads|handicap|full_game_point_spread|full_game_spread)$/.test(mt);
     const isTotal = /^(?:total_points|points_total|total|totals|over_under|full_game_total_points|full_game_total)$/.test(mt);
-    if (!isSpread && !isTotal) continue;
+    const isMoneyline = /^(?:moneyline|money_line|h2h|full_game_moneyline)$/.test(mt);
+    if (!isSpread && !isTotal && !isMoneyline) continue;
     const book = sharpBookKey(row.sportsbook);
     if (!book) continue;
     const home = canonicalNflTeam(row.home_team ?? row.home);
@@ -464,7 +466,19 @@ export function normalizeSharp(rows) {
         row.commence_time ??
         row.kickoff ??
         null;
-    const b = g.books[book] || (g.books[book] = { _spread: [], _total: [] });
+    const b = g.books[book] || (g.books[book] = { _spread: [], _total: [], _moneyline: [] });
+    if (isMoneyline) {
+      if (row.is_alternate_line === true) continue;
+      const price = Number(row.odds_american);
+      if (!validMoneylinePrice(price) || !Number.isFinite(Date.parse(row.timestamp))) continue;
+      const named = canonicalNflTeam(row.selection);
+      const side = String(row.team_side ?? row.selection_type ?? '').toLowerCase();
+      const resolved = side === 'home' || side === 'away' ? side : named === home ? 'home' : named === away ? 'away' : 'unknown';
+      b._moneyline.push({side:resolved,price,updated:row.timestamp});
+      if (!b.updated || Date.parse(row.timestamp) > Date.parse(b.updated)) b.updated = row.timestamp;
+      if (row.espn_supplement) b.supplementedAt = row.timestamp;
+      continue;
+    }
     if (
       Number.isFinite(Date.parse(row.timestamp)) &&
       (!b.updated || Date.parse(row.timestamp) > Date.parse(b.updated))
@@ -528,10 +542,12 @@ export function normalizeSharp(rows) {
     for (const [bk, b] of Object.entries(g.books)) {
       const spread = resolveSpread(b._spread, g);
       const total = resolveTotal(b._total);
-      if (spread || total)
+      const moneyline = resolveMoneylineRows(b._moneyline);
+      if (spread || total || moneyline)
         books[bk] = {
           spread,
           total,
+          ...(moneyline ? {moneyline} : {}),
           updated: b.supplementedAt || b.updated || null,
           ...(b.supplementedAt
             ? { supplemental: true, provider: "DraftKings via ESPN" }
@@ -555,7 +571,7 @@ export async function fetchSharpRaw(env, maxPages = 8, overrides = null, priorit
   const q = {
     league: "nfl",
     sportsbook: "fanduel,draftkings",
-    market: "point_spread,total_points",
+    market: "point_spread,total_points,moneyline",
     limit: "200",
     ...(overrides || {}),
   };
@@ -621,7 +637,7 @@ async function fetchSharpEventRows(env, ids) {
       const j = await r.json();
       const data = Array.isArray(j) ? j : j.data;
       if (Array.isArray(data)) rows.push(...data.filter(row => String(row.event_id) === id && row.is_player_prop !== true &&
-        /spread|handicap|total/i.test(String(row.market_type ?? row.market ?? ""))));
+        /spread|handicap|total|moneyline|money_line|h2h/i.test(String(row.market_type ?? row.market ?? ""))));
     } catch { /* budget or provider failure: keep what the main pull has */ }
   }
   return rows;
@@ -684,28 +700,28 @@ export function espnDraftKingsRows(events, games, updatedAt, now = Date.now()) {
         String(o.provider?.id) === "100" && o.provider?.name === "DraftKings",
     );
     if (!odds) continue;
-    for (const type of ["spread", "total"]) {
+    for (const type of ["spread", "total", "moneyline"]) {
       const existing = g.books?.draftkings?.[type];
       if (
         existing &&
         (type === "spread"
           ? [existing.favPrice, existing.dogPrice]
-          : [existing.overPrice, existing.underPrice]
+          : type === "moneyline" ? [existing.homePrice, existing.awayPrice] : [existing.overPrice, existing.underPrice]
         ).every((p) => Number.isFinite(p) && Math.abs(p) >= 100)
       )
         continue;
-      const sides = type === "spread" ? ["home", "away"] : ["over", "under"];
-      const market = type === "spread" ? odds.pointSpread : odds.total;
+      const sides = type !== "total" ? ["home", "away"] : ["over", "under"];
+      const market = type === "spread" ? odds.pointSpread : type === "moneyline" ? odds.moneyline : odds.total;
       const quotes = sides.map((side) => ({
         side,
         point: line(market?.[side]?.close?.line, type === "total" ? "ou" : ""),
         price: price(market?.[side]?.close?.odds),
       }));
-      if (quotes.some((q) => q.point === null || q.price === null)) continue;
+      if (quotes.some((q) => (type !== "moneyline" && q.point === null) || q.price === null)) continue;
       if (
-        type === "spread"
+        type !== "moneyline" && (type === "spread"
           ? quotes[0].point !== -quotes[1].point || quotes[0].point === 0
-          : quotes[0].point !== quotes[1].point || quotes[0].point <= 0
+          : quotes[0].point !== quotes[1].point || quotes[0].point <= 0)
       )
         continue;
       for (const q of quotes)
@@ -715,7 +731,7 @@ export function espnDraftKingsRows(events, games, updatedAt, now = Date.now()) {
           event_id: g.id,
           event_start_time: ev.date,
           sportsbook: "draftkings",
-          market_type: type === "spread" ? "point_spread" : "total_points",
+          market_type: type === "spread" ? "point_spread" : type === "moneyline" ? "moneyline" : "total_points",
           market_id: `espn:${ev.id}:${type}`,
           selection_type: q.side,
           line: q.point,
@@ -741,7 +757,7 @@ async function fetchSharpApi(env) {
   // board without FanDuel and seven games without an event ID for their prop
   // menus. Main lines for the whole week fit in about two pages.
   const MAIN = { is_main_line: "true" };
-  const catalog = await sharedFeed(env,`sharp-catalog-v2:${curPeriod.season}:${curPeriod.week}`,10*60*1000,async()=>{
+  const catalog = await sharedFeed(env,`sharp-catalog-v3:${curPeriod.season}:${curPeriod.week}`,10*60*1000,async()=>{
     const rows = await fetchSharpRaw(env, 8, MAIN);
     const current = rows.filter(r=>Date.parse(r.event_start_time)>=Date.parse(window.from) && Date.parse(r.event_start_time)<Date.parse(window.to));
     return { rows:current,ids:[...new Set(current.map(r=>r.event_id).filter(Boolean))],fetched_at:new Date().toISOString(),
@@ -752,7 +768,8 @@ async function fetchSharpApi(env) {
     : eligibleIds.length ? await fetchSharpRaw(env,8,{...MAIN,event_id:eligibleIds.join(',')}) : [];
   const sharpStats = { catalog: catalog.stats || null, catalog_events: catalog.ids?.length ?? null,
     pull: raw.stats ? { ...raw.stats, rows: raw.length, events: eligibleIds.length } : "catalog" };
-  let all = normalizeSharp(raw);
+  let normalizedRows = raw;
+  let all = normalizeSharp(normalizedRows);
   // The main-line filter hides a market SharpAPI mislabeled as alternate, which
   // recoverFlaggedMarkets exists to repair. For a game still missing a book's
   // spread or total, fetch that one event's full odds (one request) and
@@ -762,7 +779,7 @@ async function fetchSharpApi(env) {
   if (incomplete.length) {
     const extra = await fetchSharpEventRows(env, incomplete);
     sharpStats.recovery = { events: incomplete.length, rows: extra.length };
-    if (extra.length) all = normalizeSharp([...raw, ...extra]);
+    if (extra.length) { normalizedRows = [...raw, ...extra]; all = normalizeSharp(normalizedRows); }
   }
   // SharpAPI returns the whole season; scope to the current pick week's
   // kickoff window, exactly like the The-Odds-API path.
@@ -786,7 +803,7 @@ async function fetchSharpApi(env) {
     );
     games = retainSchedule({games}, events).games;
     const missing = games.some((g) =>
-      ["spread", "total"].some((m) => !g.books?.draftkings?.[m]),
+      ["spread", "total", "moneyline"].some((m) => !g.books?.draftkings?.[m]),
     );
     let updatedAt = events?.source_updated_at;
     if (
@@ -807,7 +824,7 @@ async function fetchSharpApi(env) {
     games = retainSchedule({games}, events).games;
     const extra = missing ? espnDraftKingsRows(events, games, updatedAt) : [];
     if (extra.length)
-      games = normalizeSharp([...raw, ...extra]).filter((g) => {
+      games = normalizeSharp([...normalizedRows, ...extra]).filter((g) => {
         const t = Date.parse(g.kickoff);
         return t >= from && t < to;
       });

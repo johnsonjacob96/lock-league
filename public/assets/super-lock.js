@@ -47,6 +47,12 @@ const SL_CLAIM_STOPWORDS = new Set([
   "the", "and", "at", "vs", "versus",
 ]);
 function slClaimKey(text) {
+  const ml = String(text || '').replace(/\b(?:fanduel|draftkings|fd|dk)\b/gi,'').trim().match(/^(.+?)\s+(?:ML|money\s*line)(?:\s+[+-]\d{3,})?$/i);
+  if (ml && typeof NFL_TEAM_ABBREVIATIONS !== 'undefined') {
+    const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
+    const teams = Object.entries(NFL_TEAM_ABBREVIATIONS).filter(([team,abbr])=>[team,abbr,team.split(' ').at(-1)].some(t=>norm(t)===norm(ml[1])));
+    if (teams.length === 1) text = `${teams[0][0]} ML`;
+  }
   const tokens = String(text || "")
     .toLowerCase()
     .replace(/\bo(?=\d)/g, "over ")
@@ -362,12 +368,20 @@ function slCurrentGame() {
 // Best-priced side of a game LINE (spread/total) across FD+DK, mirroring the
 // board's Fav/Dog/Over/Under buttons. Returns the side + line + text the server
 // re-derives against, or null if the game doesn't offer that market.
-function slGameLineSide(g, bet) {
+function slGameLineSide(g, bet, selectedSide) {
   const books = g.books || {};
   const cands = [];
   for (const bk of ["fanduel", "draftkings"]) {
     const b = books[bk];
     if (!b) continue;
+    if (bet === 'Moneyline' && ['home','away'].includes(selectedSide)) {
+      const m = b.moneyline, age = Date.now()-Date.parse(m?.updated);
+      if (!m || b.stale || m.stale || !Number.isFinite(age) || age < -5000 || age > 120000 ||
+          ![m.homePrice,m.awayPrice].every(p => Number.isInteger(p) && Math.abs(p)>=100 && Math.abs(p)<=1000000)) continue;
+      cands.push({book:bk,side:selectedSide,line:null,price:m[selectedSide+'Price'],
+        text:`${g[selectedSide]} ML`,label:`${slShort(g[selectedSide])} ML`});
+      continue;
+    }
     if (bet === "Favorite" && b.spread)
       cands.push({
         book: bk,
@@ -416,6 +430,8 @@ const BET_FOR_SIDE = {
   dog: "Dog",
   over: "Over",
   under: "Under",
+  home: "Moneyline",
+  away: "Moneyline",
 };
 
 function slBoardPickerHtml() {
@@ -436,7 +452,7 @@ function slBoardPickerHtml() {
   return `<div class="sl-selected-game">${g ? `<span>${teamLogoMark(g.away, "w-8 h-8", "text-xs")}<span><strong>${teamShort(g.away)}</strong><small>${escapeHtml(teamNick(g.away))}</small></span></span><small>vs</small><span>${teamLogoMark(g.home, "w-8 h-8", "text-xs")}<span><strong>${teamShort(g.home)}</strong><small>${escapeHtml(teamNick(g.home))}</small></span></span>` : escapeHtml(superLockState.gameKey)}</div>
     <button class="sl-link" id="sl-change-game">Change game</button>
     <div class="sl-tabs"><button data-sltab="props" aria-pressed="${superLockState.tab === "props"}">Player props</button><button data-sltab="lines" aria-pressed="${superLockState.tab === "lines"}">Game lines</button></div>
-    ${superLockState.tab === "lines" ? `<div class="sl-filters"><button data-slmarket="__spread__">Spread</button><button data-slmarket="__total__">Total</button></div>${superLockState.draft.market.startsWith("__") && g ? slGameLineSubHtml(g, superLockState.draft.market === "__spread__" ? "spread" : "total") : '<p class="sl-hint">Choose spread or total.</p>'}` : superLockState.loading ? '<p role="status">Loading player props…</p>' : slBrowsePropsHtml()}
+    ${superLockState.tab === "lines" ? `<div class="sl-filters">${[['spread','Spread'],['total','Total'],['moneyline','Moneyline']].map(([kind,label])=>`<button data-slmarket="__${kind}__" aria-pressed="${superLockState.draft.market === `__${kind}__`}">${label}</button>`).join('')}</div>${superLockState.draft.market.startsWith("__") && g ? slGameLineSubHtml(g, superLockState.draft.market.replaceAll('__','')) : '<p class="sl-hint">Choose spread, total, or moneyline.</p>'}` : superLockState.loading ? '<p role="status">Loading player props…</p>' : slBrowsePropsHtml()}
     <button class="sl-link sl-custom-link" data-slmode="custom">Enter a custom pick instead</button>`;
 }
 function slBrowsePropsHtml() {
@@ -508,20 +524,22 @@ function slBrowsePropsHtml() {
 // Sub-picker for a game-line Super Lock (spread or total): two side buttons +
 // a lock button, reusing the prop picker's .sl-sides styling.
 function slGameLineSubHtml(g, kind) {
-  const sides = kind === "spread" ? ["fav", "dog"] : ["over", "under"];
+  const sides = kind === "moneyline" ? ["away", "home"] : kind === "spread" ? ["fav", "dog"] : ["over", "under"];
   const btns = sides
     .map((sd) => {
-      const info = slGameLineSide(g, BET_FOR_SIDE[sd]);
+      const info = slGameLineSide(g, BET_FOR_SIDE[sd], sd);
       if (!info) return "";
       return `<button class="sl-side-btn ${superLockState.draft.side === sd ? "active" : ""}" data-slside="${sd}">
       <span class="sl-side-lab">${escapeHtml(info.label)}</span>
       <span class="sl-side-price">${fmtPrice(info.price)}${info.book ? " · " + bookShort(info.book) : ""}</span></button>`;
     })
     .join("");
-  let out = `<div class="sl-sides mt-2">${btns}</div>`;
+  let out = btns ? `<div class="sl-sides mt-2">${btns}</div>` : `<p class="sl-hint" role="status">${kind === 'moneyline' ? 'Moneyline prices' : 'Lines'} are unavailable right now. Try again shortly.</p>`;
+  superLockState.lineQuote = null;
   if (sides.includes(superLockState.draft.side)) {
-    const info = slGameLineSide(g, BET_FOR_SIDE[superLockState.draft.side]);
+    const info = slGameLineSide(g, BET_FOR_SIDE[superLockState.draft.side], superLockState.draft.side);
     if (info) {
+      superLockState.lineQuote = {...info, game_key:superLockState.gameKey};
       const taken = slIsTaken(info.text);
       const meets = info.price != null && Number(info.price) >= -120;
       const warn = taken
@@ -926,8 +944,8 @@ async function lockGameLine() {
   const g = slCurrentGame();
   const bet = BET_FOR_SIDE[superLockState.draft.side];
   if (!g || !bet) return;
-  const info = slGameLineSide(g, bet);
-  if (!info) return;
+  const info = superLockState.lineQuote;
+  if (!info || info.game_key !== superLockState.gameKey || info.side !== superLockState.draft.side) return;
   const line_pick = {
     game_key: superLockState.gameKey,
     bet,
@@ -978,7 +996,7 @@ async function lockGameLine() {
       return;
     }
     const meta = {
-      kind: bet === "Over" || bet === "Under" ? "total" : "spread",
+      kind: bet === 'Moneyline' ? 'moneyline' : bet === "Over" || bet === "Under" ? "total" : "spread",
       bet,
       side: info.side,
       line: info.line,
