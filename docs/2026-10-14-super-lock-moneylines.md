@@ -45,7 +45,7 @@ Original text, price and other saved pick fields were preserved. Jared finished
 - Backend coverage includes full-game filtering, individual quote freshness,
   named DK supplementation, changed-quote rejection, kickoff, -120 threshold,
   cross-book/custom duplicate ownership, and final win/loss/tie routing.
-- 468 Super Lock interactions at 375/390/844/1440px passed; the mobile screenshot
+- 476 Super Lock interactions at 375/390/844/1440px passed; the mobile screenshot
   was visually checked. Live presentation tests cover neutral leading/trailing
   moneylines and saved team margin at three widths.
 - Snapshot: [mobile picker](previews/2026-10-14/super-lock-moneyline-375.png).

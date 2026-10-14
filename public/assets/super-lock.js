@@ -977,7 +977,10 @@ async function lockGameLine() {
       if (j.error === "quote-changed") {
         slSetNotice(j.detail);
         const fresh = await fetch("/api/odds", {credentials:"include"});
-        if (fresh.ok) applyLiveOdds(state.thisWeekData, await fresh.json(), true);
+        if (fresh.ok) {
+          applyLiveOdds(state.thisWeekData, await fresh.json(), true);
+          refreshSuperLockEditor();
+        }
         return;
       }
       slSetNotice(
