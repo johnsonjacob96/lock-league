@@ -94,6 +94,17 @@ export async function run() {
   ])[0];
   s.eq("JSN: a buy-up priced shorter than the line below it is dropped", jsnLadder?.alts.map(a => [a.line, a.fanduel]), [[99.5, 116], [109.5, 162]]);
 
+  // ── 2e. DraftKings files a defender's interceptions made under the same
+  //        player_interceptions market as a quarterback's thrown. ──
+  const intRow = (player, market_type, selection_type, line, odds_american) => ({ is_player_prop: true, sportsbook: "draftkings",
+    market_type, player_name: player, selection_type, line, odds_american, home_team: "Denver Broncos", away_team: "Seattle Seahawks" });
+  const ints = normalizeSharpProps([
+    intRow("Bo Nix", "player_passing_yards", "over", 224.5, -112), intRow("Bo Nix", "player_passing_yards", "under", 224.5, -108),
+    intRow("Bo Nix", "player_interceptions", "over", 0.5, -135), intRow("Bo Nix", "player_interceptions", "under", 0.5, 105),
+    intRow("Julian Love", "player_interceptions", "over", 0.5, 450), intRow("Julian Love", "player_interceptions", "under", 0.5, -800),
+  ]).filter(p => p.market === "pass_int");
+  s.eq("Interceptions lists the quarterback, not a defender filed under the same market", ints.map(p => p.player), ["Bo Nix"]);
+
   // ── 2b. Safety net: an absurd MAIN O/U price (+1400 on a real 232.5 line) is dropped ──
   const maye = player("pass_yds", /Maye/);
   s.ok("Maye passing-yards prop present (line itself is fine)", !!maye);

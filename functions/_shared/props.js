@@ -330,6 +330,15 @@ export function normalizeSharpProps(rows) {
       alts,
     });
   }
+  // Books file a defender's interceptions MADE under the same market name as a
+  // quarterback's interceptions THROWN (DraftKings: player_interceptions for
+  // both), and the box score keys both "interceptions". Our Interceptions market
+  // is the passing stat, so keep it only for a player the feed also prices a
+  // passing market for; a safety's INT line is never offered as a QB's.
+  const PASSING = new Set(["pass_yds", "pass_tds", "pass_cmp", "pass_att"]);
+  const passers = new Set(out.filter((p) => PASSING.has(p.market)).map((p) => p.player.toLowerCase()));
+  for (let i = out.length - 1; i >= 0; i--)
+    if (out[i].market === "pass_int" && !passers.has(out[i].player.toLowerCase())) out.splice(i, 1);
   for (const p of out) {
     const e = agg.get(`${p.market}|${p.player.toLowerCase()}`);
     for (const book of ['fanduel', 'draftkings']) {
