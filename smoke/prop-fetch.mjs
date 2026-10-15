@@ -36,6 +36,8 @@ const row = (book = 'fanduel', player = 'Cooper Kupp', side = 'over', price = -1
   player_name: player, selection_type: side, selection: side, line: 3.5, odds_american: price,
   away_team: AWAY, home_team: HOME, event_start_time: '2026-09-10T00:20Z',
 });
+// A real main line is two-sided: the over and the under at the same number.
+const line = (book = 'fanduel', player = 'Cooper Kupp', over = -110) => [row(book, player, 'over', over), row(book, player, 'under')];
 const board = ids => ({ games: [{ id: 'espn-or-first-id', sharp_event_ids: ids,
   away: AWAY, home: HOME, kickoff: '2026-09-10T00:20Z' }] });
 
@@ -46,7 +48,7 @@ test('event requests cover both FD/DK IDs, drop unrelated events and reuse cache
     if (url.pathname === '/api/odds') return json(board(['fd-123', 'dk-456', 'fd-123']));
     providerUrls.push(url);
     assert.ok(init.signal instanceof AbortSignal);
-    return json({ data: [row(), row('draftkings'), { ...row('fanduel', 'Wrong Game'), event_id: 'other' }], pagination: { has_more: false } });
+    return json({ data: [...line(), ...line('draftkings'), { ...row('fanduel', 'Wrong Game'), event_id: 'other' }], pagination: { has_more: false } });
   });
   const first = await (await h.request()).json();
   assert.equal(first.complete, true);
@@ -97,9 +99,9 @@ test('partial event coverage preserves missing same-game players and books, with
   let phase = 0, pages = 0;
   t.mock.method(globalThis, 'fetch', async input => {
     if (new URL(input).pathname === '/api/odds') return json(board(['fd-123', 'dk-456']));
-    if (phase === 0) return json({ data: [row(), row('draftkings'), row('fanduel', 'Stefon Diggs')], pagination: { has_more: false } });
+    if (phase === 0) return json({ data: [...line(), ...line('draftkings'), ...line('fanduel', 'Stefon Diggs')], pagination: { has_more: false } });
     pages++;
-    if (pages === 1) return json({ data: [row('fanduel', 'Cooper Kupp', 'over', 120)], pagination: { has_more: true, next_cursor: 'next-page' } });
+    if (pages === 1) return json({ data: line('fanduel', 'Cooper Kupp', 120), pagination: { has_more: true, next_cursor: 'next-page' } });
     return new Response('', { status: 429 });
   });
   await h.request(); await h.drain();
@@ -147,7 +149,7 @@ test('public props debug remains authenticated and does not spend provider quota
 test('cached menu from one game is never returned for another matchup', async t => {
   const h = await setup(t);
   t.mock.method(globalThis, 'fetch', async input => new URL(input).pathname === '/api/odds'
-    ? json(board(['fd-123'])) : json({ data: [row()], pagination: { has_more: false } }));
+    ? json(board(['fd-123'])) : json({ data: line(), pagination: { has_more: false } }));
   assert.ok((await (await h.request()).json()).markets.length);
   const other = await (await h.request('San Francisco 49ers@Los Angeles Rams')).json();
   assert.deepEqual(other.markets, []);

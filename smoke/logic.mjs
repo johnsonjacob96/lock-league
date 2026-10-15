@@ -66,6 +66,34 @@ export async function run() {
   const jsnRy = player("rec_yds", /Njigba/);
   s.eq("JSN DK main uses the flagged 81.5 even though a 19.5 alt appears first", jsnRy?.draftkings?.line, 81.5);
 
+  // ── 2d. Production JSN receiving yards (Oct 15): FanDuel shipped an over-only
+  //        69.5 at -275 flagged as main, and DraftKings an unflagged two-sided
+  //        ladder plus a +1900 "over 74.5" below its real 93.5 main. ──
+  const jsnRow = (o) => ({ is_player_prop: true, market_type: "player_receiving_yards", stat_category: "receiving_yards",
+    player_name: "Jaxon Smith-Njigba", home_team: "Denver Broncos", away_team: "Seattle Seahawks", ...o });
+  const jsnProd = normalizeSharpProps([
+    jsnRow({ sportsbook: "fanduel", selection_type: "over", line: 69.5, odds_american: -275, is_main_line: true }),
+    ...[[80, -188], [90, -128], [93, -113], [100, 116], [110, 162]].map(([n, odds]) =>
+      jsnRow({ sportsbook: "fanduel", selection_type: "other", selection: `Jaxon Smith-Njigba ${n}+ Yards`, odds_american: odds })),
+    jsnRow({ sportsbook: "draftkings", selection_type: "over", line: 74.5, odds_american: 1900, is_main_line: false }),
+    jsnRow({ sportsbook: "draftkings", selection_type: "over", line: 79.5, odds_american: -250, is_main_line: false }),
+    jsnRow({ sportsbook: "draftkings", selection_type: "under", line: 79.5, odds_american: 190, is_main_line: false }),
+    jsnRow({ sportsbook: "draftkings", selection_type: "over", line: 93.5, odds_american: -114, is_main_line: false }),
+    jsnRow({ sportsbook: "draftkings", selection_type: "under", line: 93.5, odds_american: -111, is_main_line: false }),
+    jsnRow({ sportsbook: "draftkings", selection_type: "over", line: 109.5, odds_american: 155, is_main_line: false }),
+  ])[0];
+  s.eq("JSN: an over-only FanDuel row is never a main line, flagged or not", jsnProd?.fanduel, null);
+  s.eq("JSN: DraftKings main is its near-even 93.5, not the lopsided 79.5", [jsnProd?.draftkings?.line, jsnProd?.draftkings?.over, jsnProd?.draftkings?.under], [93.5, -114, -111]);
+  s.eq("JSN: headline line follows the real main (93.5), not 69.5", jsnProd?.line, 93.5);
+  s.eq("JSN: alternates sit above the main with lengthening odds", jsnProd?.alts.map(a => [a.line, a.fanduel, a.draftkings]), [[99.5, 116, null], [109.5, 162, 155]]);
+  const jsnLadder = normalizeSharpProps([
+    jsnRow({ sportsbook: "fanduel", selection_type: "over", line: 92.5, odds_american: -113, is_main_line: true }),
+    jsnRow({ sportsbook: "fanduel", selection_type: "under", line: 92.5, odds_american: -113, is_main_line: true }),
+    ...[[100, 116], [105, 105], [110, 162]].map(([n, odds]) =>
+      jsnRow({ sportsbook: "fanduel", selection_type: "other", selection: `Jaxon Smith-Njigba ${n}+ Yards`, odds_american: odds })),
+  ])[0];
+  s.eq("JSN: a buy-up priced shorter than the line below it is dropped", jsnLadder?.alts.map(a => [a.line, a.fanduel]), [[99.5, 116], [109.5, 162]]);
+
   // ── 2b. Safety net: an absurd MAIN O/U price (+1400 on a real 232.5 line) is dropped ──
   const maye = player("pass_yds", /Maye/);
   s.ok("Maye passing-yards prop present (line itself is fine)", !!maye);
