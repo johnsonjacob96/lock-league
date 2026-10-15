@@ -244,21 +244,22 @@ export function normalizeSharpProps(rows) {
       }
     }
   }
-  // Pick a book's true main line out of the collected over/under ladder: prefer a
-  // line flagged is_main_line (and, among those, one that is two-sided), then any
-  // two-sided line (both over and under — alternates are over-only), then any line
-  // carrying an under. A ladder of over-only lines has no genuine main -> null.
+  // Pick a book's true main line out of the collected over/under ladder. A main
+  // line is two-sided (both an over and an under): alternates are over-only, and
+  // a lone over is never a main however it's flagged (FanDuel's over-only 69.5 at
+  // -275 once posed as Jaxon Smith-Njigba's 92.5 receiving line). Prefer the
+  // flagged two-sided lines; when a book flags none (DraftKings) or several,
+  // take the one whose over/under prices are closest to even — the number the
+  // book actually set at the median. No two-sided line -> no main for that book.
+  const implied = (p) => { const n = Number(p); return n < 0 ? -n / (100 - n) : 100 / (100 + n); };
   const resolveMainLine = (m) => {
     if (!m || !m.size) return null;
-    const lines = [...m.keys()];
-    const twoSided = (l) => m.get(l).over != null && m.get(l).under != null;
-    const flagged = lines.filter((l) => m.get(l).main);
-    const pick =
-      flagged.find(twoSided) ??
-      (flagged.length ? Math.min(...flagged) : undefined) ??
-      (lines.some(twoSided) ? Math.min(...lines.filter(twoSided)) : undefined) ??
-      (lines.some((l) => m.get(l).under != null) ? Math.min(...lines.filter((l) => m.get(l).under != null)) : undefined);
-    if (pick === undefined) return null;
+    const twoSided = [...m.keys()].filter((l) => m.get(l).over != null && m.get(l).under != null);
+    if (!twoSided.length) return null;
+    const flagged = twoSided.filter((l) => m.get(l).main);
+    const imbalance = (l) => Math.abs(implied(m.get(l).over) - implied(m.get(l).under));
+    const pick = (flagged.length ? flagged : twoSided)
+      .reduce((a, b) => (imbalance(b) < imbalance(a) || (imbalance(b) === imbalance(a) && b < a) ? b : a));
     const slot = m.get(pick);
     // Keep the +1400-style price safety: an implausible main-line price is dropped.
     return { line: pick, over: plausibleMainPrice(slot.over) ? slot.over : null, under: plausibleMainPrice(slot.under) ? slot.under : null };
@@ -296,6 +297,20 @@ export function normalizeSharpProps(rows) {
         if (ln === mainLine || slot.over == null) continue;
         const map = e.altByBook[bk] || (e.altByBook[bk] = new Map());
         if (!map.has(ln)) map.set(ln, slot.over);
+      }
+    }
+    // A higher over line is harder to hit, so each book's alternate prices must
+    // lengthen as the line climbs from its main over. A price that breaks that
+    // ladder (DraftKings' +1900 on a 74.5 under its 93.5 main) is a mislabeled
+    // row, not a real buy-up: drop it rather than offer it as a Super Lock.
+    for (const bk of ["fanduel", "draftkings"]) {
+      const map = e.altByBook[bk]; if (!map) continue;
+      const main = bk === "fanduel" ? fdMain : dkMain;
+      let floor = main?.over != null ? implied(main.over) : 1;
+      for (const ln of [...map.keys()].sort((a, b) => a - b)) {
+        const p = implied(map.get(ln));
+        if (main && ln <= main.line) continue;
+        if (!(p < floor)) map.delete(ln); else floor = p;
       }
     }
     // Alternate OVER lines above the main line — union thresholds across books,
