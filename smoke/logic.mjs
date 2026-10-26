@@ -3,6 +3,7 @@
 // board normalization, prop menu + alt lines, pick anti-cheat re-derivation, the
 // started/Monday guards, and grading. This is the primary bug net before Week 1.
 import { suite } from "./assert.mjs";
+import { readFile } from "node:fs/promises";
 import { normalizeSharp, fetchSharpRaw } from "../functions/api/odds.js";
 import { normalizeSharpProps, plausibleMainPrice, marketKeyFromName } from "../functions/_shared/props.js";
 import { menuForGame } from "../functions/api/props.js";
@@ -17,6 +18,16 @@ const lockable = (price) => price != null && Number(price) >= LOCK_MIN;
 
 export async function run() {
   const s = suite("logic — Week-1 simulation (board · props · picks · grading)");
+
+  // Visible sign-in labels must name their controls for assistive technology.
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const login = html.split('id="login-modal"')[1]?.split('<!-- Password reset modal')[0] || "";
+  for (const [id, name, tag] of [["login-name", "Member", "select"], ["login-pass", "Password", "input"]]) {
+    s.ok(`sign-in ${name} label is associated with its control`,
+      new RegExp(`<label\\b[^>]*\\bfor="${id}"[^>]*>\\s*${name}\\s*</label>`).test(login)
+      && new RegExp(`<${tag}\\b[^>]*\\bid="${id}"`).test(login)
+      && [...html.matchAll(new RegExp(`\\bid="${id}"`, "g"))].length === 1);
+  }
 
   // ── 1. Board: derivative markets must never reach the game spread/total ──
   const games = normalizeSharp(sharpBoardRows());
