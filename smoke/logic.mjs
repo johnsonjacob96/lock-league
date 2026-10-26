@@ -3,6 +3,8 @@
 // board normalization, prop menu + alt lines, pick anti-cheat re-derivation, the
 // started/Monday guards, and grading. This is the primary bug net before Week 1.
 import { suite } from "./assert.mjs";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { normalizeSharp, fetchSharpRaw } from "../functions/api/odds.js";
 import { normalizeSharpProps, plausibleMainPrice, marketKeyFromName } from "../functions/_shared/props.js";
 import { menuForGame } from "../functions/api/props.js";
@@ -17,6 +19,24 @@ const lockable = (price) => price != null && Number(price) >= LOCK_MIN;
 
 export async function run() {
   const s = suite("logic — Week-1 simulation (board · props · picks · grading)");
+
+  // Run the actual board freshness helpers with a fixed clock and synthetic quotes.
+  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  const helper = name => html.slice(html.indexOf(`function ${name}(`)).split("\n}")[0] + "\n}";
+  const now = Date.parse("2026-09-19T16:00:00Z");
+  class FixedDate extends Date { static now() { return now; } }
+  const { quoteDelayed, bookUpdateLabel } = runInNewContext(
+    `${helper("quoteDelayed")}\n${helper("bookUpdateLabel")}\n({ quoteDelayed, bookUpdateLabel })`, { Date: FixedDate });
+  const freshBook = { updated: new Date(now).toISOString() };
+  s.eq("freshness: invalid quote cannot borrow a fresh book label",
+    bookUpdateLabel({ ...freshBook, spread: { updated: "invalid" } }), "Quote delayed · refreshing");
+  s.eq("freshness: missing timestamps are unverified", quoteDelayed({}, {}), true);
+  s.eq("freshness: missing quote timestamp uses valid book timestamp", quoteDelayed({}, freshBook), false);
+  s.eq("freshness: expired quote overrides fresh book", quoteDelayed({ updated: new Date(now - 120001).toISOString() }, freshBook), true);
+  s.eq("freshness: two-minute boundary is accepted", quoteDelayed({ updated: new Date(now - 120000).toISOString() }, freshBook), false);
+  s.eq("freshness: future quote beyond clock tolerance is delayed", quoteDelayed({ updated: new Date(now + 5001).toISOString() }, freshBook), true);
+  s.eq("freshness: small clock skew is accepted", quoteDelayed({ updated: new Date(now + 5000).toISOString() }, freshBook), false);
+  s.eq("freshness: explicit stale flag overrides timestamp", quoteDelayed({ stale: true }, freshBook), true);
 
   // ── 1. Board: derivative markets must never reach the game spread/total ──
   const games = normalizeSharp(sharpBoardRows());
