@@ -243,6 +243,29 @@ test('game totals save and settle from final scoreboard even without a player bo
  assert.equal(data.slips.find(s=>s.id===id).legs[0].player,'Game total');
 });
 
+test('missing player stat cells stay unresolved until a numeric final stat arrives',async()=>{
+ user=1;
+ const id=crypto.randomUUID();
+ const slip={...body,id,legs:[{player:'Emmett Johnson',market:'rush_yds',side:'under',line:15.5,member_id:1}]};
+ assert.equal((await post(slip)).status,200);
+ events=[{id:'missing-stat-game',away:'Denver Broncos',home:'Kansas City Chiefs',state:'post',away_score:20,home_score:24}];
+ const get=async()=>await(await onRequest({env:{},request:new Request('https://app.invalid/api/parlays?season=2026&week=1')})).json();
+ for(const value of [null,'','   ',undefined]) {
+  gameSummary=summary(0);gameSummary._seedFinal=true;
+  gameSummary.boxscore.players[0].statistics[0].athletes[0].stats=[value];
+  const data=await get();
+  assert.equal(data.slips.find(s=>s.id===id).legs[0].result,null,`missing ${JSON.stringify(value)} must not settle`);
+  assert.equal(data.games[body.game_key].progress[id][0].actual,null);
+  assert.equal(data.slips.find(s=>s.id===id).version,1);
+ }
+ // A real zero is meaningful and must still settle (and persist) normally.
+ gameSummary=summary(0);gameSummary._seedFinal=true;
+ const data=await get();
+ assert.equal(data.slips.find(s=>s.id===id).legs[0].result,'W');
+ assert.equal(data.slips.find(s=>s.id===id).legs[0].actual,0);
+ assert.equal(data.slips.find(s=>s.id===id).version,2);
+});
+
 test('real expanded-slip OCR shield fragments preserve standalone touchdown legs',()=>{
  const text='D.J. Moore Over 63.5 ©®\nD.J. MOORE - RECEIVING YDS\nUnder 54.5\nTOTAL POINTS\n2. Sam LaPorta ©®\nANY TIME TOUCHDOWN SCORER\nJosh Allen Over 31.5 ®\nJOSH ALLEN - RUSHING YDS\nD.J. Moore Over 4.5 ©\nD.J. MOORE - TOTAL RECEPTIONS\n~ Amon-Ra St. Brown Over 7.5 ©\nAMON-RA ST. BROWN - TOTAL RECEPTIONS\nJosh Allen ©\nANY TIME TOUCHDOWN SCORER\nJahmyr Gibbs Over 30.5 ®\nJAHMYR GIBBS - RECEIVING YDS';
  const parsed=client.parseParlayDocument(text);
