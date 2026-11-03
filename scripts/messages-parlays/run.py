@@ -169,7 +169,8 @@ def schema():
         odds={'type':['integer','null']}, all_legs_visible={'type':'boolean'}, displayed_leg_count=integer,
         images={'type':'array','items':obj(dict(attachment_id=integer,
             kind={'type':'string','enum':['placed_receipt','builder','other','unreadable']}))},
-        legs={'type':'array','items':obj(dict(player=string,market=string,side=string,
+        legs={'type':'array','items':obj(dict(player=string,market=string,
+            side={'type':'string','enum':['over','under','atleast','yes','spread','moneyline']},
             line={'type':['number','null']},member=string,
             evidence_ids={'type':'array','items':integer}))}))
 

@@ -51,7 +51,11 @@ export function prepare(extraction, context, image, chatIdentifier) {
     const key = JSON.stringify([leg.player.toLowerCase(),leg.market,leg.side,leg.line]);
     requireThat(!bets.has(key), 'Duplicate leg');
     bets.add(key);
-    return {...leg, member_id:members[0].id};
+    // Older extractions used the natural-language 'win' for a moneyline.
+    // Normalize only that exact market/side pair; app validation still checks
+    // the selected team and rejects unsupported directions on every other bet.
+    const side = leg.market === 'moneyline' && leg.side === 'win' ? 'moneyline' : leg.side;
+    return {...leg, side, member_id:members[0].id};
   });
   const hash = createHash('sha256').update(`messages:${chatIdentifier}:${context.target_date}:${receipt.attachment_id}`).digest('hex');
   const id = `${hash.slice(0,8)}-${hash.slice(8,12)}-5${hash.slice(13,16)}-a${hash.slice(17,20)}-${hash.slice(20,32)}`;

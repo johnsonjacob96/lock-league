@@ -47,3 +47,30 @@ test('only Monday and Thursday dates accepted',()=>{
   assert.equal(nightForDate('2026-10-08'),'Thursday');
   assert.throws(()=>nightForDate('2026-10-13'));
 });
+
+function moneylineFixture(side='moneyline') {
+  const f=fixture();
+  f.context.allowed_markets.push('moneyline','spread');
+  f.context.messages[0].text='Cowboys ML';
+  f.extraction.legs[0]={...f.extraction.legs[0],player:'Dallas Cowboys',market:'moneyline',side,line:null};
+  return f;
+}
+test('canonical moneyline preserves team, owner and null line',()=>{
+  const leg=build(moneylineFixture()).legs[0];
+  assert.deepEqual(leg,{player:'Dallas Cowboys',market:'moneyline',side:'moneyline',line:null,member_id:1,result:null});
+});
+test('legacy moneyline win extraction recovers without changing other legs',()=>{
+  assert.deepEqual(build(moneylineFixture('win')),build(moneylineFixture()));
+});
+test('moneyline alias still rejects a team outside the selected game',()=>{
+  const f=moneylineFixture('win');f.extraction.legs[0].player='Seattle Seahawks';
+  assert.throws(()=>build(f));
+});
+test('win is not accepted as a spread or prop direction',()=>{
+  const f=moneylineFixture('win');f.extraction.legs[0].market='spread';f.extraction.legs[0].line=-3.5;
+  assert.throws(()=>build(f));
+  const prop=fixture();prop.extraction.legs[0].side='win';assert.throws(()=>build(prop));
+});
+test('ambiguous moneyline direction is not silently rewritten',()=>{
+  assert.throws(()=>build(moneylineFixture('over')));
+});

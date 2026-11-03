@@ -16,7 +16,10 @@ American odds when a boost is applied; never use crossed-out original odds. Copy
 the actual receipt threshold even if the member requested a slightly different
 line. Over 3.5 is over/3.5; 6+ is atleast/6 (6 wins, never pushes). Anytime TD is
 anytime_td/yes/null. Total points Over/Under is game_total, player 'Game total'.
-Spreads/moneylines use the full team name in player.
+Spreads use market spread, side spread, and the signed point spread in line.
+Moneylines use market moneyline, side moneyline, and line null (never side win).
+Both use the full team name in player. Only use these sides: over, under, atleast,
+yes, spread, moneyline.
 
 Use allowed_markets and the exact canonical game_key in games. Match the target
 game's MNF/TNF pick thread using thread_originator_guid and messages' guid. Match

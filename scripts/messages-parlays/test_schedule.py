@@ -1,10 +1,15 @@
 import datetime as dt
 import unittest
-from run import CT, due_dates, message_text
+from run import CT, due_dates, message_text, schema
 
 class ScheduleTests(unittest.TestCase):
     def due(self, instant, state=None, start='2026-10-12'):
         return due_dates(dt.datetime.fromisoformat(instant),start,state or {})
+
+    def test_extraction_schema_limits_directions_to_app_contract(self):
+        sides=schema()['properties']['legs']['items']['properties']['side']['enum']
+        self.assertEqual(set(sides), {'over','under','atleast','yes','spread','moneyline'})
+        self.assertNotIn('win',sides)
 
     def test_before_due_and_first_run(self):
         self.assertEqual(self.due('2026-10-12T19:29:59-05:00'), [])
