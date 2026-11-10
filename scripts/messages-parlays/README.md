@@ -6,6 +6,10 @@ Mac's Messages database. No website or pick behavior changes.
 
 The LaunchAgent checks at 7:30 PM America/Chicago each Monday/Thursday, with one
 retry no earlier than 8:30 PM (and at least an hour after the first attempt).
+A missing or not-yet-downloaded screenshot does not consume an extraction attempt:
+local-only checks continue each quarter hour for seven days. Once an image syncs,
+normal receipt/owner validation runs. Existing completed imports and ambiguous
+extractions are never reopened by this recovery.
 Quarter-hour wakeups do only a local due-date check outside those windows. It
 catches up after sleep/login, including missed dates since installation. It
 requires this Mac, a logged-in user session, synced Messages attachments, network

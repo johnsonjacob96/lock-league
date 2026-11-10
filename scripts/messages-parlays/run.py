@@ -39,6 +39,47 @@ def due_dates(now, start, state):
     return result
 
 
+
+def refresh_image_waits(state, now):
+    """Recover only legacy no-image failures; never re-open extraction reviews."""
+    today = now.astimezone(CT).date()
+    for date, entry in state.items():
+        age = (today - dt.date.fromisoformat(date)).days
+        if (entry.get('status') == 'missed' and entry.get('note') == 'No images yet'
+                and 0 <= age <= 7):
+            entry.update(status='waiting_for_images', attempts=0,
+                         note='Waiting for screenshot to sync; no extraction attempted.')
+        if entry.get('status') == 'waiting_for_images' and age > 7:
+            entry.update(status='missed', note='No screenshot synced within 7 days; manual review required.')
+
+
+def has_local_image(db, date, chat_identifier):
+    """Cheap local check: no image conversion, API request or model invocation."""
+    day = dt.date.fromisoformat(date)
+    epoch = lambda d: int((dt.datetime.combine(d, dt.time(), CT).timestamp() - APPLE_EPOCH) * 1e9)
+    rows = db.execute("""SELECT a.filename FROM attachment a
+        JOIN message_attachment_join ma ON ma.attachment_id=a.ROWID
+        JOIN message m ON m.ROWID=ma.message_id
+        JOIN chat_message_join j ON j.message_id=m.ROWID
+        JOIN chat c ON c.ROWID=j.chat_id
+        WHERE c.chat_identifier=? AND c.display_name='Lock League'
+        AND m.date>=? AND m.date<? AND COALESCE(m.associated_message_type,0)<2000
+        AND a.mime_type LIKE 'image/%'""",
+        (chat_identifier, epoch(day), epoch(day + dt.timedelta(days=1)))).fetchall()
+    attachment_root = (Path.home() / 'Library/Messages/Attachments').resolve()
+    for row in rows:
+        if not row['filename']:
+            continue
+        path = Path(row['filename']).expanduser().resolve()
+        try:
+            path.relative_to(attachment_root)
+        except ValueError:
+            continue
+        if path.is_file():
+            return True
+    return False
+
+
 def read_json(path, fallback=None):
     return json.loads(path.read_text()) if path.exists() else fallback
 
@@ -262,12 +303,13 @@ def main():
             print(json.dumps(run_date(args.date, config, args.save, RUNTIME / 'replays' / args.date)))
             return
         state = read_json(RUNTIME / 'state.json', {})
+        now = dt.datetime.now(CT)
+        refresh_image_waits(state, now)
         for date, entry in state.items():
             if entry.get('status') not in TERMINAL and entry.get('attempts', 0) >= 2:
                 entry['status'] = 'missed'
                 notify(date + ': interrupted import needs review. Check LockLeagueParlay/state.json.')
         write_json(RUNTIME / 'state.json', state)
-        now = dt.datetime.now(CT)
         dates = due_dates(now, config['start_date'], state)
         if dates:
             # A macOS privacy block is setup, not a failed extraction. Do not
@@ -279,6 +321,8 @@ def main():
                                       (config['chat_identifier'],)).fetchone()
                     if chat:
                         resolve_senders(db, chat['ROWID'], config)
+                    images_ready = {date:has_local_image(db, date, config['chat_identifier'])
+                                    for date in dates}
             except sqlite3.DatabaseError:
                 health = read_json(health_file, {})
                 if health.get('status') != 'blocked_permissions':
@@ -288,6 +332,15 @@ def main():
             write_json(health_file, {'status':'ok', 'checked_at':now.isoformat()})
         for date in dates:
             prior = state.get(date, {})
+            if not images_ready[date]:
+                state[date] = {**prior, 'status':'waiting_for_images',
+                    'attempts':prior.get('attempts', 0), 'last_checked':now.timestamp(),
+                    'note':'Waiting for screenshot to sync; no extraction attempted.'}
+                refresh_image_waits(state, now)
+                write_json(RUNTIME / 'state.json', state)
+                if prior.get('status') != state[date]['status']:
+                    notify(date + ': waiting for the parlay screenshot in Messages.')
+                continue
             attempt = prior.get('attempts', 0) + 1
             state[date] = {'status':'running','attempts':attempt,'last_attempt':now.timestamp()}
             write_json(RUNTIME / 'state.json', state)  # crash cannot trigger unbounded model retries
