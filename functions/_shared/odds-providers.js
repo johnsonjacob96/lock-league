@@ -842,4 +842,4 @@ async function fetchSharpApi(env) {
   };
 }
 
-export { currentSeasonWeek, fetchOddsApi, fetchEspn, fetchSharpApi };
+export { currentSeasonWeek, fetchOddsApi, fetchEspn, fetchSharpApi, canonicalNflTeam, sharpBookKey };

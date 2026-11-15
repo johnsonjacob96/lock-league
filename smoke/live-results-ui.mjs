@@ -66,10 +66,17 @@ try {
     {...base,bet_type:'Under',pick_text:'Buffalo Bills / Detroit Lions U34.5',prop:null},
     {...base,pick_text:'Josh Allen O31.5 Rushing Yards'}
    ].map(p=>({...p,game_key:'Buffalo Bills@Detroit Lions',score:{away:'Buffalo Bills',home:'Detroit Lions',away_score:21,home_score:14},detail:p.final?'Final':'Q3 · 08:42'}));
+   // Live chance: shown on an in-progress pick with a fresh quote only.
+   const fresh={chance:0.623,books:['fanduel','draftkings'],at:new Date().toISOString()};
+   picks[0].live_odds=fresh;picks[2].live_odds=fresh;
+   picks[3].live_odds={...fresh,at:new Date(Date.now()-10*60000).toISOString()};
    wrGameCache['Buffalo Bills@Detroit Lions']={ts:Date.now(),data:{...d,found:true,stats_updated_at:new Date().toISOString()}};
    const m={member_id:5,name:'Jacob',live:{fW:1,fL:1,fP:0},picks};
    document.getElementById('root').innerHTML=`<div class="wr-wrap">${renderPersonalLive({week:3,members:[m]})}<div class="wr-grid">${wrChip(picks[0],m)}${wrChip(picks[1],m)}</div></div>`;
    results.push(['completed personal cards kept',document.querySelectorAll('.personal-live-card').length===5]);
+   const chances=[...document.querySelectorAll('.personal-live-card .live-chance')].map(e=>e.textContent);
+   results.push(['live chance on the open pick only',chances.length===1&&chances[0].startsWith('62%')&&chances[0].includes('FanDuel + DraftKings'),JSON.stringify(chances)]);
+   results.push(['live chance clamps away from certainty',liveChanceHtml({...picks[2],live_odds:{...fresh,chance:0.999}}).includes('>99%<')&&liveChanceHtml({...picks[2],live_odds:{...fresh,chance:0.001}}).includes('>1%<')]);
    return results;
   });
   for(const [name,passed,detail] of checks) assert.ok(passed,`${width}: ${name}: ${detail}`);
