@@ -950,6 +950,9 @@
   .picks-deadline { margin-bottom:16px; }
   .personal-live-grid { display:grid; gap:12px; margin:12px 0 24px; }
   .personal-live-card { border:1px solid #344139; border-radius:10px; padding:16px; background:#151b18; }
+  .live-chance { display:flex; align-items:baseline; gap:8px; margin:10px 0 4px; }
+  .live-chance strong { font:700 22px/1 Inter,sans-serif; color:#e6e8e8; font-variant-numeric:tabular-nums; }
+  .live-chance span { font-size:12px; color:#9aa4a2; }
   .personal-live-card .wr-chip { width:100%; min-height:44px; background:transparent; border:0; padding:0; text-align:left; }
   .personal-live-card .wr-pick { white-space:normal; font:600 15px/1.4 Inter,sans-serif; }
   .personal-score { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 8px; }
@@ -2233,6 +2236,18 @@ function liveResultPresentation(p, d) {
 function liveResultBadge(result) {
   return `<span class="live-result-badge result-${result.tone}">${result.symbol ? `<span aria-hidden="true">${result.symbol}</span>` : ""}${result.label}</span>`;
 }
+// The books' live, vig-free chance that this pick hits (game lines only). An
+// estimate from the market, never a result: it hides once the game is final
+// or the quote is too old to mean anything.
+function liveChanceHtml(p) {
+  const o = p.live_odds;
+  if (!o || p.state !== "in" || p.final || !Number.isFinite(o.chance)) return "";
+  const age = Date.now() - Date.parse(o.at);
+  if (!Number.isFinite(age) || age > 5 * 60000) return "";
+  const pct = Math.min(99, Math.max(1, Math.round(o.chance * 100)));
+  const books = (o.books || []).map(bookLabel).join(" + ");
+  return `<div class="live-chance" aria-label="${pct} percent chance to hit, from live ${escapeHtml(books)} odds"><strong>${pct}%</strong><span>chance to hit · live ${escapeHtml(books)} odds · ${escapeHtml(sourceAgeLabel(o.at, o.stale))}</span></div>`;
+}
 function liveProgressBar(p, d) {
   const progress = liveProgressData(p,d);
   if (!progress) return "";
@@ -2296,7 +2311,7 @@ function renderPersonalLive(wr) {
     const expanded = state.wrExpanded === `${me.member_id}:${p.bet_type}`;
     const progressData = p.prop?.market ? cached : d;
     const result = liveResultPresentation(p,progressData);
-    return `<article class="personal-live-card result-${result.tone}">${liveResultBadge(result)}<div class="slip-selection">${photo}${wrChip(p,{...me,personal:true})}</div><p class="quiet-copy">${escapeHtml(bookLabel(p.book))}${p.price != null ? " · " + americanOdds(p.price) : " · Odds unavailable"}</p>${scoreHtml}${track ? `<p class="quiet-copy">${escapeHtml(track)}</p>` : ""}${liveProgressBar(p,progressData)}${p.prop?.market && cached?.found ? `<p class="quiet-copy">Stats: ${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</p>` : ""}${expanded ? wrGamePanel(p) : ""}</article>`;
+    return `<article class="personal-live-card result-${result.tone}">${liveResultBadge(result)}<div class="slip-selection">${photo}${wrChip(p,{...me,personal:true})}</div><p class="quiet-copy">${escapeHtml(bookLabel(p.book))}${p.price != null ? " · " + americanOdds(p.price) : " · Odds unavailable"}</p>${scoreHtml}${liveChanceHtml(p)}${track ? `<p class="quiet-copy">${escapeHtml(track)}</p>` : ""}${liveProgressBar(p,progressData)}${p.prop?.market && cached?.found ? `<p class="quiet-copy">Stats: ${escapeHtml(sourceAgeLabel(cached.stats_updated_at,cached.stale))}</p>` : ""}${expanded ? wrGamePanel(p) : ""}</article>`;
   }).join("");
   const selector = `<div class="live-view-control"><label for="live-member">${comparing ? escapeHtml(me.name) + "’s card" : "My Card"}</label><select id="live-member" aria-label="Track a participant">${(wr.members || []).map(m => `<option value="${m.member_id}" ${m === me ? "selected" : ""}>${escapeHtml(m.name)}${isMe(m.name) ? " (You)" : ""}</option>`).join("")}</select></div>`;
   const comparison = comparing && own ? `<section class="comparison-anchor"><div class="compact-heading"><strong>Your card</strong><span>${own.live.fW || 0}–${own.live.fL || 0}${own.live.fP ? "–"+own.live.fP : ""} settled</span></div>${pickStatusChips(own.picks)}</section>` : "";

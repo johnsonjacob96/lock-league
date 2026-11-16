@@ -7,6 +7,8 @@ import { currentNflWeek, pickCutoff, seasonTypeFor } from "../_shared/nfl.js";
 import { fetchScoreboard, resolveSpreadResult, gradeTotal, sameTeam, maybeGrade } from "../_shared/grader.js";
 import { weeklyContext } from '../_shared/tiebreak-context.js';
 import { sql } from "../_shared/db.js";
+import { liveGameOdds, liveHitChance } from "../_shared/live-odds.js";
+import { canonicalNflTeam } from "../_shared/odds-providers.js";
 
 const TTL_MS = 10 * 1000;
 let cache = { ts: 0, key: "", data: null };
@@ -187,6 +189,7 @@ export async function onRequest({ request, env, waitUntil }) {
     members.sort((a,b)=>a.week_rank-b.week_rank || a.name.localeCompare(b.name));
   } else members.sort((a,b)=>b.live.W-a.live.W || a.live.L-b.live.L || a.name.localeCompare(b.name));
   const anyLive = events.some((e) => e.state === "in");
+  await attachLiveChances(env, cur, members);
 
   // A clinch is final for the weekly prize, but remaining picks stay open.
   let recap = null;
@@ -202,4 +205,25 @@ export async function onRequest({ request, env, waitUntil }) {
   const data = { season: cur.season, week: cur.week, revealed: true, source_updated_at: events[0]?.source_updated_at || null, fetched_at: new Date().toISOString(), anyLive, members, recap };
   cache = { ts: Date.now(), key, data };
   return json(data);
+}
+
+// Live chance to hit, from the books' in-game odds, on every revealed pick
+// whose game is in progress. Best effort: without live odds the Live tab shows
+// what it always has.
+const canonicalKey = (gameKey) => {
+  const [a, h] = String(gameKey || "").split("@");
+  return a && h ? `${canonicalNflTeam(a)}@${canonicalNflTeam(h)}` : null;
+};
+export async function attachLiveChances(env, cur, members, now = Date.now(), load = liveGameOdds) {
+  const open = members.flatMap((m) => m.picks).filter((p) => p.kind === "pick" && p.state === "in" && !p.final && p.game_key);
+  const keys = [...new Set(open.map((p) => canonicalKey(p.game_key)).filter(Boolean))];
+  if (!keys.length) return;
+  const live = await load(env, cur.season, cur.week, keys).catch(() => null);
+  if (!live?.games) return;
+  for (const p of open) {
+    try {
+      const hit = liveHitChance(p, live.games[canonicalKey(p.game_key)], now);
+      if (hit) p.live_odds = { ...hit, at: live.fetched_at, stale: !!live.stale };
+    } catch { /* one odd pick never costs the board its live view */ }
+  }
 }
