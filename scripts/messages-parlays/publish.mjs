@@ -19,6 +19,44 @@ export function nightForDate(date) {
   return day === 1 ? 'Monday' : 'Thursday';
 }
 
+// Money evidence must be literal labeled text from the selected receipt, never
+// a rounded chat estimate or the changing cash-out offer. Do the math here,
+// outside the vision reader, and never apply a boost a second time.
+export function receiptOdds(extraction) {
+  const money = extraction.receipt_money;
+  let implied = null;
+  if (money && money.attachment_id === extraction.receipt_attachment_id &&
+      money.stake_type === 'cash' && money.payout_is_final === true) {
+    const amount = text => {
+      const match = String(text || '').match(/^\s*[^:$\r\n]+:\s*\$((?:\d+|\d{1,3}(?:,\d{3})+))\.(\d{2})\s*$/);
+      if (!match) return null;
+      const cents = Number(match[1].replaceAll(',', '')) * 100 + Number(match[2]);
+      return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+    };
+    const stake = /^\s*(?:wager|stake|bet amount)\s*:/i.test(money.stake_text) ? amount(money.stake_text) : null;
+    const isTotal = /^\s*(?:to pay|total payout|total return|potential payout)\s*:/i.test(money.payout_text);
+    const isProfit = /^\s*(?:to win|profit)\s*:/i.test(money.payout_text);
+    const payout = isTotal || isProfit ? amount(money.payout_text) : null;
+    if (stake != null && payout != null) {
+      const profit = isTotal ? payout - stake : payout;
+      requireThat(profit > 0, 'Receipt payout must exceed the cash wager');
+      const raw = profit >= stake ? profit / stake * 100 : -stake / profit * 100;
+      const rounded = Math.round(raw);
+      // Cropped odds are recoverable only when the exact amounts imply an
+      // integer American price. Do not invent precision from rounded payouts.
+      if (Math.abs(raw - rounded) < 1e-7) implied = rounded;
+      if (Number.isInteger(extraction.odds)) {
+        const quotedProfit = extraction.odds > 0 ? stake * extraction.odds / 100 : stake * 100 / -extraction.odds;
+        requireThat(Math.abs(quotedProfit - profit) <= 1.000001, 'Displayed odds disagree with the receipt payout');
+      }
+    }
+  }
+  const odds = extraction.odds ?? implied;
+  requireThat(Number.isInteger(odds) && Math.abs(odds) >= 100 && Math.abs(odds) <= 1000000,
+    'Need readable final odds or exact cash wager and final payout on the same receipt');
+  return odds;
+}
+
 export function prepare(extraction, context, image, chatIdentifier) {
   requireThat(extraction.status === 'ready' && extraction.all_legs_visible === true, 'Receipt needs review');
   const imageIds = context.images.map(i => i.attachment_id);
@@ -35,7 +73,7 @@ export function prepare(extraction, context, image, chatIdentifier) {
   requireThat(receipt.time.slice(0,10) === context.target_date, 'Receipt date mismatch');
   const games = context.games.filter(g => g.game_key === extraction.game_key);
   requireThat(games.length === 1, 'Ambiguous or absent game');
-  requireThat(Number.isInteger(extraction.odds), 'Receipt odds required');
+  const odds = receiptOdds(extraction);
   requireThat(extraction.displayed_leg_count === extraction.legs.length && extraction.legs.length >= 2,
     'Incomplete leg count');
   const owners = new Set(), bets = new Set();
@@ -62,7 +100,7 @@ export function prepare(extraction, context, image, chatIdentifier) {
   const night = nightForDate(context.target_date);
   const body = {id, season:games[0].season, week:games[0].week, night,
     game_key:extraction.game_key, title:`${night==='Monday'?'MNF':'TNF'} — ${context.target_date}`,
-    odds:extraction.odds, image, legs};
+    odds, image, legs};
   try { return validateSlip(body, context.members.map(m => m.id)); }
   catch { throw new ReviewRequired('Slip did not pass app validation'); }
 }

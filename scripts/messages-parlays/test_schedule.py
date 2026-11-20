@@ -17,6 +17,13 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(set(sides), {'over','under','atleast','yes','spread','moneyline'})
         self.assertNotIn('win',sides)
 
+    def test_money_evidence_schema_keeps_provenance_and_cash_semantics(self):
+        money = schema()['properties']['receipt_money']
+        self.assertEqual(money['type'], ['object', 'null'])
+        self.assertEqual(set(money['required']), {'attachment_id','stake_text','payout_text','stake_type','payout_is_final'})
+        self.assertEqual(money['properties']['stake_type']['enum'], ['cash','bonus','unknown'])
+        self.assertFalse(money['additionalProperties'])
+
     def test_before_due_and_first_run(self):
         self.assertEqual(self.due('2026-10-12T19:29:59-05:00'), [])
         self.assertEqual(self.due('2026-10-12T19:30:00-05:00'), ['2026-10-12'])

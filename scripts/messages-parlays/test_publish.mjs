@@ -74,3 +74,45 @@ test('win is not accepted as a spread or prop direction',()=>{
 test('ambiguous moneyline direction is not silently rewritten',()=>{
   assert.throws(()=>build(moneylineFixture('over')));
 });
+
+function croppedReceipt(stake='Wager: $5.00',payout='To Pay: $395.00') {
+  const f=fixture();f.extraction.odds=null;
+  f.extraction.receipt_money={attachment_id:1,stake_text:stake,payout_text:payout,stake_type:'cash',payout_is_final:true};
+  return f;
+}
+test('cropped header uses exact receipt cash wager and boosted total, once',()=>{
+  const slip=build(croppedReceipt());assert.equal(slip.odds,7800);
+  assert.deepEqual(slip.legs,build(fixture()).legs);
+});
+test('previous cropped receipt cases preserve cents and thousands separator',()=>{
+  assert.equal(build(croppedReceipt('Wager: $5.00','To Pay: $2,605.00')).odds,52000);
+  assert.equal(build(croppedReceipt('Wager: $5.00','To Pay: $598.75')).odds,11875);
+});
+test('profit label differs from total return, including negative American prices',()=>{
+  assert.equal(build(croppedReceipt('Stake: $5.00','To Win: $390.00')).odds,7800);
+  assert.equal(build(croppedReceipt('Stake: $5.00','Total Payout: $9.00')).odds,-125);
+});
+const rejectMoney=(name,mutate)=>test(name,()=>{const f=croppedReceipt();mutate(f);assert.throws(()=>build(f));});
+rejectMoney('cash-out offer cannot substitute for total payout',f=>f.extraction.receipt_money.payout_text='Cash Out: $395.00');
+rejectMoney('rounded amounts without cents cannot fill missing odds',f=>f.extraction.receipt_money.payout_text='To Pay: $395');
+rejectMoney('unlabeled or chat amounts cannot fill missing odds',f=>f.extraction.receipt_money.payout_text='$5 to win $395.00');
+rejectMoney('money evidence must come from selected first receipt',f=>f.extraction.receipt_money.attachment_id=2);
+rejectMoney('free bet stake cannot use cash-wager formula',f=>f.extraction.receipt_money.stake_type='bonus');
+rejectMoney('unknown stake cannot fill missing odds',f=>f.extraction.receipt_money.stake_type='unknown');
+rejectMoney('pre-boost or unclear payout cannot fill missing odds',f=>f.extraction.receipt_money.payout_is_final=false);
+rejectMoney('invalid zero stake is rejected',f=>f.extraction.receipt_money.stake_text='Wager: $0.00');
+rejectMoney('payout must exceed stake for total return',f=>f.extraction.receipt_money.payout_text='To Pay: $5.00');
+rejectMoney('non-integer implied odds require review rather than rounding',f=>f.extraction.receipt_money.payout_text='To Pay: $8.33');
+rejectMoney('mixed labels cannot accidentally use last amount',f=>f.extraction.receipt_money.stake_text='Wager: $5.00 Cash Out: $2.00');
+rejectMoney('displayed odds and exact payout must agree',f=>f.extraction.odds=6000);
+rejectMoney('new payout route does not bypass owner evidence',f=>f.extraction.legs[0].evidence_ids=[999]);
+rejectMoney('new payout route does not bypass cropped-leg review',f=>f.extraction.all_legs_visible=false);
+rejectMoney('new payout route does not bypass ambiguous review status',f=>f.extraction.status='needs_review');
+test('visible final odds survive unavailable money evidence; valid amounts cross-check',()=>{
+  const f=croppedReceipt();f.extraction.odds=7800;assert.equal(build(f).odds,7800);
+  f.extraction.receipt_money=null;assert.equal(build(f).odds,7800);
+});
+test('visible odds allow a penny of payout rounding',()=>{
+  const f=croppedReceipt('Wager: $5.00','To Pay: $8.33');f.extraction.odds=-150;
+  assert.equal(build(f).odds,-150);
+});

@@ -19,7 +19,16 @@ access, and valid existing Codex/Cloudflare OAuth sessions.
 
 - The first **placed receipt** for that date, not a builder or later replacement.
 - Actual receipt lines, boosted odds, and screenshot; plus assignments evidenced
-  by the originating pick thread. Contacts resolves message authors to members.
+  by the originating pick thread or clear same-night messages from the member.
+  Contacts resolves message authors to members. A moved threshold for the same
+  player/market/direction, or equivalent `4+`/`over 3.5`, does not require review.
+- If the odds header is cropped, exact labeled cash wager and final payout on
+  that same receipt can recover the odds. The publisher calculates from cents;
+  the reader never guesses odds or reapplies the boost. Example: Wager $5.00,
+  To Pay $395.00 implies +7800, including the receipt's boost. Cash-out offers,
+  rounded chat amounts, bonus stakes, ambiguous labels and non-integer implied
+  prices cannot substitute for unreadable odds. When both odds and payout are
+  readable they must agree within a penny of payout rounding.
 - Only included legs: an absent member gets no pick, not a synthetic loss. Jack
   was absent October 8; he is not excluded from future slips.
 - `6+` / `180+` are `atleast`, not `over`. Game totals, team spreads/moneylines,
@@ -70,7 +79,7 @@ against the owner's existing plan. See [official non-interactive documentation](
 Runtime directory is owner-only (0700); state, run context, extracted JSON and
 private JPEGs stay there. They are not committed or publicly hosted. `state.json`
 records each scheduled date, `health.json` records permission blocks, and macOS
-notifications flag review/failure. Notifications depend on this Mac's settings.
+notifications flag review/failure with the specific reason. Notifications depend on this Mac's settings.
 The app's authenticated slip image storage contains only the selected receipt.
 
 ```sh
@@ -101,3 +110,18 @@ The interactive health probe passed (eight members, one Monday game). The launch
 probe exposed macOS's separate Full Disk Access requirement; scheduling is
 installed, but unattended access must be enabled and verified before calling the
 automation fully ready.
+
+
+## November 19 reliability update
+
+The November 19 review was a cropped odds header despite clearly visible $5.00
+Wager / $395.00 To Pay and eight complete, assigned legs. The reader now extracts
+literal receipt money evidence and the deterministic publisher computes +7800.
+This also covers the November 12 ($5/$2605) and November 9 ($5/$598.75) cases.
+Exact receipt lines continue to override earlier thread thresholds. Review is
+still required for unclear owners, cropped legs, unsupported markets or money
+that cannot establish the final odds. This is not a blanket suppression of alerts.
+
+39 publisher tests and 15 scheduler/schema tests cover the cash/payout path,
+negative odds, profit versus total return, no double boost, conflicting evidence,
+malformed/cashout/bonus amounts and the original ownership/first-receipt guards.

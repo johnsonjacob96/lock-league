@@ -205,7 +205,12 @@ def schema():
         return dict(type='object', properties=properties, required=list(properties), additionalProperties=False)
     string = {'type': 'string'}
     integer = {'type': 'integer'}
+    money = obj(dict(attachment_id=integer, stake_text=string, payout_text=string,
+        stake_type={'type':'string','enum':['cash','bonus','unknown']},
+        payout_is_final={'type':'boolean'}))
+    money['type'] = ['object', 'null']
     return obj(dict(status={'type':'string','enum':['ready','not_found','needs_review']}, note=string,
+        receipt_money=money,
         receipt_attachment_id={'type':['integer','null']}, game_key={'type':['string','null']},
         odds={'type':['integer','null']}, all_legs_visible={'type':'boolean'}, displayed_leg_count=integer,
         images={'type':'array','items':obj(dict(attachment_id=integer,
@@ -355,7 +360,7 @@ def main():
             print(json.dumps({'date':date, **state[date]}), flush=True)
             if result['status'] in ('saved', 'needs_review', 'missed'):
                 notify(date + (': parlay imported.' if result['status']=='saved'
-                       else ': import needs review. Check LockLeagueParlay/state.json.'))
+                       else ': import needs review — ' + result.get('note', 'Check LockLeagueParlay/state.json.')[:240]))
 
 
 if __name__ == '__main__':
