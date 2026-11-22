@@ -17,8 +17,58 @@ const BOOK_FRESH_MS = 5 * 60 * 1000;
 
 const implied = (a) => (a < 0 ? -a / (100 - a) : 100 / (100 + a));
 const validPrice = (a) => Number.isFinite(a) && Math.abs(a) >= 100 && Math.abs(a) <= 100000;
-// The vig-free chance of side A from a two-way pair of American prices.
-const twoWay = (a, b) => { const x = implied(a), y = implied(b); return x / (x + y); };
+// Removing the book's margin. Books don't spread it evenly: nearly all of it
+// rides on the longshot, so scaling both sides down by the same factor drags a
+// heavy favorite toward 50% (Under 49.5 at -2500 / Over +850 read 90%, not
+// the ~95% the price means). The power method raises both implied chances to
+// one exponent k so they sum to 1, which leaves a favorite nearly whole.
+// Returns side A's fair chance and the k that got there.
+function devig(a, b) {
+  const x = implied(a), y = implied(b);
+  if (x + y <= 1) return { p: x / (x + y), k: 1 }; // no margin to remove
+  let lo = 1, hi = 50;
+  for (let i = 0; i < 60; i++) {
+    const k = (lo + hi) / 2;
+    if (x ** k + y ** k > 1) lo = k; else hi = k;
+  }
+  const k = (lo + hi) / 2;
+  return { p: x ** k / (x ** k + y ** k), k };
+}
+// The exponent a standard -110/-110 market carries, for a book that posts no
+// two-sided line to measure its own.
+const DEFAULT_K = Math.log(0.5) / Math.log(110 / 210);
+const median = (xs) => { const v = [...xs].sort((a, b) => a - b), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+
+// A ladder of [line, price for my side, price against] -> [line, fair chance]
+// points. Late in a game books often post only one side of a line (FanDuel's
+// Under 45.5 at -700 with no over); that quote still says where the market
+// is, so it's de-vigged with the margin the same book shows on its two-sided
+// lines instead of being dropped.
+function ladderPoints(ladder) {
+  const pairs = ladder.filter(([, a, b]) => a != null && b != null).map(([l, a, b]) => [l, devig(a, b)]);
+  const k = pairs.length ? median(pairs.map(([, d]) => d.k)) : DEFAULT_K;
+  // [line, chance, weight]: a two-sided quote is the book's own number and
+  // anchors the ladder; a one-sided estimate yields to it.
+  const points = pairs.map(([l, d]) => [l, d.p, 1000]);
+  for (const [l, a, b] of ladder) {
+    if (a != null && b == null) points.push([l, Math.min(1, implied(a) ** k), 1]);
+    else if (a == null && b != null) points.push([l, Math.max(0, 1 - implied(b) ** k), 1]);
+  }
+  // More points can only help my side, so the chance must rise with the line.
+  // One-sided estimates can wobble a point out of order; average any run that
+  // does, by weight (pool adjacent violators), so a better line never reads
+  // worse and a two-sided quote keeps its price.
+  points.sort((x, y) => x[0] - y[0]);
+  const blocks = [];
+  for (const [l, p, w] of points) {
+    blocks.push({ lines: [l], sum: p * w, n: w });
+    while (blocks.length > 1 && blocks.at(-2).sum / blocks.at(-2).n > blocks.at(-1).sum / blocks.at(-1).n) {
+      const top = blocks.pop(), prev = blocks.at(-1);
+      prev.lines.push(...top.lines); prev.sum += top.sum; prev.n += top.n;
+    }
+  }
+  return blocks.flatMap((bl) => bl.lines.map((l) => [l, bl.sum / bl.n]));
+}
 
 // Live rows -> { "Away@Home": { books: { fanduel: { updated, spread: {home:{line:price}, away:{...}}, total: {over:{...}, under:{...}}, ml: {home, away} } } } }
 export function normalizeLiveRows(rows) {
@@ -74,29 +124,20 @@ function atLine(points, L) {
 function bookChance(b, spec) {
   if (spec.market === "ml") {
     const other = spec.side === "home" ? "away" : "home";
-    return b.ml[spec.side] != null && b.ml[other] != null ? twoWay(b.ml[spec.side], b.ml[other]) : null;
+    return b.ml[spec.side] != null && b.ml[other] != null ? devig(b.ml[spec.side], b.ml[other]).p : null;
   }
-  const points = [];
   if (spec.market === "spread") {
     // A team at +L against the other side at -L is one two-way market.
     const mine = b.spread[spec.side], theirs = b.spread[spec.side === "home" ? "away" : "home"];
-    for (const [l, price] of Object.entries(mine)) {
-      const opp = theirs[-Number(l)];
-      if (opp != null) points.push([Number(l), twoWay(price, opp)]);
-    }
-  } else {
-    for (const [l, over] of Object.entries(b.total.over)) {
-      const under = b.total.under[l];
-      if (under != null) points.push([Number(l), twoWay(over, under)]);
-    }
+    const lines = new Set([...Object.keys(mine).map(Number), ...Object.keys(theirs).map((l) => -Number(l))]);
+    return atLine(ladderPoints([...lines].map((l) => [l, mine[l] ?? null, theirs[-l] ?? null])), spec.line);
   }
-  // An over gets likelier as the total drops, so an over ladder rises with the
-  // negated line; an under's chance is the rest of the same market.
-  if (spec.market === "total") {
-    const p = atLine(points.map(([l, q]) => [-l, q]), -spec.line);
-    return p == null ? null : spec.side === "over" ? p : 1 - p;
-  }
-  return atLine(points, spec.line);
+  // Totals: the over's chance per line. An over gets likelier as the total
+  // drops, so its ladder rises with the negated line; an under's chance is the
+  // rest of the same market.
+  const lines = new Set([...Object.keys(b.total.over), ...Object.keys(b.total.under)].map(Number));
+  const p = atLine(ladderPoints([...lines].map((l) => [-l, b.total.over[l] ?? null, b.total.under[l] ?? null])), -spec.line);
+  return p == null ? null : spec.side === "over" ? p : 1 - p;
 }
 
 // What a saved pick is, in live-market terms: { market, side, line }, or null

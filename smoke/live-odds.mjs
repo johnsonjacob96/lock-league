@@ -16,7 +16,7 @@ const rows = [
   spread('home', 2.5, -130), spread('away', -2.5, 110),
   spread('home', -3.5, 150), spread('away', 3.5, -180),
   spread('home', 9.5, -900), spread('away', -9.5, 600),
-  spread('home', -15.5, 1400), // one-sided: no Seahawks +15.5 posted, so unusable
+  spread('home', -15.5, 1400), // one-sided: no Seahawks +15.5 posted
   total('over', 40.5, -110), total('under', 40.5, -110),
   total('over', 43.5, 150), total('under', 43.5, -180),
   row({ market_type: 'moneyline', selection_type: 'home', line: null, odds_american: 120 }),
@@ -27,7 +27,14 @@ const rows = [
 ];
 const games = normalizeLiveRows(rows);
 const game = games['Seattle Seahawks@Las Vegas Raiders'];
-const vigFree = (a, b) => { const i = x => x < 0 ? -x / (100 - x) : 100 / (100 + x); return i(a) / (i(a) + i(b)); };
+const imp = x => x < 0 ? -x / (100 - x) : 100 / (100 + x);
+// The power method, solved independently: the exponent k that makes both
+// implied chances sum to 1.
+const vigFree = (a, b) => {
+  let lo = 1, hi = 50;
+  for (let i = 0; i < 100; i++) { const k = (lo + hi) / 2; if (imp(a) ** k + imp(b) ** k > 1) lo = k; else hi = k; }
+  return imp(a) ** lo / (imp(a) ** lo + imp(b) ** lo);
+};
 
 test('live rows normalize onto canonical game keys, live game lines only', () => {
   assert.deepEqual(Object.keys(games), ['Seattle Seahawks@Las Vegas Raiders']);
@@ -62,6 +69,29 @@ test('totals, both directions, and moneyline Super Locks', () => {
   assert.equal(ml, Math.round(vigFree(120, -140) * 1000) / 1000);
   const slSpread = liveHitChance({ bet_type: 'Super Lock', pick_text: 'Las Vegas Raiders +2.5', side: 'dog', prop: { kind: 'spread' } }, game, NOW).chance;
   assert.equal(slSpread, Math.round(vigFree(-130, 110) * 1000) / 1000);
+});
+
+// FanDuel's live Saints/Bears total, early 4th quarter Nov 22 (29 points in):
+// Jacob's Under 49.5 read 90% when the book had it at -2500.
+const bears = normalizeLiveRows([
+  [38.5, -128, -104], [40.5, 142, -192], [43.5, 280, -420], [45.5, null, -700],
+  [47.5, null, -1400], [48.5, 640, -1450], [49.5, 850, -2500], [50.5, 1100, null], [52.5, 1400, null],
+].flatMap(([line, over, under]) => [['over', over], ['under', under]].filter(([, o]) => o != null)
+  .map(([side, odds]) => ({ is_live: true, sportsbook: 'fanduel', market_type: 'total_points', selection_type: side, line, odds_american: odds,
+    home_team: 'CHI Bears', away_team: 'NO Saints', timestamp: at }))))['New Orleans Saints@Chicago Bears'];
+const under = (line) => liveHitChance({ bet_type: 'Under', side: 'under', line }, bears, NOW).chance;
+
+test('a heavy favorite keeps its price: the margin comes off the longshot', () => {
+  assert.equal(under(49.5), Math.round((1 - vigFree(850, -2500)) * 1000) / 1000);
+  assert.ok(under(49.5) > 0.94, `Under 49.5 at -2500 reads ${under(49.5)}`);
+  assert.ok(Math.abs(under(49.5) + liveHitChance({ bet_type: 'Over', side: 'over', line: 49.5 }, bears, NOW).chance - 1) < 0.002);
+});
+
+test('a one-sided quote counts, and a better line never reads worse', () => {
+  // Only Under 45.5 -700 is posted (87.5% before the margin).
+  assert.ok(under(45.5) > 0.84 && under(45.5) < 0.875, `Under 45.5 reads ${under(45.5)}`);
+  const ladder = [38.5, 40.5, 42, 43.5, 45.5, 47.5, 48.5, 49.5, 50.5, 52.5, 60.5].map(under);
+  assert.ok(ladder.every((c, i) => !i || c >= ladder[i - 1]), JSON.stringify(ladder));
 });
 
 test('no number for props, free text, unknown teams, or books that stopped pricing', () => {
